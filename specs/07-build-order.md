@@ -11,9 +11,11 @@ The sequence Claude Code should ship vertical slices in. Each milestone is a wor
 
 ---
 
-## M0 — Project skeleton `[~]`
+## M0 — Project skeleton `[x]`
 
 Goal: A running React app at `localhost:5173` that proves the toolchain.
+
+**Shipped 2026-04-25.** Preview: https://harmonious-cannoli-de38c4.netlify.app — repo: https://github.com/Randy-Hough/waymarks2
 
 ### Tasks
 
@@ -32,11 +34,11 @@ Goal: A running React app at `localhost:5173` that proves the toolchain.
 
 - [x] `npm run dev` opens a styled "Waymarks" hero on `localhost:5173`
 - [x] `npm run check` is green
-- [ ] Netlify preview URL works — pending owner action (see `docs/m0-verification.md` § "Wire up Netlify")
+- [x] Netlify preview URL works — https://harmonious-cannoli-de38c4.netlify.app
 
 ---
 
-## M1 — Auth and the empty shell `[ ]`
+## M1 — Auth and the empty shell `[~]`
 
 Goal: A user can sign up, log in, and see an empty "no buildings yet" state.
 
