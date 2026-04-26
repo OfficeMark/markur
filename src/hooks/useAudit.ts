@@ -3,7 +3,9 @@ import {
   endSession,
   getActiveSessionForFloor,
   getSession,
+  listActiveSessionsForUser,
   startSession,
+  type ActiveSessionWithLabels,
   type EndSessionInput,
   type StartSessionInput,
 } from '@/lib/queries/audit-sessions';
@@ -34,6 +36,8 @@ export const auditKeys = {
     [...auditKeys.all, 'events', 'by-session', sessionId] as const,
   latestConfirmedByFloor: (floorId: string) =>
     [...auditKeys.all, 'latest-confirmed', 'by-floor', floorId] as const,
+  activeForUser: (userId: string, buildingId: string | null) =>
+    [...auditKeys.all, 'active', 'for-user', userId, buildingId ?? 'all'] as const,
 };
 
 export function useActiveAuditSession(floorId: string | undefined, userId: string | undefined) {
@@ -172,3 +176,21 @@ export function summarizeSession(
 
 export type AuditEventInput = CreateEventInput;
 export type AuditSessionType = AuditSession;
+/**
+ * Any open audit sessions for the signed-in user, optionally constrained
+ * to a single building. Drives the Home / Building "Resume audit" banner.
+ */
+export function useActiveAuditSessionsForUser(
+  userId: string | undefined,
+  buildingId?: string
+): { data: ActiveSessionWithLabels[] | undefined; isLoading: boolean } {
+  return useQuery({
+    queryKey: userId
+      ? auditKeys.activeForUser(userId, buildingId ?? null)
+      : ['audit', 'active', 'for-user', 'none'],
+    queryFn: () =>
+      userId ? listActiveSessionsForUser(userId, buildingId) : Promise.resolve([]),
+    enabled: !!userId,
+  });
+}
+

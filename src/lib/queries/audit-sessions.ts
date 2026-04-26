@@ -81,3 +81,55 @@ export async function endSession(input: EndSessionInput): Promise<AuditSession> 
   if (error) throw error;
   return data;
 }
+
+/**
+ * Any open audit session for a given user, optionally constrained to a
+ * single building. Used by the Home / Building "Resume audit" surface (M8).
+ */
+export type ActiveSessionWithLabels = {
+  id: string;
+  floor_id: string;
+  floor_label: string;
+  building_id: string;
+  building_name: string;
+  started_at: string;
+};
+
+export async function listActiveSessionsForUser(
+  userId: string,
+  buildingId?: string
+): Promise<ActiveSessionWithLabels[]> {
+  let q = supabase
+    .from('audit_sessions')
+    .select('id, floor_id, started_at, floor:floors!inner(id, label, building_id, building:buildings!inner(id, name))')
+    .eq('auditor_id', userId)
+    .is('completed_at', null)
+    .order('started_at', { ascending: false });
+  if (buildingId) {
+    q = q.eq('floor.building_id', buildingId);
+  }
+  const { data, error } = await q;
+  if (error) throw error;
+  type Row = {
+    id: string;
+    floor_id: string;
+    started_at: string;
+    floor: {
+      id: string;
+      label: string;
+      building_id: string;
+      building: { id: string; name: string } | null;
+    } | null;
+  };
+  const rows = (data ?? []) as unknown as Row[];
+  return rows
+    .filter((r) => !!r.floor && !!r.floor.building)
+    .map((r) => ({
+      id: r.id,
+      floor_id: r.floor_id,
+      floor_label: r.floor!.label,
+      building_id: r.floor!.building_id,
+      building_name: r.floor!.building!.name,
+      started_at: r.started_at,
+    }));
+}

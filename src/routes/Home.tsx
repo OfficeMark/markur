@@ -6,6 +6,7 @@ import { useAuth } from '@/lib/auth-context';
 import { usePermissions } from '@/lib/permissions-context';
 import { useBuildings } from '@/hooks/useBuildings';
 import { useTenantRepRedirect } from '@/hooks/useTenantRepRedirect';
+import { ResumeAuditBanner } from '@/components/waymarks/ResumeAuditBanner';
 import type { Building } from '@/types/database';
 
 /**
@@ -35,6 +36,8 @@ export function Home() {
           </p>
           <h1 className="font-serif text-3xl text-text sm:text-4xl">Buildings</h1>
         </header>
+
+        <ResumeAuditBanner />
 
         {pLoading || bLoading ? (
           <Loading />

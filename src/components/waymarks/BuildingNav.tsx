@@ -1,47 +1,103 @@
+import { useState } from 'react';
 import { Link, useLocation } from 'react-router-dom';
-import { Building2, Layers, ChevronRight } from 'lucide-react';
+import * as Dialog from '@radix-ui/react-dialog';
+import { Building2, Layers, ChevronRight, Menu, X } from 'lucide-react';
 import { useBuildings } from '@/hooks/useBuildings';
 import { useFloors } from '@/hooks/useFloors';
 import { cn } from '@/lib/utils';
 import type { Building, Floor } from '@/types/database';
 
 /**
- * Left sidebar listing buildings + their floors. Per spec 05:
- *   - desktop: fixed 240px column on the left
- *   - tablet/mobile: collapses to a header drop-down (M8 work — for now we
- *     simply hide the sidebar below `lg:` and you navigate by URL)
- *
- * The component fetches its own data — keeps the route components thin.
+ * Left sidebar listing buildings + their floors. Per spec 05 / 08:
+ *   * desktop (lg+): fixed 240px column on the left.
+ *   * tablet/phone: hidden; the AppShell shows a hamburger that opens
+ *     `<BuildingNavSheet>` — a left-slide Radix Dialog containing the same
+ *     content. Tapping any link auto-dismisses the sheet.
  */
 export function BuildingNav() {
-  const { data: buildings, isLoading } = useBuildings();
-
   return (
     <aside
       aria-label="Buildings and floors"
       className="hidden w-60 shrink-0 border-r border-black/10 bg-surface dark:border-white/10 lg:block"
     >
       <div className="sticky top-14 max-h-[calc(100vh-3.5rem)] overflow-y-auto p-3">
-        <div className="mb-2 px-2 text-[11px] font-medium uppercase tracking-[0.18em] text-text-faint">
-          Buildings
-        </div>
-        {isLoading ? (
-          <NavSkeleton />
-        ) : !buildings || buildings.length === 0 ? (
-          <p className="px-2 py-1.5 text-xs text-text-muted">No buildings yet.</p>
-        ) : (
-          <ul className="space-y-3">
-            {buildings.map((b) => (
-              <BuildingItem key={b.id} building={b} />
-            ))}
-          </ul>
-        )}
+        <NavList />
       </div>
     </aside>
   );
 }
 
-function BuildingItem({ building }: { building: Building }) {
+/**
+ * Hamburger button + sheet for phone/tablet. Renders nothing on desktop.
+ */
+export function BuildingNavSheet() {
+  const [open, setOpen] = useState(false);
+  return (
+    <Dialog.Root open={open} onOpenChange={setOpen}>
+      <Dialog.Trigger asChild>
+        <button
+          type="button"
+          aria-label="Open navigation"
+          className="inline-flex h-9 w-9 items-center justify-center rounded-md text-white hover:bg-white/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-waymarks-gold lg:hidden"
+        >
+          <Menu size={18} aria-hidden />
+        </button>
+      </Dialog.Trigger>
+      <Dialog.Portal>
+        <Dialog.Overlay className="fixed inset-0 z-50 bg-black/40 data-[state=open]:animate-in data-[state=open]:fade-in-0" />
+        <Dialog.Content
+          aria-describedby={undefined}
+          className="fixed inset-y-0 left-0 z-50 flex w-[min(86vw,320px)] flex-col bg-surface text-text shadow-sheet outline-none dark:border-white/10"
+        >
+          <header className="flex items-center justify-between border-b border-black/10 p-3 dark:border-white/10">
+            <Dialog.Title className="font-serif text-lg">Buildings</Dialog.Title>
+            <Dialog.Close asChild>
+              <button
+                type="button"
+                aria-label="Close navigation"
+                className="rounded-md p-1 text-text-muted hover:bg-black/5 dark:hover:bg-white/5"
+              >
+                <X size={16} aria-hidden />
+              </button>
+            </Dialog.Close>
+          </header>
+          <div className="flex-1 overflow-y-auto p-3">
+            <NavList onNavigate={() => setOpen(false)} />
+          </div>
+        </Dialog.Content>
+      </Dialog.Portal>
+    </Dialog.Root>
+  );
+}
+
+function NavList({ onNavigate }: { onNavigate?: () => void }) {
+  const { data: buildings, isLoading } = useBuildings();
+
+  if (isLoading) return <NavSkeleton />;
+  if (!buildings || buildings.length === 0) {
+    return <p className="px-2 py-1.5 text-xs text-text-muted">No buildings yet.</p>;
+  }
+  return (
+    <>
+      <div className="mb-2 px-2 text-[11px] font-medium uppercase tracking-[0.18em] text-text-faint">
+        Buildings
+      </div>
+      <ul className="space-y-3">
+        {buildings.map((b) => (
+          <BuildingItem key={b.id} building={b} onNavigate={onNavigate} />
+        ))}
+      </ul>
+    </>
+  );
+}
+
+function BuildingItem({
+  building,
+  onNavigate,
+}: {
+  building: Building;
+  onNavigate?: () => void;
+}) {
   const { data: floors } = useFloors(building.id);
   const location = useLocation();
   const buildingActive = location.pathname === `/buildings/${building.id}`;
@@ -50,6 +106,7 @@ function BuildingItem({ building }: { building: Building }) {
     <li>
       <Link
         to={`/buildings/${building.id}`}
+        onClick={onNavigate}
         className={cn(
           'group flex items-center gap-2 rounded-md px-2 py-1.5 text-sm transition-colors',
           buildingActive
@@ -64,7 +121,7 @@ function BuildingItem({ building }: { building: Building }) {
       {floors && floors.length > 0 && (
         <ul className="ml-4 mt-1 space-y-0.5">
           {floors.map((f) => (
-            <FloorItem key={f.id} floor={f} />
+            <FloorItem key={f.id} floor={f} onNavigate={onNavigate} />
           ))}
         </ul>
       )}
@@ -72,13 +129,14 @@ function BuildingItem({ building }: { building: Building }) {
   );
 }
 
-function FloorItem({ floor }: { floor: Floor }) {
+function FloorItem({ floor, onNavigate }: { floor: Floor; onNavigate?: () => void }) {
   const location = useLocation();
   const active = location.pathname === `/floors/${floor.id}`;
   return (
     <li>
       <Link
         to={`/floors/${floor.id}`}
+        onClick={onNavigate}
         className={cn(
           'flex items-center gap-2 rounded-md px-2 py-1 text-[13px] transition-colors',
           active

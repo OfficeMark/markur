@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
-import { ArrowLeft, ClipboardList, ImageOff, Plus, RefreshCw, Trash2 } from 'lucide-react';
+import { ArrowLeft, ClipboardCheck, ClipboardList, ImageOff, Plus, RefreshCw, Trash2 } from 'lucide-react';
 import { AppShell } from '@/components/waymarks/AppShell';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { Button } from '@/components/ui/Button';
@@ -23,6 +23,7 @@ import {
 import { useAuth } from '@/lib/auth-context';
 import { useCan } from '@/lib/permissions-context';
 import { planKindForPath, signedUrlForPlan } from '@/lib/upload';
+import { computeStatus } from '@/lib/asset-status';
 import type { Asset } from '@/types/database';
 
 export function Floor() {
@@ -52,6 +53,9 @@ export function Floor() {
   const [placePos, setPlacePos] = useState<{ x: number; y: number } | null>(null);
   const [newAssetOpen, setNewAssetOpen] = useState(false);
   const [selectedAssetId, setSelectedAssetId] = useState<string | null>(null);
+
+  // M8 — audit-due filter (deferred from M6).
+  const [auditDueOnly, setAuditDueOnly] = useState(false);
 
   // Deliberate-reposition state machine (M5).
   const [repositionAssetId, setRepositionAssetId] = useState<string | null>(null);
@@ -176,6 +180,22 @@ export function Floor() {
 
   const planKind = useMemo(() => planKindForPath(floor?.plan_url), [floor?.plan_url]);
 
+  // Per-asset status (cycle-aware via lastAuditByAsset). Used by the
+  // Audit-due chip count and the optional filter.
+  const auditDueAssets = useMemo(() => {
+    if (!assets.length) return [] as Asset[];
+    return assets.filter((a) => {
+      const status = computeStatus({
+        asset: a,
+        lastAuditAt: lastAuditByAsset?.get(a.id) ?? null,
+        openFlagCount: a.status === 'flagged' ? 1 : 0,
+      });
+      return status === 'attention';
+    });
+  }, [assets, lastAuditByAsset]);
+
+  const visibleAssets = auditDueOnly ? auditDueAssets : assets;
+
   if (fLoading) return <Skeleton />;
 
   if (fError || !floor) {
@@ -220,7 +240,28 @@ export function Floor() {
               {assets.length} {assets.length === 1 ? 'pin' : 'pins'}
             </p>
           </div>
-          <div className="flex items-center gap-2">
+          <div className="flex flex-wrap items-center gap-2">
+            {floor.plan_url && assets.length > 0 && (
+              <button
+                type="button"
+                onClick={() => setAuditDueOnly((v) => !v)}
+                aria-pressed={auditDueOnly}
+                className={
+                  'inline-flex h-9 items-center gap-1.5 rounded-full border px-3 text-xs font-medium transition-colors ' +
+                  (auditDueOnly
+                    ? 'border-warning/40 bg-warning-bg text-warning'
+                    : 'border-black/15 bg-surface text-text-muted hover:border-black/25 hover:text-text dark:border-white/15')
+                }
+              >
+                <ClipboardCheck size={12} aria-hidden />
+                <span>
+                  Audit due
+                  <span className="ml-1 rounded bg-black/5 px-1 font-mono text-[11px] dark:bg-white/10">
+                    {auditDueAssets.length}
+                  </span>
+                </span>
+              </button>
+            )}
             {showAuditCta && (
               <Button
                 variant="gold"
@@ -294,7 +335,7 @@ export function Floor() {
                 }}
                 pinOverlay={
                   <PinOverlay
-                    assets={assets}
+                    assets={visibleAssets}
                     selectedAssetId={selectedAssetId}
                     canMove={canEdit}
                     onSelectAsset={(a: Asset) => setSelectedAssetId(a.id)}

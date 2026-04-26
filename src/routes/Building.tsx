@@ -2,6 +2,7 @@ import { Link, useParams } from 'react-router-dom';
 import { ArrowLeft, MapPin, Layers, ImageOff, Trash2 } from 'lucide-react';
 import { AppShell } from '@/components/waymarks/AppShell';
 import { AccessManagementCard } from '@/components/waymarks/AccessManagementCard';
+import { ResumeAuditBanner } from '@/components/waymarks/ResumeAuditBanner';
 import { useBuilding } from '@/hooks/useBuildings';
 import { useFloors } from '@/hooks/useFloors';
 import { useCan, useIsSuperAdmin } from '@/lib/permissions-context';
@@ -55,6 +56,8 @@ export function Building() {
             </span>
           </p>
         </header>
+
+        <ResumeAuditBanner buildingId={building.id} />
 
         {isSuperAdmin && building && (
           <div className="mb-6 flex flex-wrap gap-2">
