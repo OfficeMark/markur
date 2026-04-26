@@ -69,32 +69,34 @@ Goal: A user can sign up, log in, and see an empty "no buildings yet" state.
 
 ---
 
-## M2 — Buildings and floors (read-only) `[~]`
+## M2 — Buildings and floors (read-only) `[x]`
 
 Goal: Super admin can see buildings and floors. No editing yet.
 
+**Shipped 2026-04-26.** Preview: https://waymarks-rebuild.netlify.app — Migration 0005 seeded "161 Bay St., Toronto" with 5 floors (B2 / B1 / Ground / Floor 2 / Floor 3). Commit `a548d6a`.
+
 ### Tasks
 
-- [ ] `lib/queries/buildings.ts`: list, get
-- [ ] `lib/queries/floors.ts`: list by building, get
-- [ ] `useBuildings()`, `useFloors(buildingId)`, `useFloor(floorId)` hooks
-- [ ] `<BuildingNav>` sidebar component with mock data
-- [ ] Wire `<BuildingNav>` to real data
-- [ ] Routes: `/buildings/:id`, `/floors/:id`
-- [ ] Floor view: shows the floor name, building name, "no plan uploaded yet" empty state
-- [ ] Seed script: 1 building (161 Bay St.), 5 floors (B2, B1, Ground, Floor 2, Floor 3)
-- [ ] Playwright test: super admin sees seeded building and floors
+- [x] `lib/queries/buildings.ts`: list, get
+- [x] `lib/queries/floors.ts`: list by building, get
+- [x] `useBuildings()`, `useFloors(buildingId)`, `useFloor(floorId)` hooks
+- [x] `<BuildingNav>` sidebar component with mock data — went straight to real data; no separate mock pass needed
+- [x] Wire `<BuildingNav>` to real data
+- [x] Routes: `/buildings/:id`, `/floors/:id`
+- [x] Floor view: shows the floor name, building name, "no plan uploaded yet" empty state
+- [x] Seed script: 1 building (161 Bay St.), 5 floors (B2, B1, Ground, Floor 2, Floor 3)
+- [~] Playwright test: super admin sees seeded building and floors — **deferred to M7.** Replaced for M2 with Vitest + RTL coverage of BuildingNav + query wrappers (8 unit tests). Real e2e against Supabase needs a stable test user / branch / cleanup story; deferring to the M7 permissions hardening pass when we do all four roles together.
 
 ### Acceptance
 
-- Sidebar shows building + floors
-- Clicking a floor navigates to that floor's page
-- Empty state on floor page is friendly
-- Test passes
+- [x] Sidebar shows building + floors
+- [x] Clicking a floor navigates to that floor's page
+- [x] Empty state on floor page is friendly
+- [x] Test passes (Vitest, 8 new tests; Playwright e2e deferred per note above)
 
 ---
 
-## M3 — Floor plan upload and rendering `[ ]`
+## M3 — Floor plan upload and rendering `[~]`
 
 Goal: Building admin can upload a PDF floor plan and see it render.
 
