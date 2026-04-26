@@ -1,5 +1,6 @@
+import { useEffect, useState } from 'react';
 import { Link, Navigate, useParams } from 'react-router-dom';
-import { ArrowLeft, RotateCcw, ShieldAlert, Trash2 } from 'lucide-react';
+import { ArrowLeft, Check, RotateCcw, ShieldAlert, Trash2 } from 'lucide-react';
 import { format, formatDistanceToNow } from 'date-fns';
 import { AppShell } from '@/components/waymarks/AppShell';
 import { Button } from '@/components/ui/Button';
@@ -11,6 +12,7 @@ import { usePermissions } from '@/lib/permissions-context';
 import type { DeletedAsset } from '@/lib/queries/assets';
 
 const RETENTION_DAYS = 30;
+const RESTORE_BANNER_MS = 4000;
 
 /**
  * Super-admin-only Trash view (M5). Lists soft-deleted assets in a building
@@ -25,6 +27,23 @@ export function Trash() {
   const { data: building } = useBuilding(id);
   const { data: deleted = [], isLoading } = useDeletedAssets(id, RETENTION_DAYS);
   const restore = useRestoreAsset(id);
+
+  // Inline confirmation banner — shown briefly after a successful restore so
+  // the user doesn't wonder whether it landed (without it, the row just
+  // disappears, which feels like the screen swallowed the action).
+  const [restoredName, setRestoredName] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!restoredName) return;
+    const t = window.setTimeout(() => setRestoredName(null), RESTORE_BANNER_MS);
+    return () => window.clearTimeout(t);
+  }, [restoredName]);
+
+  function handleRestore(asset: DeletedAsset) {
+    restore.mutate(asset.id, {
+      onSuccess: () => setRestoredName(asset.name),
+    });
+  }
 
   // Wait for permissions before deciding on the redirect.
   if (permsLoading) {
@@ -64,6 +83,20 @@ export function Trash() {
           </div>
         </header>
 
+        {restoredName && (
+          <div
+            role="status"
+            aria-live="polite"
+            className="mb-4 flex items-start gap-2 rounded-md border border-success/40 bg-success-bg p-3 text-sm text-success"
+          >
+            <Check size={14} aria-hidden className="mt-0.5" />
+            <p>
+              Restored <span className="font-medium">{restoredName}</span> — back on its floor with
+              its photos and history.
+            </p>
+          </div>
+        )}
+
         <div className="mb-4 flex items-start gap-2 rounded-md border border-black/10 bg-surface p-3 text-xs text-text-muted dark:border-white/10">
           <ShieldAlert size={14} aria-hidden className="mt-0.5 text-waymarks-gold" />
           <p>
@@ -88,7 +121,7 @@ export function Trash() {
                 key={a.id}
                 asset={a}
                 busy={restore.isPending && restore.variables === a.id}
-                onRestore={() => restore.mutate(a.id)}
+                onRestore={() => handleRestore(a)}
               />
             ))}
           </ul>
