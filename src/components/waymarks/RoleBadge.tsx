@@ -22,7 +22,7 @@ const ROLE_VISUALS: Record<Role, { label: string; className: string }> = {
     className: 'border-success/30 bg-success-bg text-success',
   },
   tenant_rep: {
-    label: 'Tenant rep',
+    label: 'Facilities',
     className: 'border-black/15 bg-waymarks-gold-soft text-text dark:border-white/15 dark:bg-white/5 dark:text-white',
   },
 };
