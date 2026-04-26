@@ -1,7 +1,7 @@
 import { useRef, useState } from 'react';
 import type { Asset } from '@/types/database';
 import { PinMarker } from './PinMarker';
-import { computeStatus } from '@/lib/asset-status';
+import { computeStatus, type AssetStatus } from '@/lib/asset-status';
 
 export type PinOverlayProps = {
   assets: Asset[];
@@ -29,6 +29,22 @@ export type PinOverlayProps = {
    * the parent on confirm or cancel.
    */
   pendingRepositionCoords?: { x: number; y: number } | null;
+
+  // Status drivers (M6) ----------------------------------------------------
+  /**
+   * Map<assetId → ISO timestamp of latest CONFIRMED audit_event>. Drives the
+   * default age-based status (asset is "good" until the cycle elapses since
+   * the last confirmed audit; "attention" after).
+   */
+  lastAuditByAsset?: ReadonlyMap<string, string> | null;
+  /**
+   * Direct override of the per-pin status. When provided, takes precedence
+   * over the computed status. Used by AuditModeShell so pins reflect
+   * *this session's* progress (green = audited this session, amber =
+   * unvisited, red = flagged this session) instead of their persistent
+   * status.
+   */
+  statusOverride?: ReadonlyMap<string, AssetStatus> | null;
 };
 
 const DRAG_THRESHOLD_PX = 4;
@@ -61,6 +77,8 @@ export function PinOverlay({
   repositionAssetId,
   onRepositionDragEnd,
   pendingRepositionCoords,
+  lastAuditByAsset,
+  statusOverride,
 }: PinOverlayProps) {
   const layerRef = useRef<HTMLDivElement | null>(null);
   // dragRef is always-current; the React state below is for visualization only.
@@ -144,11 +162,13 @@ export function PinOverlay({
   return (
     <div ref={layerRef} className="pointer-events-none absolute inset-0">
       {assets.map((asset) => {
-        const status = computeStatus({
-          asset,
-          lastAuditAt: null,
-          openFlagCount: asset.status === 'flagged' ? 1 : 0,
-        });
+        const status: AssetStatus =
+          statusOverride?.get(asset.id) ??
+          computeStatus({
+            asset,
+            lastAuditAt: lastAuditByAsset?.get(asset.id) ?? null,
+            openFlagCount: asset.status === 'flagged' ? 1 : 0,
+          });
         const isRepositionTarget = repositionAssetId === asset.id;
         // While the parent is showing the confirmation toast, keep the pin
         // pinned at the candidate coords. Otherwise fall back to the live

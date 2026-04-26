@@ -186,27 +186,35 @@ Goal: Pin movement works end-to-end with logging.
 
 ---
 
-## M6 — Audit walkaround `[ ]`
+## M6 — Audit walkaround `[x]`
 
 Goal: A user can run an audit on a floor.
 
+**Shipped 2026-04-26.** Preview: https://waymarks-rebuild.netlify.app — Migration `0012_m6_audit_session_triggers_and_helpers`. See `docs/m6-verification.md`.
+
 ### Tasks
 
-- [ ] Migration: `audit_sessions`, `audit_events` tables (already in `03-data-model.md`)
-- [ ] `<AuditModeShell>` component
-- [ ] Audit session lifecycle: start → events → end
-- [ ] `<AuditCompleteSummary>` modal
-- [ ] "Resume last audit" surface on home/building view
-- [ ] Asset status computed from latest audit_event (good / attention / flagged)
-- [ ] Filter "Audit due" computed from cycle days vs. last audit
-- [ ] Playwright test: full audit flow on a 3-asset floor
+- [x] Migration: `audit_sessions`, `audit_events` tables already in 0001; M6 adds audit_log triggers on both, a partial unique index `audit_sessions_active_idx` to enforce one open session per (floor, auditor), and audit_log read-RLS coverage for these entity types.
+- [x] `<AuditModeShell>` component — full-screen overlay with AUDIT badge top bar, progress bar, floor plan with session-scoped pin coloring, and a bottom action sheet.
+- [x] Audit session lifecycle: `useStartAudit` / `useEndAudit` / `useCreateAuditEvent`, with optimistic event insertion so the progress bar advances without a round trip.
+- [x] `<AuditCompleteSummary>` modal — Total / Audited / Missed counts plus a clickable list of missed assets that jumps back into the shell focused on each.
+- [x] "Resume last audit" surface — banner at the top of `Floor.tsx` when an active session exists for the current user; the "Audit floor" button in the header switches to "Resume audit" automatically.
+- [x] Asset status computed from latest audit_event — `useLatestConfirmedByFloor` returns Map<assetId → lastConfirmedAt> and feeds `lastAuditByAsset` into PinOverlay → `computeStatus`.
+- [~] Filter "Audit due" computed from cycle days vs. last audit — the *computation* is wired (cycle-aware status with the new lastAuditAt), but the explicit filter chip on the floor toolbar is **deferred to M8** with the responsive polish pass since it's a UI affordance, not a data model gap.
+- [~] Playwright test: full audit flow on a 3-asset floor — **deferred to M7** with the wider permissions hardening / e2e infrastructure (same rationale as M2/M5).
+
+### Replacement for the deferred Playwright e2e
+
+- `summarizeSession` unit tests covering the validation rules: re-confirm doesn't double-count, skipped doesn't count as audited, last event wins, confirm-then-skip removes from audited.
+- `computeStatus` unit tests covering the cycle math: confirmed within cycle → good, beyond cycle → attention, fresh-with-no-audit → good, default 90-day fallback, flag overrides cycle.
+- Trigger correctness validated post-migration via `information_schema.triggers`.
 
 ### Acceptance
 
-- Audit mode is full-screen with progress bar and bottom action sheet
-- Confirm/Flag/Skip each generate the right event
-- End audit summary is accurate
-- Multiple audit sessions accumulate correctly in asset history
+- [x] Audit mode is full-screen with progress bar and bottom action sheet — AUDIT badge in gold, progress N/M in the top bar, animated progress bar below, bottom sheet shows current asset with three action buttons + Next.
+- [x] Confirm / Flag / Skip each generate the right event — `useCreateAuditEvent` writes the outcome and the optimistic patch advances the progress bar immediately.
+- [x] End audit summary is accurate — `summarizeSession` deduplicates per-asset; the modal blocks ending with zero events.
+- [x] Multiple audit sessions accumulate correctly in asset history — every audit_event row triggers an audit_log entry, visible in the asset's activity timeline.
 
 ---
 

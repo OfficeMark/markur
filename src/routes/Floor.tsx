@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
-import { ArrowLeft, ImageOff, Plus, RefreshCw, Trash2 } from 'lucide-react';
+import { ArrowLeft, ClipboardList, ImageOff, Plus, RefreshCw, Trash2 } from 'lucide-react';
 import { AppShell } from '@/components/waymarks/AppShell';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { Button } from '@/components/ui/Button';
@@ -11,9 +11,16 @@ import { NewAssetDialog } from '@/components/waymarks/NewAssetDialog';
 import { AssetDrawer } from '@/components/waymarks/AssetDrawer';
 import { RepositionToolbar } from '@/components/waymarks/RepositionToolbar';
 import { StepUpDialog } from '@/components/waymarks/StepUpDialog';
+import { AuditModeShell } from '@/components/waymarks/AuditModeShell';
 import { useFloor } from '@/hooks/useFloors';
 import { useBuilding } from '@/hooks/useBuildings';
 import { useAssets, useSoftDeleteAsset, useUpdateAsset } from '@/hooks/useAssets';
+import {
+  useActiveAuditSession,
+  useLatestConfirmedByFloor,
+  useStartAudit,
+} from '@/hooks/useAudit';
+import { useAuth } from '@/lib/auth-context';
 import { useCan } from '@/lib/permissions-context';
 import { planKindForPath, signedUrlForPlan } from '@/lib/upload';
 import type { Asset } from '@/types/database';
@@ -23,12 +30,20 @@ export function Floor() {
   const { data: floor, isLoading: fLoading, error: fError } = useFloor(id);
   const { data: building } = useBuilding(floor?.building_id);
   const { data: assets = [] } = useAssets(id);
+  const { user } = useAuth();
 
   const canUploadPlan = useCan('upload_plan', { type: 'building', id: floor?.building_id ?? '' });
   const canCreate = useCan('create', { type: 'building', id: floor?.building_id ?? '' });
   const canEdit = useCan('edit', { type: 'building', id: floor?.building_id ?? '' });
+  const canAudit = useCan('audit', { type: 'floor', id: id ?? '' });
   const updateAsset = useUpdateAsset(id);
   const softDelete = useSoftDeleteAsset(id);
+
+  // M6 — audit walkaround
+  const { data: lastAuditByAsset } = useLatestConfirmedByFloor(id);
+  const { data: activeSession } = useActiveAuditSession(id, user?.id);
+  const startAudit = useStartAudit(id, user?.id);
+  const [inAudit, setInAudit] = useState(false);
 
   const [uploadOpen, setUploadOpen] = useState(false);
   const [signedUrl, setSignedUrl] = useState<string | null>(null);
@@ -111,7 +126,6 @@ export function Floor() {
   function onRepositionDragEnd(assetId: string, x: number, y: number) {
     const a = assets.find((a) => a.id === assetId);
     if (!a) return;
-    // Treat sub-pixel-ish moves as no-ops.
     if (Math.abs(a.x - x) < 0.0005 && Math.abs(a.y - y) < 0.0005) {
       setPendingMove(null);
       return;
@@ -126,10 +140,8 @@ export function Floor() {
         patch: { x: pendingMove.to.x, y: pendingMove.to.y },
       });
       setPendingMove(null);
-      setRepositionAssetId(null); // exit mode after a successful confirm
+      setRepositionAssetId(null);
     } catch {
-      // The optimistic-update rollback in useUpdateAsset already restores the
-      // pin. Keep the user in reposition mode so they can retry.
       setPendingMove(null);
     }
   }
@@ -142,9 +154,23 @@ export function Floor() {
     try {
       await softDelete.mutateAsync(deleteAssetId);
       setDeleteAssetId(null);
-      setSelectedAssetId(null); // drawer was already closed by the dialog open; be defensive
+      setSelectedAssetId(null);
     } catch {
       // Surface error via the dialog's own error handling later.
+    }
+  }
+
+  async function startOrResumeAudit() {
+    if (activeSession) {
+      setInAudit(true);
+      return;
+    }
+    if (!floor?.id) return;
+    try {
+      await startAudit.mutateAsync({ floor_id: floor.id, assets_total: assets.length });
+      setInAudit(true);
+    } catch {
+      // Errors surface in console; user can tap again.
     }
   }
 
@@ -172,6 +198,8 @@ export function Floor() {
   }
 
   const buildingId = floor.building_id;
+  const showAuditCta =
+    floor.plan_url && canAudit && assets.length > 0;
 
   return (
     <AppShell>
@@ -193,6 +221,16 @@ export function Floor() {
             </p>
           </div>
           <div className="flex items-center gap-2">
+            {showAuditCta && (
+              <Button
+                variant="gold"
+                iconLeft={<ClipboardList size={14} aria-hidden />}
+                loading={startAudit.isPending}
+                onClick={() => void startOrResumeAudit()}
+              >
+                {activeSession ? 'Resume audit' : 'Audit floor'}
+              </Button>
+            )}
             {floor.plan_url && canCreate && (
               <Button
                 variant={placing ? 'gold' : 'secondary'}
@@ -213,6 +251,22 @@ export function Floor() {
             )}
           </div>
         </header>
+
+        {activeSession && !inAudit && (
+          <div
+            role="status"
+            aria-live="polite"
+            className="mb-4 flex flex-wrap items-center gap-2 rounded-md border border-waymarks-gold/40 bg-waymarks-gold-soft p-3 text-sm dark:bg-white/5"
+          >
+            <ClipboardList size={14} aria-hidden className="text-waymarks-gold" />
+            <p className="flex-1 text-waymarks-ink dark:text-white">
+              You have an audit in progress on this floor.
+            </p>
+            <Button size="sm" variant="gold" onClick={() => setInAudit(true)}>
+              Resume
+            </Button>
+          </div>
+        )}
 
         {floor.plan_url ? (
           signedUrlError ? (
@@ -252,6 +306,7 @@ export function Floor() {
                     pendingRepositionCoords={
                       pendingMove ? { x: pendingMove.to.x, y: pendingMove.to.y } : null
                     }
+                    lastAuditByAsset={lastAuditByAsset ?? null}
                   />
                 }
               />
@@ -302,7 +357,6 @@ export function Floor() {
           floorId={floor.id}
           position={placePos}
           onCreated={(asset) => {
-            // Open the drawer for the just-created pin so the user sees it landed.
             setSelectedAssetId(asset.id);
           }}
         />
@@ -333,6 +387,18 @@ export function Floor() {
         busy={softDelete.isPending}
         onConfirm={confirmDelete}
       />
+
+      {inAudit && activeSession && signedUrl && planKind && (
+        <AuditModeShell
+          session={activeSession}
+          floorLabel={floor.label}
+          buildingName={building?.name ?? 'Building'}
+          assets={assets}
+          planUrl={signedUrl}
+          planKind={planKind}
+          onClose={() => setInAudit(false)}
+        />
+      )}
     </AppShell>
   );
 }
