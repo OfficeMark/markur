@@ -10,6 +10,7 @@ import { Login } from '@/routes/Login';
 import { ProtectedRoute } from '@/routes/ProtectedRoute';
 import { Trash } from '@/routes/Trash';
 import { AcceptInvitation } from '@/routes/AcceptInvitation';
+import { OfflineSync } from '@/components/waymarks/OfflineSync';
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -29,6 +30,7 @@ export default function App() {
       <ThemeProvider>
         <AuthProvider>
           <PermissionsProvider>
+            <OfflineSync />
             <Routes>
               <Route path="/login" element={<Login />} />
               <Route

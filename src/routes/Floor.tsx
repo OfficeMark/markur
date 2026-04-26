@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
-import { ArrowLeft, ClipboardCheck, ClipboardList, ImageOff, Plus, RefreshCw, Trash2 } from 'lucide-react';
+import { ArrowLeft, Check, ClipboardCheck, ClipboardList, Download, ImageOff, Plus, RefreshCw, Trash2 } from 'lucide-react';
 import { AppShell } from '@/components/waymarks/AppShell';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { Button } from '@/components/ui/Button';
@@ -24,6 +24,12 @@ import { useAuth } from '@/lib/auth-context';
 import { useCan } from '@/lib/permissions-context';
 import { planKindForPath, signedUrlForPlan } from '@/lib/upload';
 import { computeStatus } from '@/lib/asset-status';
+import {
+  putAssetsForFloor,
+  putBuilding,
+  putFloor,
+  putLastAudits,
+} from '@/lib/offline';
 import type { Asset } from '@/types/database';
 
 export function Floor() {
@@ -56,6 +62,12 @@ export function Floor() {
 
   // M8 — audit-due filter (deferred from M6).
   const [auditDueOnly, setAuditDueOnly] = useState(false);
+
+  // M9 — take this floor offline (pre-cache for the audit walkaround).
+  const [cacheState, setCacheState] = useState<'idle' | 'caching' | 'cached' | 'error'>(
+    'idle'
+  );
+  const [cacheError, setCacheError] = useState<string | null>(null);
 
   // Deliberate-reposition state machine (M5).
   const [repositionAssetId, setRepositionAssetId] = useState<string | null>(null);
@@ -161,6 +173,32 @@ export function Floor() {
       setSelectedAssetId(null);
     } catch {
       // Surface error via the dialog's own error handling later.
+    }
+  }
+
+  async function takeOffline() {
+    if (!floor || !building) return;
+    setCacheError(null);
+    setCacheState('caching');
+    try {
+      // Persist building + floor + assets + last audits to Dexie.
+      await putBuilding(building);
+      await putFloor(floor);
+      await putAssetsForFloor(floor.id, assets);
+      await putLastAudits(floor.id, lastAuditByAsset ?? new Map<string, string>());
+      // Pre-warm the floor plan in the SW runtime cache by fetching it once.
+      if (signedUrl) {
+        try {
+          await fetch(signedUrl, { cache: 'reload' });
+        } catch {
+          // Plan caching is best-effort.
+        }
+      }
+      setCacheState('cached');
+      window.setTimeout(() => setCacheState('idle'), 3500);
+    } catch (e) {
+      setCacheError(e instanceof Error ? e.message : 'Cache failed.');
+      setCacheState('error');
     }
   }
 
@@ -281,6 +319,22 @@ export function Floor() {
                 {placing ? 'Cancel placing' : 'Add asset'}
               </Button>
             )}
+            {floor.plan_url && (
+              <Button
+                variant="secondary"
+                iconLeft={
+                  cacheState === 'cached' ? (
+                    <Check size={14} aria-hidden />
+                  ) : (
+                    <Download size={14} aria-hidden />
+                  )
+                }
+                loading={cacheState === 'caching'}
+                onClick={() => void takeOffline()}
+              >
+                {cacheState === 'cached' ? 'Cached' : 'Take offline'}
+              </Button>
+            )}
             {floor.plan_url && canUploadPlan && (
               <Button
                 variant="secondary"
@@ -292,6 +346,12 @@ export function Floor() {
             )}
           </div>
         </header>
+
+        {cacheError && (
+          <div className="mb-4 rounded-md border border-danger/30 bg-danger-bg p-3 text-xs text-danger">
+            Could not cache this floor: {cacheError}
+          </div>
+        )}
 
         {activeSession && !inAudit && (
           <div

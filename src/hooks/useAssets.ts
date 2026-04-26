@@ -10,6 +10,7 @@ import {
   type CreateAssetInput,
   type UpdateAssetInput,
 } from '@/lib/queries/assets';
+import { getAssetsForFloor, putAssetsForFloor } from '@/lib/offline';
 import type { Asset } from '@/types/database';
 
 export const assetKeys = {
@@ -20,10 +21,28 @@ export const assetKeys = {
     [...assetKeys.all, 'deleted-by-building', buildingId] as const,
 };
 
+/**
+ * Stale-while-revalidate read of assets on a floor. Tries the network; on
+ * success, writes back to the Dexie cache. On failure (offline, unreachable
+ * Supabase), falls back to whatever's in Dexie. The audit walkaround is
+ * the highest-value offline surface and depends on this.
+ */
 export function useAssets(floorId: string | undefined) {
   return useQuery({
     queryKey: floorId ? assetKeys.byFloor(floorId) : ['assets', 'by-floor', 'none'],
-    queryFn: () => (floorId ? listAssetsByFloor(floorId) : Promise.resolve([])),
+    queryFn: async () => {
+      if (!floorId) return [] as Asset[];
+      try {
+        const fresh = await listAssetsByFloor(floorId);
+        // Fire-and-forget cache writeback; failures shouldn't break reads.
+        void putAssetsForFloor(floorId, fresh).catch(() => undefined);
+        return fresh;
+      } catch (err) {
+        const cached = await getAssetsForFloor(floorId).catch(() => [] as Asset[]);
+        if (cached.length) return cached;
+        throw err;
+      }
+    },
     enabled: !!floorId,
   });
 }
