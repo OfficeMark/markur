@@ -11,6 +11,8 @@ build/
 
 # Vite
 .vite/
+vite.config.ts.timestamp-*
+vite.config.*.timestamp-*.mjs
 
 # Tests
 coverage/

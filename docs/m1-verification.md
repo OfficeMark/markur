@@ -81,7 +81,7 @@ Once you've signed up at least once, ping me with the email you used and I'll in
 
 ### 4. Verify on Netlify
 
-After step 1 finishes deploying, go to your Netlify URL (https://harmonious-cannoli-de38c4.netlify.app). Same flow — sign up / sign in / out — should work end-to-end.
+After step 1 finishes deploying, go to your Netlify URL (https://waymarks-rebuild.netlify.app). Same flow — sign up / sign in / out — should work end-to-end.
 
 ## Things to try if something goes wrong
 

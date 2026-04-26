@@ -2,8 +2,18 @@ import { Link } from 'react-router-dom';
 import type { ReactNode } from 'react';
 import { SyncChip } from './SyncChip';
 import { UserMenu } from './UserMenu';
+import { BuildingNav } from './BuildingNav';
 
-export function AppShell({ children }: { children: ReactNode }) {
+type AppShellProps = {
+  children: ReactNode;
+  /**
+   * Hide the BuildingNav sidebar. Useful for the empty-state home (no grants
+   * yet → nothing to navigate to) and for the audit walkaround (full-screen).
+   */
+  withSidebar?: boolean;
+};
+
+export function AppShell({ children, withSidebar = true }: AppShellProps) {
   return (
     <div className="flex min-h-screen flex-col bg-waymarks-cream text-text">
       <header className="sticky top-0 z-40 border-b border-black/10 bg-waymarks-ink text-white">
@@ -20,7 +30,10 @@ export function AppShell({ children }: { children: ReactNode }) {
           </div>
         </div>
       </header>
-      <main className="flex-1">{children}</main>
+      <div className="mx-auto flex w-full max-w-[1600px] flex-1">
+        {withSidebar && <BuildingNav />}
+        <main className="flex-1">{children}</main>
+      </div>
     </div>
   );
 }

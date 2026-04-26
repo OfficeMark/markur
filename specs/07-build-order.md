@@ -15,7 +15,7 @@ The sequence Claude Code should ship vertical slices in. Each milestone is a wor
 
 Goal: A running React app at `localhost:5173` that proves the toolchain.
 
-**Shipped 2026-04-25.** Preview: https://harmonious-cannoli-de38c4.netlify.app — repo: https://github.com/Randy-Hough/waymarks2
+**Shipped 2026-04-25.** Preview: https://waymarks-rebuild.netlify.app — repo: https://github.com/Randy-Hough/waymarks2
 
 ### Tasks
 
@@ -34,40 +34,42 @@ Goal: A running React app at `localhost:5173` that proves the toolchain.
 
 - [x] `npm run dev` opens a styled "Waymarks" hero on `localhost:5173`
 - [x] `npm run check` is green
-- [x] Netlify preview URL works — https://harmonious-cannoli-de38c4.netlify.app
+- [x] Netlify preview URL works — https://waymarks-rebuild.netlify.app
 
 ---
 
-## M1 — Auth and the empty shell `[~]`
+## M1 — Auth and the empty shell `[x]`
 
 Goal: A user can sign up, log in, and see an empty "no buildings yet" state.
 
+**Shipped 2026-04-26.** Preview: https://waymarks-rebuild.netlify.app — Supabase project ref `drclmnqlurvwqpnnpgzb`. Migrations 0001–0004 applied. See `docs/m1-verification.md` for the run log.
+
 ### Tasks
 
-- [ ] Initialize Supabase project, copy URL + anon key into `.env.local` and Netlify
-- [ ] Create migration `0001_init.sql`: `profiles`, `organizations`, `buildings`, `floors`, `assets`, `tenants`, `access_grants`, `audit_log`, `pending_invitations` tables (per `03-data-model.md`)
-- [ ] Set up RLS on every table (start permissive, lock down per-table)
-- [ ] Add Postgres trigger: on `auth.users` insert, create `profiles` row
-- [ ] Add the `user_can()` SQL function (`04-permissions.md`)
-- [ ] `npm run db:types` to generate TypeScript types
-- [ ] Build `<AuthProvider>` and the login/signup screens (using Supabase Auth UI or hand-rolled)
-- [ ] Implement `useCurrentUser()`, `useCan()`, and `<Can>` from `04-permissions.md`
-- [ ] Implement the page shell: header (logo + sync chip + user chip), main content area
-- [ ] Empty state: "You don't have access to any buildings yet" with explainer
-- [ ] Manual test: sign up, log in, log out
+- [x] Initialize Supabase project, copy URL + anon key into `.env.local` and Netlify
+- [x] Create migration `0001_init.sql`: `profiles`, `organizations`, `buildings`, `floors`, `assets`, `tenants`, `access_grants`, `audit_log`, `pending_invitations` tables (per `03-data-model.md`)
+- [x] Set up RLS on every table (start permissive, lock down per-table)
+- [x] Add Postgres trigger: on `auth.users` insert, create `profiles` row
+- [x] Add the `user_can()` SQL function (`04-permissions.md`)
+- [x] `npm run db:types` to generate TypeScript types — generated via Supabase MCP and saved to `src/types/database.ts`
+- [x] Build `<AuthProvider>` and the login/signup screens (hand-rolled with React Hook Form + Zod)
+- [x] Implement `useCurrentUser()`, `useCan()`, and `<Can>` from `04-permissions.md`
+- [x] Implement the page shell: header (logo + sync chip + user chip), main content area
+- [x] Empty state: "You don't have access to any buildings yet" with explainer
+- [x] Manual test: sign up, log in, log out
 
 ### Acceptance
 
-- Sign up via email/password works
-- Login persists across reloads
-- Logged-out state correctly redirects to `/login`
-- The header looks like the design system specifies (dark ink + gold accent)
-- A signed-in user with no `access_grants` sees the empty state
-- Granting them a `super_admin` role manually in SQL → they see the building list (empty for now)
+- [x] Sign up via email/password works
+- [x] Login persists across reloads
+- [x] Logged-out state correctly redirects to `/login`
+- [x] The header looks like the design system specifies (dark ink + gold accent)
+- [x] A signed-in user with no `access_grants` sees the empty state
+- [x] Granting them a `super_admin` role manually in SQL → they see the building list (empty for now)
 
 ---
 
-## M2 — Buildings and floors (read-only) `[ ]`
+## M2 — Buildings and floors (read-only) `[~]`
 
 Goal: Super admin can see buildings and floors. No editing yet.
 

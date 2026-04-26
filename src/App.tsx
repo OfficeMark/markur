@@ -4,14 +4,16 @@ import { ThemeProvider } from '@/components/waymarks/ThemeProvider';
 import { AuthProvider } from '@/lib/AuthProvider';
 import { PermissionsProvider } from '@/lib/PermissionsProvider';
 import { Home } from '@/routes/Home';
+import { Building } from '@/routes/Building';
+import { Floor } from '@/routes/Floor';
 import { Login } from '@/routes/Login';
 import { ProtectedRoute } from '@/routes/ProtectedRoute';
 
 const queryClient = new QueryClient({
   defaultOptions: {
     queries: {
-      // Stale-while-revalidate is the read pattern (per CLAUDE.md). M1 doesn't
-      // exercise this much yet — defaults are fine until M2.
+      // Stale-while-revalidate is the read pattern (per CLAUDE.md). Defaults
+      // are reasonable; per-table tuning lands as we add features.
       staleTime: 30_000,
       refetchOnWindowFocus: false,
       retry: 1,
@@ -32,6 +34,22 @@ export default function App() {
                 element={
                   <ProtectedRoute>
                     <Home />
+                  </ProtectedRoute>
+                }
+              />
+              <Route
+                path="/buildings/:id"
+                element={
+                  <ProtectedRoute>
+                    <Building />
+                  </ProtectedRoute>
+                }
+              />
+              <Route
+                path="/floors/:id"
+                element={
+                  <ProtectedRoute>
+                    <Floor />
                   </ProtectedRoute>
                 }
               />
