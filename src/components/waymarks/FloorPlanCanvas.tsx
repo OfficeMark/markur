@@ -5,6 +5,7 @@ import {
   useRef,
   useState,
   type PointerEvent as RPointerEvent,
+  type ReactNode,
   type WheelEvent as RWheelEvent,
 } from 'react';
 import { getDocument, GlobalWorkerOptions } from 'pdfjs-dist';
@@ -16,26 +17,36 @@ if (typeof window !== 'undefined' && !GlobalWorkerOptions.workerSrc) {
   GlobalWorkerOptions.workerSrc = pdfWorkerUrl;
 }
 
+export type FloorPlanCanvasMode = 'view' | 'placing';
+
 export type FloorPlanCanvasProps = {
-  /** A signed Storage URL or a blob: URL pointing at the plan file. */
   src: string;
-  /** "pdf" | "image" — picks the renderer. */
   kind: 'pdf' | 'image';
-  /** Optional render-quality knob (devicePixelRatio multiplier). */
   scale?: number;
-  /** Called once we know the rendered pixel dimensions. M4+ uses these to
-   *  position pins (assets store coords as 0–1 normalized). */
-  onDimensions?: (dims: { width: number; height: number }) => void;
+  /**
+   * Optional pin overlay — rendered inside the same panned/zoomed wrapper as
+   * the canvas, so pins follow the plan when it moves. Use percent-based
+   * positioning (`left: ${x*100}%`, `top: ${y*100}%`) inside.
+   */
+  pinOverlay?: ReactNode;
+  mode?: FloorPlanCanvasMode;
+  /** Fires when the user clicks (not drags) on the canvas in `placing` mode.
+   *  Coordinates are 0–1 normalized within the rendered canvas box. */
+  onPlaceClick?: (coords: { x: number; y: number }) => void;
   className?: string;
 };
 
 type Status = 'idle' | 'loading' | 'ready' | 'error';
 
+const DRAG_THRESHOLD_PX = 4;
+
 export function FloorPlanCanvas({
   src,
   kind,
   scale = 1.5,
-  onDimensions,
+  pinOverlay,
+  mode = 'view',
+  onPlaceClick,
   className,
 }: FloorPlanCanvasProps) {
   const containerRef = useRef<HTMLDivElement | null>(null);
@@ -43,13 +54,16 @@ export function FloorPlanCanvas({
   const [status, setStatus] = useState<Status>('idle');
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
-  // Pan + zoom state (CSS transform; doesn't trigger re-render of the canvas
-  // bitmap, just the wrapper).
   const [zoom, setZoom] = useState(1);
   const [pan, setPan] = useState({ x: 0, y: 0 });
-  const draggingRef = useRef<{ x: number; y: number; startX: number; startY: number } | null>(
-    null
-  );
+  const dragRef = useRef<{
+    startClientX: number;
+    startClientY: number;
+    startPanX: number;
+    startPanY: number;
+    moved: boolean;
+  } | null>(null);
+  const [isDragging, setIsDragging] = useState(false);
 
   // Render whenever src or kind changes.
   useEffect(() => {
@@ -78,10 +92,8 @@ export function FloorPlanCanvas({
           canvas.height = Math.floor(viewport.height);
           await page.render({ canvasContext: ctx, viewport }).promise;
           if (cancelled) return;
-          onDimensions?.({ width: canvas.width, height: canvas.height });
           setStatus('ready');
         } else {
-          // Image path.
           const img = new Image();
           img.crossOrigin = 'anonymous';
           img.onload = () => {
@@ -95,7 +107,6 @@ export function FloorPlanCanvas({
             canvas.width = img.naturalWidth;
             canvas.height = img.naturalHeight;
             ctx.drawImage(img, 0, 0);
-            onDimensions?.({ width: canvas.width, height: canvas.height });
             setStatus('ready');
           };
           img.onerror = () => {
@@ -115,7 +126,7 @@ export function FloorPlanCanvas({
     return () => {
       cancelled = true;
     };
-  }, [src, kind, scale, onDimensions]);
+  }, [src, kind, scale]);
 
   const onWheel = useCallback((e: RWheelEvent<HTMLDivElement>) => {
     if (!e.ctrlKey && !e.metaKey && Math.abs(e.deltaY) < 4) return;
@@ -124,29 +135,58 @@ export function FloorPlanCanvas({
     setZoom((z) => clamp(z * factor, 0.3, 6));
   }, []);
 
-  const onPointerDown = useCallback((e: RPointerEvent<HTMLDivElement>) => {
-    if (e.button !== 0) return;
-    e.currentTarget.setPointerCapture(e.pointerId);
-    draggingRef.current = { x: e.clientX, y: e.clientY, startX: pan.x, startY: pan.y };
-  }, [pan.x, pan.y]);
+  const onPointerDown = useCallback(
+    (e: RPointerEvent<HTMLDivElement>) => {
+      if (e.button !== 0) return;
+      e.currentTarget.setPointerCapture(e.pointerId);
+      dragRef.current = {
+        startClientX: e.clientX,
+        startClientY: e.clientY,
+        startPanX: pan.x,
+        startPanY: pan.y,
+        moved: false,
+      };
+    },
+    [pan.x, pan.y]
+  );
 
   const onPointerMove = useCallback((e: RPointerEvent<HTMLDivElement>) => {
-    const drag = draggingRef.current;
+    const drag = dragRef.current;
     if (!drag) return;
-    setPan({
-      x: drag.startX + (e.clientX - drag.x),
-      y: drag.startY + (e.clientY - drag.y),
-    });
-  }, []);
-
-  const endDrag = useCallback((e: RPointerEvent<HTMLDivElement>) => {
-    draggingRef.current = null;
-    if (e.currentTarget.hasPointerCapture(e.pointerId)) {
-      e.currentTarget.releasePointerCapture(e.pointerId);
+    const dx = e.clientX - drag.startClientX;
+    const dy = e.clientY - drag.startClientY;
+    if (!drag.moved && Math.hypot(dx, dy) > DRAG_THRESHOLD_PX) {
+      drag.moved = true;
+      setIsDragging(true);
+    }
+    if (drag.moved) {
+      setPan({ x: drag.startPanX + dx, y: drag.startPanY + dy });
     }
   }, []);
 
-  // Keyboard zoom + pan.
+  const onPointerUp = useCallback(
+    (e: RPointerEvent<HTMLDivElement>) => {
+      const drag = dragRef.current;
+      dragRef.current = null;
+      if (e.currentTarget.hasPointerCapture(e.pointerId)) {
+        e.currentTarget.releasePointerCapture(e.pointerId);
+      }
+      setIsDragging(false);
+
+      // Click (no meaningful drag) → if in placing mode, fire onPlaceClick.
+      if (drag && !drag.moved && mode === 'placing' && onPlaceClick && canvasRef.current) {
+        const rect = canvasRef.current.getBoundingClientRect();
+        const x = (e.clientX - rect.left) / rect.width;
+        const y = (e.clientY - rect.top) / rect.height;
+        if (x >= 0 && x <= 1 && y >= 0 && y <= 1) {
+          onPlaceClick({ x, y });
+        }
+      }
+    },
+    [mode, onPlaceClick]
+  );
+
+  // Keyboard zoom + pan when the container has focus.
   useEffect(() => {
     function onKey(e: KeyboardEvent) {
       if (!containerRef.current) return;
@@ -190,6 +230,9 @@ export function FloorPlanCanvas({
     [pan.x, pan.y, zoom]
   );
 
+  const cursor =
+    mode === 'placing' ? 'cursor-crosshair' : isDragging ? 'cursor-grabbing' : 'cursor-grab';
+
   return (
     <div
       ref={containerRef}
@@ -200,11 +243,11 @@ export function FloorPlanCanvas({
       onWheel={onWheel}
       onPointerDown={onPointerDown}
       onPointerMove={onPointerMove}
-      onPointerUp={endDrag}
-      onPointerCancel={endDrag}
+      onPointerUp={onPointerUp}
+      onPointerCancel={onPointerUp}
       className={cn(
         'relative h-[70vh] w-full overflow-hidden rounded-xl border border-black/10 bg-waymarks-gold-soft outline-none focus-visible:ring-2 focus-visible:ring-waymarks-gold dark:border-white/10 dark:bg-white/5',
-        draggingRef.current ? 'cursor-grabbing' : 'cursor-grab',
+        cursor,
         className
       )}
     >
@@ -226,21 +269,32 @@ export function FloorPlanCanvas({
         style={{
           transform,
           transformOrigin: 'center center',
-          transition: draggingRef.current ? 'none' : 'transform 80ms ease-out',
+          transition: isDragging ? 'none' : 'transform 80ms ease-out',
         }}
       >
-        <canvas
-          ref={canvasRef}
-          aria-hidden
-          className={cn(
-            'max-h-full max-w-full select-none shadow-sm',
-            status === 'ready' ? 'opacity-100' : 'opacity-0'
+        <div className="relative">
+          <canvas
+            ref={canvasRef}
+            aria-hidden
+            className={cn(
+              'block max-h-[70vh] max-w-full select-none shadow-sm',
+              status === 'ready' ? 'opacity-100' : 'opacity-0'
+            )}
+          />
+          {/* Pin overlay rendered inside the same transformed/centered wrapper so pins pan + zoom with the plan. */}
+          {status === 'ready' && pinOverlay && (
+            <div className="pointer-events-none absolute inset-0">{pinOverlay}</div>
           )}
-        />
+        </div>
       </div>
       {status === 'ready' && (
         <div className="pointer-events-none absolute bottom-2 right-2 rounded-md bg-waymarks-ink/80 px-2 py-1 font-mono text-[10px] uppercase tracking-wide text-white/80">
           {Math.round(zoom * 100)}%
+        </div>
+      )}
+      {mode === 'placing' && status === 'ready' && (
+        <div className="pointer-events-none absolute left-1/2 top-3 -translate-x-1/2 rounded-full bg-waymarks-ink/85 px-3 py-1 text-xs font-medium text-white">
+          Click on the plan to place a pin · Esc to cancel
         </div>
       )}
     </div>

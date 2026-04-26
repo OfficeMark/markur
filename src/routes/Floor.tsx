@@ -1,25 +1,37 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
-import { ArrowLeft, ImageOff, RefreshCw } from 'lucide-react';
+import { ArrowLeft, ImageOff, Plus, RefreshCw } from 'lucide-react';
 import { AppShell } from '@/components/waymarks/AppShell';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { Button } from '@/components/ui/Button';
 import { FloorPlanCanvas } from '@/components/waymarks/FloorPlanCanvas';
 import { FloorPlanUploadDialog } from '@/components/waymarks/FloorPlanUploadDialog';
+import { PinOverlay } from '@/components/waymarks/PinOverlay';
+import { NewAssetDialog } from '@/components/waymarks/NewAssetDialog';
+import { AssetDrawer } from '@/components/waymarks/AssetDrawer';
 import { useFloor } from '@/hooks/useFloors';
 import { useBuilding } from '@/hooks/useBuildings';
+import { useAssets } from '@/hooks/useAssets';
 import { useCan } from '@/lib/permissions-context';
 import { planKindForPath, signedUrlForPlan } from '@/lib/upload';
+import type { Asset } from '@/types/database';
 
 export function Floor() {
   const { id } = useParams<{ id: string }>();
   const { data: floor, isLoading: fLoading, error: fError } = useFloor(id);
   const { data: building } = useBuilding(floor?.building_id);
-  const canUpload = useCan('upload_plan', { type: 'building', id: floor?.building_id ?? '' });
+  const { data: assets = [] } = useAssets(id);
+
+  const canUploadPlan = useCan('upload_plan', { type: 'building', id: floor?.building_id ?? '' });
+  const canCreate = useCan('create', { type: 'building', id: floor?.building_id ?? '' });
 
   const [uploadOpen, setUploadOpen] = useState(false);
   const [signedUrl, setSignedUrl] = useState<string | null>(null);
   const [signedUrlError, setSignedUrlError] = useState<string | null>(null);
+  const [placing, setPlacing] = useState(false);
+  const [placePos, setPlacePos] = useState<{ x: number; y: number } | null>(null);
+  const [newAssetOpen, setNewAssetOpen] = useState(false);
+  const [selectedAssetId, setSelectedAssetId] = useState<string | null>(null);
 
   // Resolve a signed URL whenever the plan_url changes.
   useEffect(() => {
@@ -44,6 +56,16 @@ export function Floor() {
     };
   }, [floor?.plan_url]);
 
+  // Esc cancels placing mode.
+  useEffect(() => {
+    if (!placing) return;
+    function onKey(e: KeyboardEvent) {
+      if (e.key === 'Escape') setPlacing(false);
+    }
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [placing]);
+
   const planKind = useMemo(() => planKindForPath(floor?.plan_url), [floor?.plan_url]);
 
   if (fLoading) return <Skeleton />;
@@ -67,6 +89,8 @@ export function Floor() {
     );
   }
 
+  const buildingId = floor.building_id;
+
   return (
     <AppShell>
       <div className="mx-auto w-full max-w-5xl px-4 py-8 sm:px-6 sm:py-10">
@@ -82,16 +106,30 @@ export function Floor() {
               {building ? `${building.name} · floor` : 'Floor'}
             </p>
             <h1 className="font-serif text-3xl text-text sm:text-4xl">{floor.label}</h1>
+            <p className="mt-1 text-xs text-text-faint">
+              {assets.length} {assets.length === 1 ? 'pin' : 'pins'}
+            </p>
           </div>
-          {floor.plan_url && canUpload && (
-            <Button
-              variant="secondary"
-              iconLeft={<RefreshCw size={14} aria-hidden />}
-              onClick={() => setUploadOpen(true)}
-            >
-              Replace plan
-            </Button>
-          )}
+          <div className="flex items-center gap-2">
+            {floor.plan_url && canCreate && (
+              <Button
+                variant={placing ? 'gold' : 'secondary'}
+                iconLeft={<Plus size={14} aria-hidden />}
+                onClick={() => setPlacing((p) => !p)}
+              >
+                {placing ? 'Cancel placing' : 'Add asset'}
+              </Button>
+            )}
+            {floor.plan_url && canUploadPlan && (
+              <Button
+                variant="secondary"
+                iconLeft={<RefreshCw size={14} aria-hidden />}
+                onClick={() => setUploadOpen(true)}
+              >
+                Replace plan
+              </Button>
+            )}
+          </div>
         </header>
 
         {floor.plan_url ? (
@@ -108,7 +146,23 @@ export function Floor() {
               <span className="sr-only">Loading plan…</span>
             </div>
           ) : (
-            <FloorPlanCanvas src={signedUrl} kind={planKind} />
+            <FloorPlanCanvas
+              src={signedUrl}
+              kind={planKind}
+              mode={placing ? 'placing' : 'view'}
+              onPlaceClick={(coords) => {
+                setPlacing(false);
+                setPlacePos(coords);
+                setNewAssetOpen(true);
+              }}
+              pinOverlay={
+                <PinOverlay
+                  assets={assets}
+                  selectedAssetId={selectedAssetId}
+                  onSelectAsset={(a: Asset) => setSelectedAssetId(a.id)}
+                />
+              }
+            />
           )
         ) : (
           <EmptyState
@@ -116,7 +170,7 @@ export function Floor() {
             title="No plan uploaded yet"
             description="Once a floor plan is uploaded you'll see it here, ready for pins. PDF, PNG, or JPG."
             primaryAction={
-              canUpload
+              canUploadPlan
                 ? { label: 'Upload floor plan', onClick: () => setUploadOpen(true) }
                 : undefined
             }
@@ -124,7 +178,7 @@ export function Floor() {
         )}
       </div>
 
-      {canUpload && (
+      {canUploadPlan && (
         <FloorPlanUploadDialog
           open={uploadOpen}
           onOpenChange={setUploadOpen}
@@ -134,6 +188,31 @@ export function Floor() {
           existingPlanUrl={floor.plan_url}
         />
       )}
+
+      {canCreate && (
+        <NewAssetDialog
+          open={newAssetOpen}
+          onOpenChange={(o) => {
+            setNewAssetOpen(o);
+            if (!o) setPlacePos(null);
+          }}
+          floorId={floor.id}
+          position={placePos}
+          onCreated={(asset) => {
+            // Open the drawer for the just-created pin so the user sees it landed.
+            setSelectedAssetId(asset.id);
+          }}
+        />
+      )}
+
+      <AssetDrawer
+        assetId={selectedAssetId}
+        floorId={floor.id}
+        buildingId={buildingId}
+        onOpenChange={(o) => {
+          if (!o) setSelectedAssetId(null);
+        }}
+      />
     </AppShell>
   );
 }
@@ -149,4 +228,3 @@ function Skeleton() {
     </AppShell>
   );
 }
-
