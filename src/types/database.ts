@@ -84,6 +84,7 @@ export type Database = {
           floor_id: string;
           id: string;
           installed_at: string | null;
+          is_locked: boolean;
           location_notes: string | null;
           manufacturer: string | null;
           name: string;
@@ -104,6 +105,7 @@ export type Database = {
           floor_id: string;
           id?: string;
           installed_at?: string | null;
+          is_locked?: boolean;
           location_notes?: string | null;
           manufacturer?: string | null;
           name: string;
@@ -124,6 +126,7 @@ export type Database = {
           floor_id?: string;
           id?: string;
           installed_at?: string | null;
+          is_locked?: boolean;
           location_notes?: string | null;
           manufacturer?: string | null;
           name?: string;

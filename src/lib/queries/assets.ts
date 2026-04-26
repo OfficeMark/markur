@@ -65,6 +65,7 @@ export type UpdateAssetInput = Partial<{
   installed_at: string | null;
   audit_cycle_days: number | null;
   status: 'good' | 'attention' | 'flagged';
+  is_locked: boolean;
   tenant_scope_id: string | null;
   x: number;
   y: number;

@@ -11,7 +11,7 @@ import { NewAssetDialog } from '@/components/waymarks/NewAssetDialog';
 import { AssetDrawer } from '@/components/waymarks/AssetDrawer';
 import { useFloor } from '@/hooks/useFloors';
 import { useBuilding } from '@/hooks/useBuildings';
-import { useAssets } from '@/hooks/useAssets';
+import { useAssets, useUpdateAsset } from '@/hooks/useAssets';
 import { useCan } from '@/lib/permissions-context';
 import { planKindForPath, signedUrlForPlan } from '@/lib/upload';
 import type { Asset } from '@/types/database';
@@ -24,6 +24,8 @@ export function Floor() {
 
   const canUploadPlan = useCan('upload_plan', { type: 'building', id: floor?.building_id ?? '' });
   const canCreate = useCan('create', { type: 'building', id: floor?.building_id ?? '' });
+  const canEdit = useCan('edit', { type: 'building', id: floor?.building_id ?? '' });
+  const updateAsset = useUpdateAsset(id);
 
   const [uploadOpen, setUploadOpen] = useState(false);
   const [signedUrl, setSignedUrl] = useState<string | null>(null);
@@ -159,7 +161,11 @@ export function Floor() {
                 <PinOverlay
                   assets={assets}
                   selectedAssetId={selectedAssetId}
+                  canMove={canEdit}
                   onSelectAsset={(a: Asset) => setSelectedAssetId(a.id)}
+                  onReposition={(assetId, x, y) =>
+                    updateAsset.mutate({ id: assetId, patch: { x, y } })
+                  }
                 />
               }
             />
