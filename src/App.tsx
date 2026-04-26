@@ -8,6 +8,7 @@ import { Building } from '@/routes/Building';
 import { Floor } from '@/routes/Floor';
 import { Login } from '@/routes/Login';
 import { ProtectedRoute } from '@/routes/ProtectedRoute';
+import { Trash } from '@/routes/Trash';
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -42,6 +43,14 @@ export default function App() {
                 element={
                   <ProtectedRoute>
                     <Building />
+                  </ProtectedRoute>
+                }
+              />
+              <Route
+                path="/buildings/:id/trash"
+                element={
+                  <ProtectedRoute>
+                    <Trash />
                   </ProtectedRoute>
                 }
               />

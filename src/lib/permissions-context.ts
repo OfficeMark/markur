@@ -25,3 +25,18 @@ export function useCan(capability: Capability, resource: Resource): boolean {
   if (loading) return false;
   return checkCapability(grants, capability, resource);
 }
+
+/**
+ * Returns true iff the signed-in user has an active super_admin grant. Used
+ * for super-only UI surfaces like the Trash view (M5). Returns false during
+ * initial load.
+ */
+export function useIsSuperAdmin(): boolean {
+  const { grants, loading } = usePermissions();
+  if (loading) return false;
+  const now = Date.now();
+  return grants.some(
+    (g) =>
+      g.role === 'super_admin' && (!g.expires_at || new Date(g.expires_at).getTime() > now)
+  );
+}

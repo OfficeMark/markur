@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
-import { ArrowLeft, ImageOff, Plus, RefreshCw } from 'lucide-react';
+import { ArrowLeft, ImageOff, Plus, RefreshCw, Trash2 } from 'lucide-react';
 import { AppShell } from '@/components/waymarks/AppShell';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { Button } from '@/components/ui/Button';
@@ -9,9 +9,11 @@ import { FloorPlanUploadDialog } from '@/components/waymarks/FloorPlanUploadDial
 import { PinOverlay } from '@/components/waymarks/PinOverlay';
 import { NewAssetDialog } from '@/components/waymarks/NewAssetDialog';
 import { AssetDrawer } from '@/components/waymarks/AssetDrawer';
+import { RepositionToolbar } from '@/components/waymarks/RepositionToolbar';
+import { StepUpDialog } from '@/components/waymarks/StepUpDialog';
 import { useFloor } from '@/hooks/useFloors';
 import { useBuilding } from '@/hooks/useBuildings';
-import { useAssets, useUpdateAsset } from '@/hooks/useAssets';
+import { useAssets, useSoftDeleteAsset, useUpdateAsset } from '@/hooks/useAssets';
 import { useCan } from '@/lib/permissions-context';
 import { planKindForPath, signedUrlForPlan } from '@/lib/upload';
 import type { Asset } from '@/types/database';
@@ -26,6 +28,7 @@ export function Floor() {
   const canCreate = useCan('create', { type: 'building', id: floor?.building_id ?? '' });
   const canEdit = useCan('edit', { type: 'building', id: floor?.building_id ?? '' });
   const updateAsset = useUpdateAsset(id);
+  const softDelete = useSoftDeleteAsset(id);
 
   const [uploadOpen, setUploadOpen] = useState(false);
   const [signedUrl, setSignedUrl] = useState<string | null>(null);
@@ -34,6 +37,15 @@ export function Floor() {
   const [placePos, setPlacePos] = useState<{ x: number; y: number } | null>(null);
   const [newAssetOpen, setNewAssetOpen] = useState(false);
   const [selectedAssetId, setSelectedAssetId] = useState<string | null>(null);
+
+  // Deliberate-reposition state machine (M5).
+  const [repositionAssetId, setRepositionAssetId] = useState<string | null>(null);
+  const [pendingMove, setPendingMove] = useState<
+    { assetId: string; from: { x: number; y: number }; to: { x: number; y: number } } | null
+  >(null);
+
+  // Soft-delete confirmation state (M5).
+  const [deleteAssetId, setDeleteAssetId] = useState<string | null>(null);
 
   // Resolve a signed URL whenever the plan_url changes.
   useEffect(() => {
@@ -67,6 +79,74 @@ export function Floor() {
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
   }, [placing]);
+
+  // Esc cancels reposition mode (also clears any pending move).
+  useEffect(() => {
+    if (!repositionAssetId) return;
+    function onKey(e: KeyboardEvent) {
+      if (e.key === 'Escape') {
+        setPendingMove(null);
+        setRepositionAssetId(null);
+      }
+    }
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [repositionAssetId]);
+
+  // Reposition mode and placing mode are mutually exclusive — turning one
+  // on cancels the other.
+  useEffect(() => {
+    if (repositionAssetId && placing) setPlacing(false);
+  }, [repositionAssetId, placing]);
+
+  function startReposition(assetId: string) {
+    setSelectedAssetId(null); // close drawer
+    setPendingMove(null);
+    setRepositionAssetId(assetId);
+  }
+  function cancelReposition() {
+    setPendingMove(null);
+    setRepositionAssetId(null);
+  }
+  function onRepositionDragEnd(assetId: string, x: number, y: number) {
+    const a = assets.find((a) => a.id === assetId);
+    if (!a) return;
+    // Treat sub-pixel-ish moves as no-ops.
+    if (Math.abs(a.x - x) < 0.0005 && Math.abs(a.y - y) < 0.0005) {
+      setPendingMove(null);
+      return;
+    }
+    setPendingMove({ assetId, from: { x: a.x, y: a.y }, to: { x, y } });
+  }
+  async function confirmMove() {
+    if (!pendingMove) return;
+    try {
+      await updateAsset.mutateAsync({
+        id: pendingMove.assetId,
+        patch: { x: pendingMove.to.x, y: pendingMove.to.y },
+      });
+      setPendingMove(null);
+      setRepositionAssetId(null); // exit mode after a successful confirm
+    } catch {
+      // The optimistic-update rollback in useUpdateAsset already restores the
+      // pin. Keep the user in reposition mode so they can retry.
+      setPendingMove(null);
+    }
+  }
+  function dismissPendingMove() {
+    setPendingMove(null);
+  }
+
+  async function confirmDelete() {
+    if (!deleteAssetId) return;
+    try {
+      await softDelete.mutateAsync(deleteAssetId);
+      setDeleteAssetId(null);
+      setSelectedAssetId(null); // drawer was already closed by the dialog open; be defensive
+    } catch {
+      // Surface error via the dialog's own error handling later.
+    }
+  }
 
   const planKind = useMemo(() => planKindForPath(floor?.plan_url), [floor?.plan_url]);
 
@@ -148,27 +228,44 @@ export function Floor() {
               <span className="sr-only">Loading plan…</span>
             </div>
           ) : (
-            <FloorPlanCanvas
-              src={signedUrl}
-              kind={planKind}
-              mode={placing ? 'placing' : 'view'}
-              onPlaceClick={(coords) => {
-                setPlacing(false);
-                setPlacePos(coords);
-                setNewAssetOpen(true);
-              }}
-              pinOverlay={
-                <PinOverlay
-                  assets={assets}
-                  selectedAssetId={selectedAssetId}
-                  canMove={canEdit}
-                  onSelectAsset={(a: Asset) => setSelectedAssetId(a.id)}
-                  onReposition={(assetId, x, y) =>
-                    updateAsset.mutate({ id: assetId, patch: { x, y } })
-                  }
+            <div className="relative">
+              <FloorPlanCanvas
+                src={signedUrl}
+                kind={planKind}
+                mode={placing ? 'placing' : 'view'}
+                onPlaceClick={(coords) => {
+                  setPlacing(false);
+                  setPlacePos(coords);
+                  setNewAssetOpen(true);
+                }}
+                pinOverlay={
+                  <PinOverlay
+                    assets={assets}
+                    selectedAssetId={selectedAssetId}
+                    canMove={canEdit}
+                    onSelectAsset={(a: Asset) => setSelectedAssetId(a.id)}
+                    onReposition={(assetId, x, y) =>
+                      updateAsset.mutate({ id: assetId, patch: { x, y } })
+                    }
+                    repositionAssetId={repositionAssetId}
+                    onRepositionDragEnd={onRepositionDragEnd}
+                    pendingRepositionCoords={
+                      pendingMove ? { x: pendingMove.to.x, y: pendingMove.to.y } : null
+                    }
+                  />
+                }
+              />
+              {repositionAssetId && (
+                <RepositionToolbar
+                  state={pendingMove ? 'pending' : 'armed'}
+                  pending={pendingMove}
+                  busy={updateAsset.isPending}
+                  onCancel={cancelReposition}
+                  onConfirm={() => void confirmMove()}
+                  onDismissPending={dismissPendingMove}
                 />
-              }
-            />
+              )}
+            </div>
           )
         ) : (
           <EmptyState
@@ -218,6 +315,23 @@ export function Floor() {
         onOpenChange={(o) => {
           if (!o) setSelectedAssetId(null);
         }}
+        onStartReposition={startReposition}
+        onStartDelete={(id) => setDeleteAssetId(id)}
+      />
+
+      <StepUpDialog
+        open={!!deleteAssetId}
+        onOpenChange={(o) => {
+          if (!o) setDeleteAssetId(null);
+        }}
+        title="Delete asset"
+        description="This soft-deletes the pin. A super admin can restore it from Trash within 30 days; after that it's permanent."
+        confirmWord="DELETE"
+        confirmLabel="Delete asset"
+        confirmVariant="danger"
+        confirmIcon={<Trash2 size={14} aria-hidden />}
+        busy={softDelete.isPending}
+        onConfirm={confirmDelete}
       />
     </AppShell>
   );

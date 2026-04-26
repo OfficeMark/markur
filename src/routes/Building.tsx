@@ -1,14 +1,16 @@
 import { Link, useParams } from 'react-router-dom';
-import { ArrowLeft, MapPin, Layers, ImageOff } from 'lucide-react';
+import { ArrowLeft, MapPin, Layers, ImageOff, Trash2 } from 'lucide-react';
 import { AppShell } from '@/components/waymarks/AppShell';
 import { useBuilding } from '@/hooks/useBuildings';
 import { useFloors } from '@/hooks/useFloors';
+import { useIsSuperAdmin } from '@/lib/permissions-context';
 import type { Floor } from '@/types/database';
 
 export function Building() {
   const { id } = useParams<{ id: string }>();
   const { data: building, isLoading: bLoading, error: bError } = useBuilding(id);
   const { data: floors = [], isLoading: fLoading } = useFloors(id);
+  const isSuperAdmin = useIsSuperAdmin();
 
   if (bLoading) return <Skeleton />;
 
@@ -51,6 +53,18 @@ export function Building() {
             </span>
           </p>
         </header>
+
+        {isSuperAdmin && building && (
+          <div className="mb-6 flex flex-wrap gap-2">
+            <Link
+              to={`/buildings/${building.id}/trash`}
+              className="inline-flex h-9 items-center gap-1.5 rounded-md border border-black/10 bg-surface px-3 text-xs font-medium text-text-muted hover:border-black/20 hover:text-text dark:border-white/10 dark:hover:border-white/20"
+            >
+              <Trash2 size={12} aria-hidden />
+              <span>Trash</span>
+            </Link>
+          </div>
+        )}
 
         <section className="space-y-3">
           <h2 className="text-xs font-medium uppercase tracking-[0.18em] text-text-faint">

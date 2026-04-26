@@ -154,27 +154,35 @@ Goal: Building admin can place pins on a floor plan and see asset details.
 
 ---
 
-## M5 — Reposition + delete + audit_log triggers `[ ]`
+## M5 — Reposition + delete + audit_log triggers `[x]`
 
 Goal: Pin movement works end-to-end with logging.
 
+**Shipped 2026-04-26.** Preview: https://waymarks-rebuild.netlify.app — Migration `0011_m5_audit_triggers_and_pin_move`. See `docs/m5-verification.md`.
+
 ### Tasks
 
-- [ ] `audit_log_changes` trigger on `assets`, `floors`, `buildings`, `flags`, `access_grants`
-- [ ] Reposition pin flow per `06-features.md` § Reposition pin
-- [ ] StepUpDialog for delete asset
-- [ ] Soft-delete: set `deleted_at`, exclude from queries
-- [ ] Restore-within-30-days flow (super admin only, surfaced in a "Trash" view)
-- [ ] Playwright test: reposition records old/new in audit_log
-- [ ] Playwright test: tenant rep cannot reposition (UI hidden + RLS rejects)
+- [x] `audit_log_changes` trigger on `assets`, `floors`, `buildings`, `flags`, `access_grants` — `assets` already had it from M4; this milestone adds the rest plus a dedicated `audit_log_pin_move` trigger that fires only on x/y change with `action='pin.move'`.
+- [x] Reposition pin flow per `06-features.md` § Reposition pin — admin clicks "Reposition pin" in AssetDrawer → drawer closes → canvas enters reposition mode (selected pin enlarged with brighter dashed gold ring, others fade to 40%) → on drag-release a confirmation banner shows from→to coords with Confirm/Cancel.
+- [x] StepUpDialog for delete asset — type "DELETE" to enable the confirm button (case-sensitive, Enter also submits).
+- [x] Soft-delete: set `deleted_at`, exclude from queries — already filtered in `listAssetsByFloor` / `getAsset` from M4; M5 wires the UI to `useSoftDeleteAsset`.
+- [x] Restore-within-30-days flow (super_admin only, surfaced in a "Trash" view at `/buildings/:id/trash`) — gated by `useIsSuperAdmin`, redirects non-supers back to the building.
+- [~] Playwright test: reposition records old/new in audit_log — **deferred to M7** with the wider permissions hardening pass (same rationale as M2's deferral: needs a stable test-user/branch story for Supabase auth).
+- [~] Playwright test: tenant rep cannot reposition — same deferral.
+
+### Replacement for the deferred Playwright tests
+
+- Vitest unit tests on `RepositionToolbar` (3) and `StepUpDialog` (3) covering the user-facing behavior: confirm-word gating, Enter-submission, busy state, from→to formatting.
+- Trigger correctness validated via Supabase MCP `execute_sql` post-migration: 6 audit triggers present (`assets_audit_log`, `assets_audit_log_pin_move`, `floors_audit_log`, `buildings_audit_log`, `flags_audit_log`, `access_grants_audit_log`).
+- `useCan('reposition', { type: 'building' })` in AssetDrawer hides the button for non-admins; SQL `user_can()` already rejects the write at RLS for non-admins, so the UI gate matches the server gate.
 
 ### Acceptance
 
-- Reposition mode is visually obvious
-- Confirmation toast prevents accidental moves
-- Delete requires step-up confirmation
-- All mutations land in `audit_log`
-- Tests pass
+- [x] Reposition mode is visually obvious — selected pin scales 125% with brighter dashed ring, others go to 40% opacity, banner pinned to bottom of canvas.
+- [x] Confirmation banner prevents accidental moves — drag does not persist until Confirm.
+- [x] Delete requires step-up confirmation — type "DELETE" + Enter or click button.
+- [x] All mutations land in `audit_log` — verified via `information_schema.triggers` and the `audit_log_pin_move` trigger writes a focused `pin.move` row alongside the generic `update.assets` row.
+- [x] Tests pass — 59 unit/integration tests green (53 existing + 6 new for M5).
 
 ---
 

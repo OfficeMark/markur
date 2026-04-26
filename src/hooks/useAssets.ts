@@ -3,6 +3,8 @@ import {
   createAsset,
   getAsset,
   listAssetsByFloor,
+  listDeletedAssetsForBuilding,
+  restoreAsset,
   softDeleteAsset,
   updateAsset,
   type CreateAssetInput,
@@ -14,6 +16,8 @@ export const assetKeys = {
   all: ['assets'] as const,
   byFloor: (floorId: string) => [...assetKeys.all, 'by-floor', floorId] as const,
   detail: (id: string) => [...assetKeys.all, 'detail', id] as const,
+  deletedByBuilding: (buildingId: string) =>
+    [...assetKeys.all, 'deleted-by-building', buildingId] as const,
 };
 
 export function useAssets(floorId: string | undefined) {
@@ -104,6 +108,37 @@ export function useSoftDeleteAsset(floorId: string | undefined) {
     onSuccess: (_data, id) => {
       qc.invalidateQueries({ queryKey: assetKeys.detail(id) });
       if (floorId) qc.invalidateQueries({ queryKey: assetKeys.byFloor(floorId) });
+      // Any open Trash view should pick up the new entry.
+      qc.invalidateQueries({ queryKey: [...assetKeys.all, 'deleted-by-building'] });
+    },
+  });
+}
+
+/**
+ * Soft-deleted assets in a building, within the configurable retention
+ * window (default 30 days). Used by the super_admin Trash view (M5).
+ */
+export function useDeletedAssets(buildingId: string | undefined, withinDays = 30) {
+  return useQuery({
+    queryKey: buildingId
+      ? assetKeys.deletedByBuilding(buildingId)
+      : ['assets', 'deleted-by-building', 'none'],
+    queryFn: () =>
+      buildingId ? listDeletedAssetsForBuilding(buildingId, withinDays) : Promise.resolve([]),
+    enabled: !!buildingId,
+  });
+}
+
+export function useRestoreAsset(buildingId: string | undefined) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) => restoreAsset(id),
+    onSuccess: () => {
+      // Restored asset reappears on its floor, so invalidate everything.
+      qc.invalidateQueries({ queryKey: assetKeys.all });
+      if (buildingId) {
+        qc.invalidateQueries({ queryKey: assetKeys.deletedByBuilding(buildingId) });
+      }
     },
   });
 }

@@ -16,6 +16,7 @@ import {
   Save,
   Lock,
   LockOpen,
+  Move,
 } from 'lucide-react';
 import { Chip } from '@/components/ui/Chip';
 import { MetricCard } from '@/components/ui/MetricCard';
@@ -41,6 +42,17 @@ export type AssetDrawerProps = {
   floorId: string;
   buildingId: string;
   onOpenChange: (open: boolean) => void;
+  /**
+   * "Reposition pin" — admin-only deliberate move flow (M5). When present,
+   * a button surfaces in the drawer that closes the drawer and asks the
+   * parent to enter reposition mode on the canvas.
+   */
+  onStartReposition?: (assetId: string) => void;
+  /**
+   * "Delete asset" — admin-only soft-delete (M5). Parent handles the
+   * StepUpDialog confirmation flow.
+   */
+  onStartDelete?: (assetId: string) => void;
 };
 
 const STATUS_OPTIONS: Array<{ value: AssetStatus; label: string; icon: typeof Check }> = [
@@ -66,11 +78,20 @@ const FACILITY_TYPES = [
   { value: 'utility_room', label: 'Utility room' },
 ] as const;
 
-export function AssetDrawer({ assetId, floorId, buildingId, onOpenChange }: AssetDrawerProps) {
+export function AssetDrawer({
+  assetId,
+  floorId,
+  buildingId,
+  onOpenChange,
+  onStartReposition,
+  onStartDelete,
+}: AssetDrawerProps) {
   const open = !!assetId;
   const { data: asset, isLoading } = useAsset(assetId ?? undefined);
   const { data: activity = [] } = useActivity('assets', assetId ?? undefined);
   const canEdit = useCan('edit', { type: 'building', id: buildingId });
+  const canReposition = useCan('reposition', { type: 'building', id: buildingId });
+  const canDelete = useCan('delete', { type: 'building', id: buildingId });
   const update = useUpdateAsset(floorId);
   const [editing, setEditing] = useState(false);
 
@@ -154,6 +175,12 @@ export function AssetDrawer({ assetId, floorId, buildingId, onOpenChange }: Asse
                       onChangeStatus={(status) =>
                         update.mutate({ id: asset.id, patch: { status } })
                       }
+                    />
+                    <AdminActions
+                      canReposition={canReposition && !!onStartReposition}
+                      canDelete={canDelete && !!onStartDelete}
+                      onReposition={() => onStartReposition?.(asset.id)}
+                      onDelete={() => onStartDelete?.(asset.id)}
                     />
                   </>
                 )}
@@ -269,6 +296,44 @@ function QuickActions({
           );
         })}
       </div>
+    </div>
+  );
+}
+
+function AdminActions({
+  canReposition,
+  canDelete,
+  onReposition,
+  onDelete,
+}: {
+  canReposition: boolean;
+  canDelete: boolean;
+  onReposition: () => void;
+  onDelete: () => void;
+}) {
+  if (!canReposition && !canDelete) return null;
+  return (
+    <div className="flex flex-wrap gap-1.5">
+      {canReposition && (
+        <button
+          type="button"
+          onClick={onReposition}
+          className="inline-flex h-8 items-center gap-1.5 rounded-md border border-black/10 bg-surface px-3 text-xs font-medium text-text hover:bg-black/5 dark:border-white/10 dark:hover:bg-white/5"
+        >
+          <Move size={12} aria-hidden />
+          <span>Reposition pin</span>
+        </button>
+      )}
+      {canDelete && (
+        <button
+          type="button"
+          onClick={onDelete}
+          className="inline-flex h-8 items-center gap-1.5 rounded-md border border-danger/30 bg-surface px-3 text-xs font-medium text-danger hover:bg-danger-bg dark:border-danger/40"
+        >
+          <Trash2 size={12} aria-hidden />
+          <span>Delete asset</span>
+        </button>
+      )}
     </div>
   );
 }
@@ -818,6 +883,7 @@ function prettyType(type: string): string {
 }
 
 function prettyAction(action: string): string {
+  if (action === 'pin.move') return 'Pin moved';
   if (action.startsWith('insert.')) return 'Created';
   if (action.startsWith('update.')) return 'Updated';
   if (action.startsWith('delete.')) return 'Deleted';

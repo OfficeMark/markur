@@ -89,3 +89,43 @@ export async function softDeleteAsset(id: string): Promise<void> {
     .eq('id', id);
   if (error) throw error;
 }
+
+/**
+ * List soft-deleted assets in a building, deleted within the last `withinDays`
+ * days. The Trash view (super_admin only) uses this to surface restorable
+ * pins. We join against floors so we can scope by building.
+ *
+ * RLS lets super_admin select these directly; building_admins on the building
+ * also see them via the existing `assets_select` policy (no restriction on
+ * deleted_at). Non-admins return [].
+ */
+export type DeletedAsset = Asset & { floor_label: string | null };
+
+export async function listDeletedAssetsForBuilding(
+  buildingId: string,
+  withinDays = 30
+): Promise<DeletedAsset[]> {
+  const cutoff = new Date(Date.now() - withinDays * 24 * 60 * 60 * 1000).toISOString();
+  const { data, error } = await supabase
+    .from('assets')
+    .select('*, floor:floors!inner(id, building_id, label)')
+    .eq('floor.building_id', buildingId)
+    .not('deleted_at', 'is', null)
+    .gte('deleted_at', cutoff)
+    .order('deleted_at', { ascending: false });
+  if (error) throw error;
+  type Row = Asset & { floor: { id: string; building_id: string; label: string } | null };
+  const rows = (data ?? []) as unknown as Row[];
+  return rows.map((r) => {
+    const { floor, ...rest } = r;
+    return { ...rest, floor_label: floor?.label ?? null };
+  });
+}
+
+export async function restoreAsset(id: string): Promise<void> {
+  const { error } = await supabase
+    .from('assets')
+    .update({ deleted_at: null })
+    .eq('id', id);
+  if (error) throw error;
+}

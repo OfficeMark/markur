@@ -7,10 +7,28 @@ export type PinOverlayProps = {
   assets: Asset[];
   selectedAssetId?: string | null;
   onSelectAsset: (asset: Asset) => void;
-  /** Whether the current user can move unlocked pins. */
+  /** Whether the current user can move unlocked pins via the M4 quick-drag. */
   canMove: boolean;
-  /** Persist a new (x, y) for an asset after a drag. */
+  /** Persist a new (x, y) for an asset after a quick-drag (M4 inline path). */
   onReposition?: (assetId: string, x: number, y: number) => void;
+
+  // Deliberate reposition (M5) ---------------------------------------------
+  /**
+   * When set, this pin is in deliberate-reposition mode: it is the only
+   * draggable pin (lock state ignored), other pins fade out, and the
+   * pointer-up handler reports the candidate coordinates instead of
+   * persisting them. The parent shows a confirmation toast and then either
+   * commits via the regular update path or cancels.
+   */
+  repositionAssetId?: string | null;
+  /** Drag-end callback in reposition mode. Parent decides what to do next. */
+  onRepositionDragEnd?: (assetId: string, x: number, y: number) => void;
+  /**
+   * If the parent is showing a confirm-or-cancel toast for a pending move,
+   * keep the pin pinned at these coords (overrides asset.x/y). Cleared by
+   * the parent on confirm or cancel.
+   */
+  pendingRepositionCoords?: { x: number; y: number } | null;
 };
 
 const DRAG_THRESHOLD_PX = 4;
@@ -30,6 +48,8 @@ type DragState = {
   /** Latest clamped 0–1 coords while dragging. */
   curX: number;
   curY: number;
+  /** Whether this drag is the deliberate-reposition path (vs. M4 quick-nudge). */
+  reposition: boolean;
 };
 
 export function PinOverlay({
@@ -38,6 +58,9 @@ export function PinOverlay({
   onSelectAsset,
   canMove,
   onReposition,
+  repositionAssetId,
+  onRepositionDragEnd,
+  pendingRepositionCoords,
 }: PinOverlayProps) {
   const layerRef = useRef<HTMLDivElement | null>(null);
   // dragRef is always-current; the React state below is for visualization only.
@@ -48,8 +71,11 @@ export function PinOverlay({
     null
   );
 
-  function startDrag(asset: Asset, e: React.PointerEvent<HTMLButtonElement>) {
-    if (!canMove || !onReposition || asset.is_locked) return;
+  function startDrag(
+    asset: Asset,
+    isReposition: boolean,
+    e: React.PointerEvent<HTMLButtonElement>
+  ) {
     const layer = layerRef.current;
     if (!layer) return;
     const rect = layer.getBoundingClientRect();
@@ -69,6 +95,7 @@ export function PinOverlay({
       moved: false,
       curX: asset.x,
       curY: asset.y,
+      reposition: isReposition,
     };
     e.currentTarget.setPointerCapture(e.pointerId);
   }
@@ -96,10 +123,14 @@ export function PinOverlay({
     if (button && button.hasPointerCapture(e.pointerId)) {
       button.releasePointerCapture(e.pointerId);
     }
-    if (drag.moved && onReposition) {
+    if (drag.moved) {
       // Pull the latest computed coords straight from the ref — no React
-      // state closure to go stale.
-      onReposition(drag.assetId, drag.curX, drag.curY);
+      // state closure to go stale (lesson from M4 drag-closure incident).
+      if (drag.reposition) {
+        onRepositionDragEnd?.(drag.assetId, drag.curX, drag.curY);
+      } else {
+        onReposition?.(drag.assetId, drag.curX, drag.curY);
+      }
       // Suppress the click that follows a drag (the browser fires one after
       // pointerup if the press + release land on the same element).
       justDraggedRef.current = drag.assetId;
@@ -118,10 +149,32 @@ export function PinOverlay({
           lastAuditAt: null,
           openFlagCount: asset.status === 'flagged' ? 1 : 0,
         });
+        const isRepositionTarget = repositionAssetId === asset.id;
+        // While the parent is showing the confirmation toast, keep the pin
+        // pinned at the candidate coords. Otherwise fall back to the live
+        // drag preview, then to the asset's persisted coords.
         const isPreview = preview?.assetId === asset.id;
-        const x = isPreview ? preview.x : asset.x;
-        const y = isPreview ? preview.y : asset.y;
-        const draggable = canMove && !asset.is_locked;
+        const x =
+          isRepositionTarget && pendingRepositionCoords
+            ? pendingRepositionCoords.x
+            : isPreview
+              ? preview.x
+              : asset.x;
+        const y =
+          isRepositionTarget && pendingRepositionCoords
+            ? pendingRepositionCoords.y
+            : isPreview
+              ? preview.y
+              : asset.y;
+
+        // Drag eligibility:
+        //   - if a deliberate reposition is active, only the targeted pin can
+        //     be dragged (lock state intentionally ignored);
+        //   - otherwise the M4 quick-nudge path applies: canMove + unlocked.
+        const draggable = isRepositionTarget
+          ? true
+          : !repositionAssetId && canMove && !asset.is_locked;
+        const faded = !!repositionAssetId && !isRepositionTarget;
 
         return (
           <div
@@ -135,9 +188,12 @@ export function PinOverlay({
               type={asset.type}
               status={status}
               selected={asset.id === selectedAssetId}
-              unlocked={draggable}
+              unlocked={draggable && !isRepositionTarget}
+              repositioning={isRepositionTarget}
+              faded={faded}
               onPointerDownDrag={(e) => {
-                startDrag(asset, e);
+                if (!draggable) return;
+                startDrag(asset, isRepositionTarget, e);
                 const button = e.currentTarget;
                 // Native pointer event listeners — `pointermove` fires after
                 // setPointerCapture even when the cursor leaves the button.
@@ -154,6 +210,9 @@ export function PinOverlay({
               }}
               onClick={() => {
                 if (justDraggedRef.current === asset.id) return;
+                // While a reposition is active, suppress click-to-open-drawer
+                // — the user is mid-action and the drawer would interrupt.
+                if (repositionAssetId) return;
                 onSelectAsset(asset);
               }}
             />
