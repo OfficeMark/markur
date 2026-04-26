@@ -105,7 +105,9 @@ function FormError({ children }: { children: React.ReactNode }) {
 function SignInForm() {
   const navigate = useNavigate();
   const location = useLocation();
-  const redirectTo = (location.state as { from?: string } | null)?.from ?? '/';
+  const params = new URLSearchParams(location.search);
+  const redirectTo =
+    (location.state as { from?: string } | null)?.from ?? params.get('next') ?? '/';
   const [authError, setAuthError] = useState<string | null>(null);
 
   const {

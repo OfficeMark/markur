@@ -1,9 +1,10 @@
 import { Link, useParams } from 'react-router-dom';
 import { ArrowLeft, MapPin, Layers, ImageOff, Trash2 } from 'lucide-react';
 import { AppShell } from '@/components/waymarks/AppShell';
+import { AccessManagementCard } from '@/components/waymarks/AccessManagementCard';
 import { useBuilding } from '@/hooks/useBuildings';
 import { useFloors } from '@/hooks/useFloors';
-import { useIsSuperAdmin } from '@/lib/permissions-context';
+import { useCan, useIsSuperAdmin } from '@/lib/permissions-context';
 import type { Floor } from '@/types/database';
 
 export function Building() {
@@ -11,6 +12,7 @@ export function Building() {
   const { data: building, isLoading: bLoading, error: bError } = useBuilding(id);
   const { data: floors = [], isLoading: fLoading } = useFloors(id);
   const isSuperAdmin = useIsSuperAdmin();
+  const canManageAccess = useCan('manage_access', { type: 'building', id: id ?? '' });
 
   if (bLoading) return <Skeleton />;
 
@@ -84,6 +86,12 @@ export function Building() {
             </ul>
           )}
         </section>
+
+        {canManageAccess && (
+          <section className="mt-8">
+            <AccessManagementCard buildingId={building.id} />
+          </section>
+        )}
       </div>
     </AppShell>
   );

@@ -1,23 +1,28 @@
-import { Link } from 'react-router-dom';
+import { Link, Navigate } from 'react-router-dom';
 import { Building2, MapPin } from 'lucide-react';
 import { AppShell } from '@/components/waymarks/AppShell';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { useAuth } from '@/lib/auth-context';
 import { usePermissions } from '@/lib/permissions-context';
 import { useBuildings } from '@/hooks/useBuildings';
+import { useTenantRepRedirect } from '@/hooks/useTenantRepRedirect';
 import type { Building } from '@/types/database';
 
 /**
  * The home (post-sign-in) screen.
  *
+ *   - tenant-rep-only users → redirected to their primary floor (per spec 04)
  *   - signed-in user with zero access_grants → "no buildings yet" empty state
- *     (sidebar suppressed)
  *   - signed-in user with grants → list of buildings, sidebar active
  */
 export function Home() {
   const { profile } = useAuth();
   const { grants, loading: pLoading } = usePermissions();
   const { data: buildings, isLoading: bLoading } = useBuildings();
+  const { loading: trLoading, redirectTo } = useTenantRepRedirect();
+
+  if (trLoading) return <Loading inShell />;
+  if (redirectTo) return <Navigate to={redirectTo} replace />;
 
   const noGrants = !pLoading && grants.length === 0;
 
@@ -87,8 +92,8 @@ function BuildingCard({ building }: { building: Building }) {
   );
 }
 
-function Loading() {
-  return (
+function Loading({ inShell }: { inShell?: boolean } = {}) {
+  const cards = (
     <div className="grid grid-cols-1 gap-3 sm:grid-cols-2" aria-hidden>
       {[0, 1].map((i) => (
         <div
@@ -97,5 +102,11 @@ function Loading() {
         />
       ))}
     </div>
+  );
+  if (!inShell) return cards;
+  return (
+    <AppShell>
+      <div className="mx-auto w-full max-w-4xl px-4 py-10 sm:px-6 sm:py-12">{cards}</div>
+    </AppShell>
   );
 }

@@ -9,6 +9,7 @@ import { Floor } from '@/routes/Floor';
 import { Login } from '@/routes/Login';
 import { ProtectedRoute } from '@/routes/ProtectedRoute';
 import { Trash } from '@/routes/Trash';
+import { AcceptInvitation } from '@/routes/AcceptInvitation';
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -61,6 +62,10 @@ export default function App() {
                     <Floor />
                   </ProtectedRoute>
                 }
+              />
+              <Route
+                path="/accept/:token"
+                element={<AcceptInvitation />}
               />
             </Routes>
           </PermissionsProvider>

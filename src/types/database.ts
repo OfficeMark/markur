@@ -1,7 +1,3 @@
-// AUTO-GENERATED. Do not edit by hand.
-// Regenerate with `npm run db:types` after every migration.
-// Source: Supabase project drclmnqlurvwqpnnpgzb.
-
 export type Json =
   | string
   | number
@@ -11,7 +7,9 @@ export type Json =
   | Json[];
 
 export type Database = {
-  __InternalSupabase: { PostgrestVersion: '14.5' };
+  __InternalSupabase: {
+    PostgrestVersion: '14.5';
+  };
   public: {
     Tables: {
       access_grants: {
@@ -88,7 +86,6 @@ export type Database = {
           location_notes: string | null;
           manufacturer: string | null;
           name: string;
-          photo_url: string | null;
           status: string;
           tenant_scope_id: string | null;
           type: string;
@@ -109,7 +106,6 @@ export type Database = {
           location_notes?: string | null;
           manufacturer?: string | null;
           name: string;
-          photo_url?: string | null;
           status?: string;
           tenant_scope_id?: string | null;
           type: string;
@@ -130,7 +126,6 @@ export type Database = {
           location_notes?: string | null;
           manufacturer?: string | null;
           name?: string;
-          photo_url?: string | null;
           status?: string;
           tenant_scope_id?: string | null;
           type?: string;
@@ -372,9 +367,27 @@ export type Database = {
         Relationships: [];
       };
       organizations: {
-        Row: { created_at: string; id: string; name: string; plan: string; slug: string };
-        Insert: { created_at?: string; id?: string; name: string; plan?: string; slug: string };
-        Update: { created_at?: string; id?: string; name?: string; plan?: string; slug?: string };
+        Row: {
+          created_at: string;
+          id: string;
+          name: string;
+          plan: string;
+          slug: string;
+        };
+        Insert: {
+          created_at?: string;
+          id?: string;
+          name: string;
+          plan?: string;
+          slug: string;
+        };
+        Update: {
+          created_at?: string;
+          id?: string;
+          name?: string;
+          plan?: string;
+          slug?: string;
+        };
         Relationships: [];
       };
       pending_invitations: {
@@ -483,6 +496,10 @@ export type Database = {
         Returns: boolean;
       };
       user_can_anything: { Args: { p_capability: string }; Returns: boolean };
+      user_can_view_asset: {
+        Args: { p_asset: Database['public']['Tables']['assets']['Row'] };
+        Returns: boolean;
+      };
     };
     Enums: { [_ in never]: never };
     CompositeTypes: { [_ in never]: never };
