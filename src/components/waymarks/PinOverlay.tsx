@@ -27,6 +27,9 @@ type DragState = {
   rectWidth: number;
   rectHeight: number;
   moved: boolean;
+  /** Latest clamped 0–1 coords while dragging. */
+  curX: number;
+  curY: number;
 };
 
 export function PinOverlay({
@@ -37,8 +40,13 @@ export function PinOverlay({
   onReposition,
 }: PinOverlayProps) {
   const layerRef = useRef<HTMLDivElement | null>(null);
+  // dragRef is always-current; the React state below is for visualization only.
   const dragRef = useRef<DragState | null>(null);
-  const [preview, setPreview] = useState<{ assetId: string; x: number; y: number } | null>(null);
+  // Used to suppress click-after-drag.
+  const justDraggedRef = useRef<string | null>(null);
+  const [preview, setPreview] = useState<{ assetId: string; x: number; y: number } | null>(
+    null
+  );
 
   function startDrag(asset: Asset, e: React.PointerEvent<HTMLButtonElement>) {
     if (!canMove || !onReposition || asset.is_locked) return;
@@ -59,11 +67,13 @@ export function PinOverlay({
       rectWidth: rect.width,
       rectHeight: rect.height,
       moved: false,
+      curX: asset.x,
+      curY: asset.y,
     };
     e.currentTarget.setPointerCapture(e.pointerId);
   }
 
-  function onPointerMove(e: React.PointerEvent<HTMLButtonElement>) {
+  function updateDrag(e: PointerEvent) {
     const drag = dragRef.current;
     if (!drag || drag.pointerId !== e.pointerId) return;
     const dx = e.clientX - drag.startClientX;
@@ -74,18 +84,28 @@ export function PinOverlay({
     if (!drag.moved) return;
     const x = clamp01(drag.startX + dx / drag.rectWidth);
     const y = clamp01(drag.startY + dy / drag.rectHeight);
+    drag.curX = x;
+    drag.curY = y;
     setPreview({ assetId: drag.assetId, x, y });
   }
 
-  function endDrag(e: React.PointerEvent<HTMLButtonElement>) {
+  function finishDrag(e: PointerEvent, button: HTMLButtonElement | null) {
     const drag = dragRef.current;
     if (!drag || drag.pointerId !== e.pointerId) return;
     dragRef.current = null;
-    if (e.currentTarget.hasPointerCapture(e.pointerId)) {
-      e.currentTarget.releasePointerCapture(e.pointerId);
+    if (button && button.hasPointerCapture(e.pointerId)) {
+      button.releasePointerCapture(e.pointerId);
     }
-    if (drag.moved && preview && onReposition) {
-      onReposition(drag.assetId, preview.x, preview.y);
+    if (drag.moved && onReposition) {
+      // Pull the latest computed coords straight from the ref — no React
+      // state closure to go stale.
+      onReposition(drag.assetId, drag.curX, drag.curY);
+      // Suppress the click that follows a drag (the browser fires one after
+      // pointerup if the press + release land on the same element).
+      justDraggedRef.current = drag.assetId;
+      setTimeout(() => {
+        if (justDraggedRef.current === drag.assetId) justDraggedRef.current = null;
+      }, 50);
     }
     setPreview(null);
   }
@@ -118,28 +138,22 @@ export function PinOverlay({
               unlocked={draggable}
               onPointerDownDrag={(e) => {
                 startDrag(asset, e);
-                // Wire move/up on the same target so pointer capture works.
-                const target = e.currentTarget;
-                target.onpointermove = (ev) =>
-                  onPointerMove(
-                    ev as unknown as React.PointerEvent<HTMLButtonElement>
-                  );
-                target.onpointerup = (ev) => {
-                  target.onpointermove = null;
-                  target.onpointerup = null;
-                  target.onpointercancel = null;
-                  endDrag(ev as unknown as React.PointerEvent<HTMLButtonElement>);
+                const button = e.currentTarget;
+                // Native pointer event listeners — `pointermove` fires after
+                // setPointerCapture even when the cursor leaves the button.
+                const onMove = (ev: PointerEvent) => updateDrag(ev);
+                const onEnd = (ev: PointerEvent) => {
+                  button.removeEventListener('pointermove', onMove);
+                  button.removeEventListener('pointerup', onEnd);
+                  button.removeEventListener('pointercancel', onEnd);
+                  finishDrag(ev, button);
                 };
-                target.onpointercancel = (ev) => {
-                  target.onpointermove = null;
-                  target.onpointerup = null;
-                  target.onpointercancel = null;
-                  endDrag(ev as unknown as React.PointerEvent<HTMLButtonElement>);
-                };
+                button.addEventListener('pointermove', onMove);
+                button.addEventListener('pointerup', onEnd);
+                button.addEventListener('pointercancel', onEnd);
               }}
               onClick={() => {
-                // Suppress click that follows a drag.
-                if (preview && preview.assetId === asset.id) return;
+                if (justDraggedRef.current === asset.id) return;
                 onSelectAsset(asset);
               }}
             />
