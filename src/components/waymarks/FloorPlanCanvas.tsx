@@ -76,7 +76,7 @@ export function FloorPlanCanvas({
           if (!ctx) throw new Error('Canvas 2D context unavailable');
           canvas.width = Math.floor(viewport.width);
           canvas.height = Math.floor(viewport.height);
-          await page.render({ canvasContext: ctx, viewport, canvas }).promise;
+          await page.render({ canvasContext: ctx, viewport }).promise;
           if (cancelled) return;
           onDimensions?.({ width: canvas.width, height: canvas.height });
           setStatus('ready');
