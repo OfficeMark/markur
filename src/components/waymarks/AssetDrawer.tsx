@@ -1,19 +1,27 @@
 import { useEffect, useState } from 'react';
 import * as Dialog from '@radix-ui/react-dialog';
 import { format } from 'date-fns';
-import { X, MapPin, Calendar, Wrench, Pencil } from 'lucide-react';
+import { X, MapPin, Calendar, Wrench, Pencil, Plus, Trash2, ImageOff } from 'lucide-react';
 import { Chip } from '@/components/ui/Chip';
 import { MetricCard } from '@/components/ui/MetricCard';
-import { useAsset, useUpdateAsset } from '@/hooks/useAssets';
+import { Button } from '@/components/ui/Button';
+import { useAsset } from '@/hooks/useAssets';
 import { useActivity } from '@/hooks/useActivity';
-import { signedAssetPhotoUrl } from '@/lib/queries/assets';
+import {
+  useAddAssetPhoto,
+  useAssetPhotos,
+  useDeleteAssetPhoto,
+} from '@/hooks/useAssetPhotos';
+import {
+  signedAssetPhotoUrl,
+  validateAssetPhotoFile,
+} from '@/lib/queries/asset-photos';
 import { computeStatus, statusLabel, type AssetStatus } from '@/lib/asset-status';
 import { useCan } from '@/lib/permissions-context';
-import type { Asset, AuditLogEntry } from '@/types/database';
+import type { Asset, AssetPhoto, AuditLogEntry } from '@/types/database';
 
 export type AssetDrawerProps = {
   assetId: string | null;
-  /** Floor the drawer is rendered from. Used for permission checks + cache keys. */
   floorId: string;
   buildingId: string;
   onOpenChange: (open: boolean) => void;
@@ -24,6 +32,7 @@ export function AssetDrawer({ assetId, floorId, buildingId, onOpenChange }: Asse
   const { data: asset, isLoading } = useAsset(assetId ?? undefined);
   const { data: activity = [] } = useActivity('assets', assetId ?? undefined);
   const canEdit = useCan('edit', { type: 'building', id: buildingId });
+  void floorId;
 
   return (
     <Dialog.Root open={open} onOpenChange={onOpenChange}>
@@ -31,16 +40,12 @@ export function AssetDrawer({ assetId, floorId, buildingId, onOpenChange }: Asse
         <Dialog.Overlay className="fixed inset-0 z-50 bg-black/30 data-[state=open]:animate-in data-[state=open]:fade-in-0" />
         <Dialog.Content
           aria-describedby={undefined}
-          className="fixed right-0 top-0 z-50 flex h-full w-[min(96vw,420px)] flex-col border-l border-black/10 bg-surface text-text shadow-sheet outline-none dark:border-white/10"
+          className="fixed right-0 top-0 z-50 flex h-full w-[min(96vw,440px)] flex-col border-l border-black/10 bg-surface text-text shadow-sheet outline-none dark:border-white/10"
         >
           <header className="flex items-start justify-between gap-3 border-b border-black/10 p-4 dark:border-white/10">
             <Dialog.Title asChild>
               <div className="min-w-0">
-                {asset ? (
-                  <p className="truncate font-serif text-xl">{asset.name}</p>
-                ) : (
-                  <p className="truncate font-serif text-xl">Asset</p>
-                )}
+                <p className="truncate font-serif text-xl">{asset?.name ?? 'Asset'}</p>
                 {asset && (
                   <p className="mt-0.5 truncate text-xs text-text-muted">
                     {prettyType(asset.type)} · {asset.category}
@@ -63,7 +68,7 @@ export function AssetDrawer({ assetId, floorId, buildingId, onOpenChange }: Asse
               <Skeleton />
             ) : (
               <>
-                <PhotoSection asset={asset} canEdit={canEdit} floorId={floorId} />
+                <PhotoGallery assetId={asset.id} canEdit={canEdit} />
                 <DetailsSection asset={asset} />
                 <StatusRow asset={asset} flagCount={asset.status === 'flagged' ? 1 : 0} />
                 <AttributesSection asset={asset} />
@@ -88,83 +93,202 @@ function Skeleton() {
   );
 }
 
-function PhotoSection({
-  asset,
-  canEdit,
-  floorId,
-}: {
-  asset: Asset;
-  canEdit: boolean;
-  floorId: string;
-}) {
-  const [signedUrl, setSignedUrl] = useState<string | null>(null);
-  const [errored, setErrored] = useState(false);
+function PhotoGallery({ assetId, canEdit }: { assetId: string; canEdit: boolean }) {
+  const { data: photos = [], isLoading } = useAssetPhotos(assetId);
+  const [active, setActive] = useState(0);
+  const add = useAddAssetPhoto(assetId);
+  const del = useDeleteAssetPhoto(assetId);
+  const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
-  useEffect(() => {
-    let cancelled = false;
-    setErrored(false);
-    if (!asset.photo_url) {
-      setSignedUrl(null);
-      return;
+  const safeActive = Math.min(active, Math.max(0, photos.length - 1));
+  const current: AssetPhoto | undefined = photos[safeActive];
+
+  async function onPickFiles(list: FileList | null) {
+    if (!list) return;
+    setErrorMsg(null);
+    for (const file of Array.from(list)) {
+      const v = validateAssetPhotoFile(file);
+      if (v) {
+        setErrorMsg(v);
+        continue;
+      }
+      try {
+        await add.mutateAsync(file);
+      } catch (e) {
+        setErrorMsg(e instanceof Error ? e.message : 'Upload failed.');
+      }
     }
-    void signedAssetPhotoUrl(asset.photo_url)
-      .then((u) => {
-        if (!cancelled) setSignedUrl(u);
-      })
-      .catch(() => {
-        if (!cancelled) setErrored(true);
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [asset.photo_url]);
+  }
+
+  async function onDelete(p: AssetPhoto) {
+    setErrorMsg(null);
+    try {
+      await del.mutateAsync(p);
+      setActive(0);
+    } catch (e) {
+      setErrorMsg(e instanceof Error ? e.message : 'Delete failed.');
+    }
+  }
 
   return (
     <div className="space-y-2">
       <div className="overflow-hidden rounded-lg border border-black/10 bg-waymarks-gold-soft dark:border-white/10 dark:bg-white/5">
-        {signedUrl && !errored ? (
-          <img src={signedUrl} alt={asset.name} className="w-full object-cover" />
+        {isLoading ? (
+          <div className="flex h-40 animate-pulse items-center justify-center text-text-faint">
+            Loading photos…
+          </div>
+        ) : current ? (
+          <PhotoFrame photo={current} canDelete={canEdit} onDelete={() => onDelete(current)} />
         ) : (
-          <div className="flex h-32 items-center justify-center text-xs text-text-faint">
-            {asset.photo_url ? (errored ? 'Could not load photo' : 'Loading photo…') : 'No photo'}
+          <div className="flex h-32 flex-col items-center justify-center gap-1 text-text-faint">
+            <ImageOff size={20} aria-hidden />
+            <span className="text-xs">No photos yet</span>
           </div>
         )}
       </div>
+
+      {photos.length > 1 && (
+        <div className="flex gap-1 overflow-x-auto">
+          {photos.map((p, i) => (
+            <ThumbButton
+              key={p.id}
+              photo={p}
+              active={i === safeActive}
+              onSelect={() => setActive(i)}
+            />
+          ))}
+        </div>
+      )}
+
       {canEdit && (
-        <ReplacePhotoButton asset={asset} floorId={floorId} />
+        <div className="flex gap-1">
+          <label className="inline-flex h-8 cursor-pointer items-center gap-1 rounded-md border border-black/10 px-2 text-xs hover:bg-black/5 dark:border-white/10 dark:hover:bg-white/5">
+            <Plus size={12} aria-hidden />
+            <span>{add.isPending ? 'Uploading…' : 'Add photo'}</span>
+            <input
+              type="file"
+              accept="image/*"
+              capture="environment"
+              className="sr-only"
+              onChange={(e) => {
+                void onPickFiles(e.target.files);
+                e.target.value = '';
+              }}
+            />
+          </label>
+          <label className="inline-flex h-8 cursor-pointer items-center gap-1 rounded-md border border-black/10 px-2 text-xs hover:bg-black/5 dark:border-white/10 dark:hover:bg-white/5">
+            <Pencil size={12} aria-hidden />
+            <span>Choose files</span>
+            <input
+              type="file"
+              accept="image/png,image/jpeg,image/webp"
+              multiple
+              className="sr-only"
+              onChange={(e) => {
+                void onPickFiles(e.target.files);
+                e.target.value = '';
+              }}
+            />
+          </label>
+        </div>
+      )}
+      {errorMsg && <p className="text-xs text-danger">{errorMsg}</p>}
+    </div>
+  );
+}
+
+function PhotoFrame({
+  photo,
+  canDelete,
+  onDelete,
+}: {
+  photo: AssetPhoto;
+  canDelete: boolean;
+  onDelete: () => void;
+}) {
+  const [url, setUrl] = useState<string | null>(null);
+  const [errored, setErrored] = useState(false);
+
+  useEffect(() => {
+    let cancelled = false;
+    setUrl(null);
+    setErrored(false);
+    void signedAssetPhotoUrl(photo.path)
+      .then((u) => !cancelled && setUrl(u))
+      .catch(() => !cancelled && setErrored(true));
+    return () => {
+      cancelled = true;
+    };
+  }, [photo.path]);
+
+  if (errored) {
+    return (
+      <div className="flex h-40 items-center justify-center text-xs text-danger">
+        Could not load photo
+      </div>
+    );
+  }
+  if (!url) {
+    return (
+      <div className="flex h-40 animate-pulse items-center justify-center text-text-faint">
+        Loading…
+      </div>
+    );
+  }
+  return (
+    <div className="relative">
+      <img src={url} alt="" className="block w-full object-cover" />
+      {canDelete && (
+        <button
+          type="button"
+          onClick={onDelete}
+          aria-label="Delete this photo"
+          className="absolute right-2 top-2 inline-flex h-7 w-7 items-center justify-center rounded-full bg-waymarks-ink/80 text-white hover:bg-danger"
+        >
+          <Trash2 size={12} aria-hidden />
+        </button>
       )}
     </div>
   );
 }
 
-function ReplacePhotoButton({ asset, floorId }: { asset: Asset; floorId: string }) {
-  const update = useUpdateAsset(floorId);
-  const [busy, setBusy] = useState(false);
+function ThumbButton({
+  photo,
+  active,
+  onSelect,
+}: {
+  photo: AssetPhoto;
+  active: boolean;
+  onSelect: () => void;
+}) {
+  const [url, setUrl] = useState<string | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    void signedAssetPhotoUrl(photo.path)
+      .then((u) => !cancelled && setUrl(u))
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, [photo.path]);
 
   return (
-    <label className="inline-flex h-8 cursor-pointer items-center gap-1 rounded-md border border-black/10 px-2 text-xs hover:bg-black/5 dark:border-white/10 dark:hover:bg-white/5">
-      <Pencil size={12} aria-hidden />
-      <span>{busy ? 'Uploading…' : asset.photo_url ? 'Replace photo' : 'Add photo'}</span>
-      <input
-        type="file"
-        accept="image/*"
-        capture="environment"
-        className="sr-only"
-        onChange={async (e) => {
-          const f = e.target.files?.[0];
-          if (!f) return;
-          setBusy(true);
-          try {
-            const { uploadAssetPhoto } = await import('@/lib/queries/assets');
-            const path = await uploadAssetPhoto(asset.id, f);
-            await update.mutateAsync({ id: asset.id, patch: { photo_url: path } });
-          } finally {
-            setBusy(false);
-            e.target.value = '';
-          }
-        }}
-      />
-    </label>
+    <button
+      type="button"
+      onClick={onSelect}
+      aria-pressed={active}
+      className={
+        'h-12 w-12 shrink-0 overflow-hidden rounded-md border-2 ' +
+        (active ? 'border-waymarks-gold' : 'border-transparent hover:border-black/15')
+      }
+    >
+      {url ? (
+        <img src={url} alt="" className="h-full w-full object-cover" />
+      ) : (
+        <div className="h-full w-full animate-pulse bg-black/5 dark:bg-white/5" />
+      )}
+    </button>
   );
 }
 
@@ -194,10 +318,7 @@ function StatusRow({ asset, flagCount }: { asset: Asset; flagCount: number }) {
 
   return (
     <div className="grid grid-cols-3 gap-2">
-      <MetricCard
-        label="Last audit"
-        value="—"
-      />
+      <MetricCard label="Last audit" value="—" />
       <MetricCard
         label="Status"
         value={statusLabel(status)}
@@ -266,9 +387,7 @@ function ActivitySection({ items }: { items: AuditLogEntry[] }) {
             className="rounded-md border border-black/10 bg-surface p-2 text-xs dark:border-white/10"
           >
             <p className="font-medium capitalize">{prettyAction(entry.action)}</p>
-            <p className="text-text-faint">
-              {format(new Date(entry.created_at), 'PPp')}
-            </p>
+            <p className="text-text-faint">{format(new Date(entry.created_at), 'PPp')}</p>
           </li>
         ))}
       </ol>
@@ -285,7 +404,6 @@ function PermissionsFooter() {
 }
 
 function prettyType(type: string): string {
-  // 'tenant_id' → 'Tenant ID', 'service_room' → 'Service room'
   return type
     .split('_')
     .map((part, i) => (i === 0 ? part[0]?.toUpperCase() + part.slice(1) : part))
@@ -293,10 +411,12 @@ function prettyType(type: string): string {
 }
 
 function prettyAction(action: string): string {
-  // 'insert.assets' → 'Created'; 'update.assets' → 'Updated'; etc.
   if (action.startsWith('insert.')) return 'Created';
   if (action.startsWith('update.')) return 'Updated';
   if (action.startsWith('delete.')) return 'Deleted';
   return action;
 }
 
+// Suppress unused-import warning for Button (kept for upcoming Edit/Reposition CTA).
+const _unused = Button;
+void _unused;

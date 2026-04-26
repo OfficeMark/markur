@@ -11,11 +11,7 @@ export type Json =
   | Json[];
 
 export type Database = {
-  // Allows to automatically instantiate createClient with right options
-  // instead of createClient<Database, { PostgrestVersion: 'XX' }>(URL, KEY)
-  __InternalSupabase: {
-    PostgrestVersion: '14.5';
-  };
+  __InternalSupabase: { PostgrestVersion: '14.5' };
   public: {
     Tables: {
       access_grants: {
@@ -48,6 +44,33 @@ export type Database = {
           scope_id?: string | null;
           scope_type?: string;
           user_id?: string;
+        };
+        Relationships: [];
+      };
+      asset_photos: {
+        Row: {
+          asset_id: string;
+          created_at: string;
+          created_by: string | null;
+          id: string;
+          path: string;
+          sort_order: number;
+        };
+        Insert: {
+          asset_id: string;
+          created_at?: string;
+          created_by?: string | null;
+          id?: string;
+          path: string;
+          sort_order?: number;
+        };
+        Update: {
+          asset_id?: string;
+          created_at?: string;
+          created_by?: string | null;
+          id?: string;
+          path?: string;
+          sort_order?: number;
         };
         Relationships: [];
       };
@@ -112,22 +135,7 @@ export type Database = {
           x?: number;
           y?: number;
         };
-        Relationships: [
-          {
-            foreignKeyName: 'assets_floor_id_fkey';
-            columns: ['floor_id'];
-            isOneToOne: false;
-            referencedRelation: 'floors';
-            referencedColumns: ['id'];
-          },
-          {
-            foreignKeyName: 'assets_tenant_scope_id_fkey';
-            columns: ['tenant_scope_id'];
-            isOneToOne: false;
-            referencedRelation: 'tenants';
-            referencedColumns: ['id'];
-          },
-        ];
+        Relationships: [];
       };
       audit_events: {
         Row: {
@@ -157,22 +165,7 @@ export type Database = {
           photo_url?: string | null;
           session_id?: string;
         };
-        Relationships: [
-          {
-            foreignKeyName: 'audit_events_asset_id_fkey';
-            columns: ['asset_id'];
-            isOneToOne: false;
-            referencedRelation: 'assets';
-            referencedColumns: ['id'];
-          },
-          {
-            foreignKeyName: 'audit_events_session_id_fkey';
-            columns: ['session_id'];
-            isOneToOne: false;
-            referencedRelation: 'audit_sessions';
-            referencedColumns: ['id'];
-          },
-        ];
+        Relationships: [];
       };
       audit_log: {
         Row: {
@@ -247,15 +240,7 @@ export type Database = {
           notes?: string | null;
           started_at?: string;
         };
-        Relationships: [
-          {
-            foreignKeyName: 'audit_sessions_floor_id_fkey';
-            columns: ['floor_id'];
-            isOneToOne: false;
-            referencedRelation: 'floors';
-            referencedColumns: ['id'];
-          },
-        ];
+        Relationships: [];
       };
       buildings: {
         Row: {
@@ -300,15 +285,7 @@ export type Database = {
           total_floors?: number;
           updated_at?: string;
         };
-        Relationships: [
-          {
-            foreignKeyName: 'buildings_owner_org_id_fkey';
-            columns: ['owner_org_id'];
-            isOneToOne: false;
-            referencedRelation: 'organizations';
-            referencedColumns: ['id'];
-          },
-        ];
+        Relationships: [];
       };
       flags: {
         Row: {
@@ -344,15 +321,7 @@ export type Database = {
           severity?: string;
           status?: string;
         };
-        Relationships: [
-          {
-            foreignKeyName: 'flags_asset_id_fkey';
-            columns: ['asset_id'];
-            isOneToOne: false;
-            referencedRelation: 'assets';
-            referencedColumns: ['id'];
-          },
-        ];
+        Relationships: [];
       };
       floors: {
         Row: {
@@ -397,38 +366,12 @@ export type Database = {
           updated_at?: string;
           width_px?: number | null;
         };
-        Relationships: [
-          {
-            foreignKeyName: 'floors_building_id_fkey';
-            columns: ['building_id'];
-            isOneToOne: false;
-            referencedRelation: 'buildings';
-            referencedColumns: ['id'];
-          },
-        ];
+        Relationships: [];
       };
       organizations: {
-        Row: {
-          created_at: string;
-          id: string;
-          name: string;
-          plan: string;
-          slug: string;
-        };
-        Insert: {
-          created_at?: string;
-          id?: string;
-          name: string;
-          plan?: string;
-          slug: string;
-        };
-        Update: {
-          created_at?: string;
-          id?: string;
-          name?: string;
-          plan?: string;
-          slug?: string;
-        };
+        Row: { created_at: string; id: string; name: string; plan: string; slug: string };
+        Insert: { created_at?: string; id?: string; name: string; plan?: string; slug: string };
+        Update: { created_at?: string; id?: string; name?: string; plan?: string; slug?: string };
         Relationships: [];
       };
       pending_invitations: {
@@ -525,40 +468,21 @@ export type Database = {
           primary_floor_id?: string | null;
           suite_label?: string | null;
         };
-        Relationships: [
-          {
-            foreignKeyName: 'tenants_building_id_fkey';
-            columns: ['building_id'];
-            isOneToOne: false;
-            referencedRelation: 'buildings';
-            referencedColumns: ['id'];
-          },
-          {
-            foreignKeyName: 'tenants_primary_floor_id_fkey';
-            columns: ['primary_floor_id'];
-            isOneToOne: false;
-            referencedRelation: 'floors';
-            referencedColumns: ['id'];
-          },
-        ];
+        Relationships: [];
       };
     };
-    Views: {
-      [_ in never]: never;
-    };
+    Views: { [_ in never]: never };
     Functions: {
+      storage_asset_photo_asset_id: { Args: { p_name: string }; Returns: string };
+      storage_floor_plan_floor_id: { Args: { p_name: string }; Returns: string };
       user_can: {
         Args: { p_capability: string; p_scope_id: string; p_scope_type: string };
         Returns: boolean;
       };
       user_can_anything: { Args: { p_capability: string }; Returns: boolean };
     };
-    Enums: {
-      [_ in never]: never;
-    };
-    CompositeTypes: {
-      [_ in never]: never;
-    };
+    Enums: { [_ in never]: never };
+    CompositeTypes: { [_ in never]: never };
   };
 };
 
@@ -574,6 +498,7 @@ export type Building = Tbl['buildings']['Row'];
 export type Floor = Tbl['floors']['Row'];
 export type Tenant = Tbl['tenants']['Row'];
 export type Asset = Tbl['assets']['Row'];
+export type AssetPhoto = Tbl['asset_photos']['Row'];
 export type AuditSession = Tbl['audit_sessions']['Row'];
 export type AuditEvent = Tbl['audit_events']['Row'];
 export type Flag = Tbl['flags']['Row'];

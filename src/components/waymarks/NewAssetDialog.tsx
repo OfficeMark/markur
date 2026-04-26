@@ -3,11 +3,11 @@ import * as Dialog from '@radix-ui/react-dialog';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
-import { Camera, FileImage, X, AlertCircle } from 'lucide-react';
+import { Camera, FileImage, X, AlertCircle, Trash2 } from 'lucide-react';
 import { Button } from '@/components/ui/Button';
 import { useCreateAsset } from '@/hooks/useAssets';
-import { uploadAssetPhoto, type AssetCategory } from '@/lib/queries/assets';
-import { supabase } from '@/lib/supabase';
+import { type AssetCategory } from '@/lib/queries/assets';
+import { addAssetPhoto, validateAssetPhotoFile } from '@/lib/queries/asset-photos';
 import { cn } from '@/lib/utils';
 import type { Asset } from '@/types/database';
 
@@ -45,9 +45,7 @@ type FormValues = z.infer<typeof schema>;
 export type NewAssetDialogProps = {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  /** Floor we're placing on. */
   floorId: string;
-  /** Click coordinates as 0–1 normalized values. */
   position: { x: number; y: number } | null;
   onCreated?: (asset: Asset) => void;
 };
@@ -60,8 +58,9 @@ export function NewAssetDialog({
   onCreated,
 }: NewAssetDialogProps) {
   const create = useCreateAsset();
-  const [photoFile, setPhotoFile] = useState<File | null>(null);
+  const [photos, setPhotos] = useState<File[]>([]);
   const [submitError, setSubmitError] = useState<string | null>(null);
+  const [photoErrors, setPhotoErrors] = useState<string[]>([]);
 
   const {
     register,
@@ -78,6 +77,20 @@ export function NewAssetDialog({
   const selectedType = watch('type');
   const category: AssetCategory =
     FORM_TYPES.find((t) => t.value === selectedType)?.category ?? 'signage';
+
+  function appendFiles(list: FileList | null) {
+    if (!list || list.length === 0) return;
+    const accepted: File[] = [];
+    const errors: string[] = [];
+    for (const file of Array.from(list)) {
+      const v = validateAssetPhotoFile(file);
+      if (v) errors.push(v);
+      else accepted.push(file);
+    }
+    setPhotos((prev) => [...prev, ...accepted]);
+    if (errors.length > 0) setPhotoErrors(errors);
+    else setPhotoErrors([]);
+  }
 
   async function onSubmit(values: FormValues) {
     if (!position) {
@@ -96,13 +109,14 @@ export function NewAssetDialog({
         y: position.y,
       });
 
-      if (photoFile) {
-        const path = await uploadAssetPhoto(asset.id, photoFile);
-        await supabase.from('assets').update({ photo_url: path }).eq('id', asset.id);
+      // Upload photos sequentially so sort_order is deterministic.
+      for (const f of photos) {
+        await addAssetPhoto(asset.id, f);
       }
 
       reset();
-      setPhotoFile(null);
+      setPhotos([]);
+      setPhotoErrors([]);
       onCreated?.(asset);
       onOpenChange(false);
     } catch (err) {
@@ -116,7 +130,8 @@ export function NewAssetDialog({
       onOpenChange={(o) => {
         if (!o) {
           reset();
-          setPhotoFile(null);
+          setPhotos([]);
+          setPhotoErrors([]);
           setSubmitError(null);
         }
         onOpenChange(o);
@@ -124,7 +139,7 @@ export function NewAssetDialog({
     >
       <Dialog.Portal>
         <Dialog.Overlay className="fixed inset-0 z-50 bg-black/40 data-[state=open]:animate-in data-[state=open]:fade-in-0" />
-        <Dialog.Content className="fixed left-1/2 top-1/2 z-50 w-[min(94vw,520px)] -translate-x-1/2 -translate-y-1/2 rounded-xl border border-black/10 bg-surface p-5 text-text shadow-sheet outline-none dark:border-white/10">
+        <Dialog.Content className="fixed left-1/2 top-1/2 z-50 max-h-[92vh] w-[min(94vw,540px)] -translate-x-1/2 -translate-y-1/2 overflow-y-auto rounded-xl border border-black/10 bg-surface p-5 text-text shadow-sheet outline-none dark:border-white/10">
           <div className="flex items-start justify-between gap-3">
             <div>
               <Dialog.Title className="font-serif text-xl">Add asset</Dialog.Title>
@@ -153,11 +168,7 @@ export function NewAssetDialog({
               </div>
             )}
 
-            <Field
-              label="Type"
-              htmlFor="asset-type"
-              error={errors.type?.message}
-            >
+            <Field label="Type" htmlFor="asset-type" error={errors.type?.message}>
               <select
                 id="asset-type"
                 {...register('type')}
@@ -205,7 +216,12 @@ export function NewAssetDialog({
               />
             </Field>
 
-            <PhotoPicker file={photoFile} onChange={setPhotoFile} />
+            <PhotosPicker
+              files={photos}
+              onAdd={appendFiles}
+              onRemove={(i) => setPhotos((prev) => prev.filter((_, idx) => idx !== i))}
+              errors={photoErrors}
+            />
 
             <div className="flex justify-end gap-2">
               <Button
@@ -216,7 +232,9 @@ export function NewAssetDialog({
                 Cancel
               </Button>
               <Button type="submit" variant="gold" loading={isSubmitting}>
-                Place pin
+                {photos.length > 0
+                  ? `Place pin + ${photos.length} ${photos.length === 1 ? 'photo' : 'photos'}`
+                  : 'Place pin'}
               </Button>
             </div>
           </form>
@@ -254,49 +272,43 @@ function Field({
   );
 }
 
-function PhotoPicker({
-  file,
-  onChange,
+function PhotosPicker({
+  files,
+  onAdd,
+  onRemove,
+  errors,
 }: {
-  file: File | null;
-  onChange: (f: File | null) => void;
+  files: File[];
+  onAdd: (list: FileList | null) => void;
+  onRemove: (index: number) => void;
+  errors: string[];
 }) {
-  const previewUrl = file ? URL.createObjectURL(file) : null;
-
   return (
     <div className="space-y-2">
       <p className="text-xs font-medium uppercase tracking-[0.18em] text-text-faint">
-        Photo (optional)
+        Photos (optional)
       </p>
+
+      {files.length > 0 && (
+        <ul className="grid grid-cols-3 gap-2 sm:grid-cols-4">
+          {files.map((f, i) => (
+            <PhotoTile key={i} file={f} onRemove={() => onRemove(i)} />
+          ))}
+        </ul>
+      )}
+
       <div
         className={cn(
-          'flex items-center gap-3 rounded-md border border-dashed p-3',
-          file ? 'border-waymarks-gold/50 bg-waymarks-gold-soft' : 'border-black/15 dark:border-white/15'
+          'flex flex-wrap items-center gap-2 rounded-md border border-dashed p-3',
+          'border-black/15 dark:border-white/15'
         )}
       >
-        {previewUrl ? (
-          <img
-            src={previewUrl}
-            alt="Selected"
-            className="h-14 w-14 rounded-md object-cover"
-            onLoad={() => URL.revokeObjectURL(previewUrl)}
-          />
-        ) : (
-          <span className="inline-flex h-14 w-14 items-center justify-center rounded-md bg-waymarks-gold-soft text-text-faint dark:bg-white/5">
-            <FileImage size={18} aria-hidden />
-          </span>
-        )}
-        <div className="flex-1 space-y-1 text-sm">
-          {file ? (
-            <>
-              <p className="truncate font-medium">{file.name}</p>
-              <p className="text-xs text-text-faint">{(file.size / 1024).toFixed(0)} KB</p>
-            </>
-          ) : (
-            <p className="text-text-muted">Capture or pick an image of this sign.</p>
-          )}
-        </div>
-        <div className="flex flex-col gap-1">
+        <span className="text-sm text-text-muted">
+          {files.length === 0
+            ? 'Add one or more photos.'
+            : `${files.length} attached. Add more if you want.`}
+        </span>
+        <div className="ml-auto flex gap-1">
           <label className="inline-flex h-8 cursor-pointer items-center gap-1 rounded-md border border-black/10 px-2 text-xs hover:bg-black/5 dark:border-white/10 dark:hover:bg-white/5">
             <Camera size={12} aria-hidden />
             <span>Take photo</span>
@@ -305,30 +317,53 @@ function PhotoPicker({
               accept="image/*"
               capture="environment"
               className="sr-only"
-              onChange={(e) => onChange(e.target.files?.[0] ?? null)}
+              onChange={(e) => {
+                onAdd(e.target.files);
+                e.target.value = '';
+              }}
             />
           </label>
           <label className="inline-flex h-8 cursor-pointer items-center gap-1 rounded-md border border-black/10 px-2 text-xs hover:bg-black/5 dark:border-white/10 dark:hover:bg-white/5">
             <FileImage size={12} aria-hidden />
-            <span>Choose file</span>
+            <span>Choose files</span>
             <input
               type="file"
               accept="image/png,image/jpeg,image/webp"
+              multiple
               className="sr-only"
-              onChange={(e) => onChange(e.target.files?.[0] ?? null)}
+              onChange={(e) => {
+                onAdd(e.target.files);
+                e.target.value = '';
+              }}
             />
           </label>
-          {file && (
-            <button
-              type="button"
-              onClick={() => onChange(null)}
-              className="text-xs text-text-faint hover:text-danger"
-            >
-              Remove
-            </button>
-          )}
         </div>
       </div>
+
+      {errors.length > 0 && (
+        <ul className="space-y-1 text-xs text-danger">
+          {errors.map((m, i) => (
+            <li key={i}>{m}</li>
+          ))}
+        </ul>
+      )}
     </div>
+  );
+}
+
+function PhotoTile({ file, onRemove }: { file: File; onRemove: () => void }) {
+  const url = URL.createObjectURL(file);
+  return (
+    <li className="group relative aspect-square overflow-hidden rounded-md border border-black/10 dark:border-white/10">
+      <img src={url} alt={file.name} className="h-full w-full object-cover" onLoad={() => URL.revokeObjectURL(url)} />
+      <button
+        type="button"
+        onClick={onRemove}
+        aria-label={`Remove ${file.name}`}
+        className="absolute right-1 top-1 inline-flex h-6 w-6 items-center justify-center rounded-full bg-waymarks-ink/80 text-white opacity-0 transition-opacity hover:bg-danger group-hover:opacity-100 group-focus-within:opacity-100"
+      >
+        <Trash2 size={12} aria-hidden />
+      </button>
+    </li>
   );
 }

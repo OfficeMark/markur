@@ -4,6 +4,8 @@ import type { Asset } from '@/types/database';
 /**
  * All Supabase access for `public.assets` lives here. Components consume
  * these via the hooks in src/hooks/useAssets.ts.
+ *
+ * Photo handling lives in queries/asset-photos.ts (multi-photo since 0009).
  */
 
 export async function listAssetsByFloor(floorId: string): Promise<Asset[]> {
@@ -47,10 +49,7 @@ export async function createAsset(input: CreateAssetInput): Promise<Asset> {
 
   const { data, error } = await supabase
     .from('assets')
-    .insert({
-      ...input,
-      created_by,
-    })
+    .insert({ ...input, created_by })
     .select('*')
     .single();
   if (error) throw error;
@@ -67,7 +66,6 @@ export type UpdateAssetInput = Partial<{
   audit_cycle_days: number | null;
   status: 'good' | 'attention' | 'flagged';
   tenant_scope_id: string | null;
-  photo_url: string | null;
   x: number;
   y: number;
 }>;
@@ -89,39 +87,4 @@ export async function softDeleteAsset(id: string): Promise<void> {
     .update({ deleted_at: new Date().toISOString() })
     .eq('id', id);
   if (error) throw error;
-}
-
-// =========================================================================
-// Photo upload helpers (asset-photos bucket)
-// =========================================================================
-
-export const ASSET_PHOTO_MAX_BYTES = 8 * 1024 * 1024;
-export const ASSET_PHOTO_MIMES = ['image/png', 'image/jpeg', 'image/webp'] as const;
-export type AssetPhotoMime = (typeof ASSET_PHOTO_MIMES)[number];
-
-export function assetPhotoObjectName(assetId: string, mime: AssetPhotoMime): string {
-  const ext = mime === 'image/png' ? 'png' : mime === 'image/webp' ? 'webp' : 'jpg';
-  return `${assetId}.${ext}`;
-}
-
-export async function uploadAssetPhoto(assetId: string, file: File): Promise<string> {
-  const mime = file.type as AssetPhotoMime;
-  const path = assetPhotoObjectName(assetId, mime);
-  const { error } = await supabase.storage
-    .from('asset-photos')
-    .upload(path, file, {
-      contentType: mime,
-      upsert: true,
-      cacheControl: '0',
-    });
-  if (error) throw error;
-  return path;
-}
-
-export async function signedAssetPhotoUrl(path: string): Promise<string> {
-  const { data, error } = await supabase.storage
-    .from('asset-photos')
-    .createSignedUrl(path, 60 * 30);
-  if (error) throw error;
-  return data.signedUrl;
 }

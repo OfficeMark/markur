@@ -45,7 +45,11 @@ export const PinMarker = forwardRef<HTMLButtonElement, PinMarkerProps>(function 
       ref={ref}
       type="button"
       data-asset-id={assetId}
-      onClick={onClick}
+      onPointerDown={(e) => e.stopPropagation()}
+      onClick={(e) => {
+        e.stopPropagation();
+        onClick?.();
+      }}
       aria-label={`${name} (${type}, ${statusLabel(status)})`}
       className={cn(
         'group relative inline-flex h-7 w-7 -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-full',
