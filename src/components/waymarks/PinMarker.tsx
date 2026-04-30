@@ -87,7 +87,7 @@ export const PinMarker = forwardRef<HTMLButtonElement, PinMarkerProps>(function 
       aria-label={`${name} (${typeName}, ${statusLabel(status)}${lockSuffix})`}
       style={{ backgroundColor: resolvedFill }}
       className={cn(
-        'group relative inline-flex h-9 w-9 -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-full lg:h-[21px] lg:w-[21px]',
+        'group relative inline-flex h-7 w-7 -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-full lg:h-[21px] lg:w-[21px]',
         'border border-white shadow-sm transition-transform',
         'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-waymarks-gold focus-visible:ring-offset-1',
         !repositioning && !unlocked && !selected && statusRingClass,
