@@ -11,7 +11,11 @@ import { ProtectedRoute } from '@/routes/ProtectedRoute';
 import { Trash } from '@/routes/Trash';
 import { AcceptInvitation } from '@/routes/AcceptInvitation';
 import { Help } from '@/routes/Help';
+import { Privacy } from '@/routes/Privacy';
+import { Terms } from '@/routes/Terms';
 import { OfflineSync } from '@/components/waymarks/OfflineSync';
+import { ErrorBoundary } from '@/components/waymarks/ErrorBoundary';
+import { CookieConsent } from '@/components/waymarks/CookieConsent';
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -27,61 +31,66 @@ const queryClient = new QueryClient({
 
 export default function App() {
   return (
-    <QueryClientProvider client={queryClient}>
-      <ThemeProvider>
-        <AuthProvider>
-          <PermissionsProvider>
-            <OfflineSync />
-            <Routes>
-              <Route path="/login" element={<Login />} />
-              <Route
-                path="/"
-                element={
-                  <ProtectedRoute>
-                    <Home />
-                  </ProtectedRoute>
-                }
-              />
-              <Route
-                path="/buildings/:id"
-                element={
-                  <ProtectedRoute>
-                    <Building />
-                  </ProtectedRoute>
-                }
-              />
-              <Route
-                path="/buildings/:id/trash"
-                element={
-                  <ProtectedRoute>
-                    <Trash />
-                  </ProtectedRoute>
-                }
-              />
-              <Route
-                path="/floors/:id"
-                element={
-                  <ProtectedRoute>
-                    <Floor />
-                  </ProtectedRoute>
-                }
-              />
-              <Route
-                path="/help"
-                element={
-                  <ProtectedRoute>
-                    <Help />
-                  </ProtectedRoute>
-                }
-              />
-              <Route
-                path="/accept/:token"
-                element={<AcceptInvitation />}
-              />
-            </Routes>
-          </PermissionsProvider>
-        </AuthProvider>
-      </ThemeProvider>
-    </QueryClientProvider>
+    <ErrorBoundary>
+      <QueryClientProvider client={queryClient}>
+        <ThemeProvider>
+          <AuthProvider>
+            <PermissionsProvider>
+              <OfflineSync />
+              <Routes>
+                <Route path="/login" element={<Login />} />
+                <Route
+                  path="/"
+                  element={
+                    <ProtectedRoute>
+                      <Home />
+                    </ProtectedRoute>
+                  }
+                />
+                <Route
+                  path="/buildings/:id"
+                  element={
+                    <ProtectedRoute>
+                      <Building />
+                    </ProtectedRoute>
+                  }
+                />
+                <Route
+                  path="/buildings/:id/trash"
+                  element={
+                    <ProtectedRoute>
+                      <Trash />
+                    </ProtectedRoute>
+                  }
+                />
+                <Route
+                  path="/floors/:id"
+                  element={
+                    <ProtectedRoute>
+                      <Floor />
+                    </ProtectedRoute>
+                  }
+                />
+                <Route
+                  path="/help"
+                  element={
+                    <ProtectedRoute>
+                      <Help />
+                    </ProtectedRoute>
+                  }
+                />
+                <Route
+                  path="/accept/:token"
+                  element={<AcceptInvitation />}
+                />
+                <Route path="/legal/privacy" element={<Privacy />} />
+                <Route path="/legal/terms" element={<Terms />} />
+              </Routes>
+              <CookieConsent />
+            </PermissionsProvider>
+          </AuthProvider>
+        </ThemeProvider>
+      </QueryClientProvider>
+    </ErrorBoundary>
   );
 }

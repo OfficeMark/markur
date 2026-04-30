@@ -14,6 +14,7 @@ import { Button } from '@/components/ui/Button';
 import { Chip } from '@/components/ui/Chip';
 import { RoleBadge, type Role } from "@/components/waymarks/RoleBadge";
 import { NewInvitationDialog } from '@/components/waymarks/NewInvitationDialog';
+import { StepUpDialog } from '@/components/waymarks/StepUpDialog';
 import {
   useBuildingGrants,
   useCancelInvitation,
@@ -23,16 +24,6 @@ import {
 import { format, formatDistanceToNow } from 'date-fns';
 import type { GrantWithProfile } from '@/lib/queries/access';
 import type { PendingInvitation } from '@/types/database';
-
-/**
- * Building-scoped access management. Visible only to admins
- * (manage_access on the building, gated by the parent route).
- *
- * Sections:
- *  1. Active grants — name + role + scope + expires_at, with Revoke.
- *  2. Pending invitations — email + role + token URL copy + Cancel.
- *  3. "Invite user" CTA opening NewInvitationDialog.
- */
 
 export type AccessManagementCardProps = {
   buildingId: string;
@@ -45,6 +36,14 @@ export function AccessManagementCard({ buildingId }: AccessManagementCardProps) 
   const cancelInv = useCancelInvitation(buildingId);
   const [inviteOpen, setInviteOpen] = useState(false);
   const [revokingId, setRevokingId] = useState<string | null>(null);
+  // Step-up confirmation (M10e). Revoke is destructive — the user has to
+  // type REVOKE to confirm, mirroring the asset soft-delete flow.
+  const [pendingRevoke, setPendingRevoke] = useState<GrantWithProfile | null>(null);
+  const [revokeError, setRevokeError] = useState<string | null>(null);
+
+  const revokeDescription = pendingRevoke
+    ? `This removes ${pendingRevoke.profile?.display_name ?? 'this user'}'s access to this building. They will be signed out of any active session and won't be able to view floors here until you re-invite them.`
+    : '';
 
   return (
     <section className="rounded-lg border border-black/10 bg-surface p-4 dark:border-white/10">
@@ -75,8 +74,8 @@ export function AccessManagementCard({ buildingId }: AccessManagementCardProps) 
               grant={g}
               busy={revoke.isPending && revokingId === g.id}
               onRevoke={() => {
-                setRevokingId(g.id);
-                revoke.mutate(g.id, { onSettled: () => setRevokingId(null) });
+                setRevokeError(null);
+                setPendingRevoke(g);
               }}
             />
           ))}
@@ -113,6 +112,37 @@ export function AccessManagementCard({ buildingId }: AccessManagementCardProps) 
         open={inviteOpen}
         onOpenChange={setInviteOpen}
         buildingId={buildingId}
+      />
+
+      <StepUpDialog
+        open={!!pendingRevoke}
+        onOpenChange={(open) => {
+          if (!open) {
+            setPendingRevoke(null);
+            setRevokeError(null);
+          }
+        }}
+        title="Revoke access"
+        description={revokeDescription}
+        confirmWord="REVOKE"
+        confirmLabel="Revoke access"
+        confirmIcon={<UserMinus size={12} aria-hidden />}
+        busy={revoke.isPending}
+        errorMessage={revokeError}
+        onConfirm={async () => {
+          if (!pendingRevoke) return;
+          setRevokingId(pendingRevoke.id);
+          try {
+            await revoke.mutateAsync(pendingRevoke.id);
+            setPendingRevoke(null);
+          } catch (err) {
+            setRevokeError(
+              err instanceof Error ? err.message : 'Could not revoke. Try again.'
+            );
+          } finally {
+            setRevokingId(null);
+          }
+        }}
       />
     </section>
   );

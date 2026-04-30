@@ -755,6 +755,7 @@ function ThumbButton({
       type="button"
       onClick={onSelect}
       aria-pressed={active}
+      aria-label={active ? 'Selected photo' : 'View this photo'}
       className={
         'h-12 w-12 shrink-0 overflow-hidden rounded-md border-2 ' +
         (active ? 'border-waymarks-gold' : 'border-transparent hover:border-black/15')
