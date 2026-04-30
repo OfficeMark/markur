@@ -25,7 +25,7 @@ export function ResumeAuditBanner({ buildingId }: ResumeAuditBannerProps) {
     <div
       role="status"
       aria-live="polite"
-      className="mb-4 flex flex-wrap items-center gap-3 rounded-md border border-waymarks-gold/40 bg-waymarks-gold-soft p-3 text-sm dark:bg-white/5"
+      className="mb-4 flex flex-wrap items-center gap-3 rounded-md border border-waymarks-gold bg-waymarks-gold-soft p-3 text-sm dark:bg-white/5"
     >
       <ClipboardList size={16} aria-hidden className="text-waymarks-gold" />
       <p className="flex-1 text-waymarks-ink dark:text-white">
@@ -35,7 +35,7 @@ export function ResumeAuditBanner({ buildingId }: ResumeAuditBannerProps) {
       </p>
       <Link
         to={`/floors/${session.floor_id}`}
-        className="inline-flex h-9 items-center gap-1 rounded-md bg-waymarks-gold px-3 text-xs font-medium text-white hover:bg-waymarks-gold/90"
+        className="inline-flex h-9 items-center gap-1 rounded-md bg-waymarks-gold px-3 text-xs font-medium text-white hover:bg-waymarks-gold-deep"
       >
         Resume <ChevronRight size={12} aria-hidden />
       </Link>

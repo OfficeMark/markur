@@ -40,7 +40,7 @@ export function RepositionToolbar({
       <div
         role="status"
         aria-live="polite"
-        className="pointer-events-auto absolute inset-x-3 bottom-3 flex items-center gap-2 rounded-lg border border-waymarks-gold/40 bg-waymarks-gold-soft px-3 py-2 text-sm shadow-sheet dark:bg-white/5"
+        className="pointer-events-auto absolute inset-x-3 bottom-3 flex items-center gap-2 rounded-lg border border-waymarks-gold bg-waymarks-gold-soft px-3 py-2 text-sm shadow-sheet dark:bg-white/5"
       >
         <Move size={14} aria-hidden className="text-waymarks-gold" />
         <span className="flex-1 text-waymarks-ink dark:text-white">
@@ -65,7 +65,7 @@ export function RepositionToolbar({
     <div
       role="dialog"
       aria-label="Confirm pin move"
-      className="pointer-events-auto absolute inset-x-3 bottom-3 flex flex-col gap-2 rounded-lg border border-waymarks-gold/60 bg-surface p-3 text-sm shadow-sheet sm:flex-row sm:items-center"
+      className="pointer-events-auto absolute inset-x-3 bottom-3 flex flex-col gap-2 rounded-lg border border-waymarks-gold bg-surface p-3 text-sm shadow-sheet sm:flex-row sm:items-center"
     >
       <div className="flex flex-1 items-center gap-2">
         <Move size={14} aria-hidden className="text-waymarks-gold" />

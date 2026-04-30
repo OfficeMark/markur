@@ -102,10 +102,10 @@ export const PinMarker = forwardRef<HTMLButtonElement, PinMarkerProps>(function 
         repositioning &&
           'after:pointer-events-none after:absolute after:-inset-2 after:animate-pulse after:rounded-full after:border-[3px] after:border-dashed after:border-waymarks-gold',
         unlocked && !repositioning &&
-          'cursor-grab touch-none ring-4 ring-waymarks-gold/40 ring-offset-1',
+          'cursor-grab touch-none ring-4 ring-waymarks-gold ring-offset-1',
         unlocked && !repositioning &&
           'after:pointer-events-none after:absolute after:-inset-1 after:animate-pulse after:rounded-full after:border-2 after:border-dashed after:border-waymarks-gold',
-        !unlocked && !repositioning && selected && 'ring-4 ring-waymarks-gold/40',
+        !unlocked && !repositioning && selected && 'ring-4 ring-waymarks-gold',
         pendingSync && 'border-dashed',
         faded && 'opacity-40'
       )}

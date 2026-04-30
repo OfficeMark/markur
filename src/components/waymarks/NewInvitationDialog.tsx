@@ -163,7 +163,7 @@ export function NewInvitationDialog({
                 <p className="text-[11px] font-medium uppercase tracking-[0.18em] text-text-faint">
                   Access management
                 </p>
-                <p className="font-serif text-xl">Invite user</p>
+                <p className="font-semibold text-xl">Invite user</p>
               </div>
             </Dialog.Title>
             <Dialog.Close asChild>
@@ -217,7 +217,7 @@ export function NewInvitationDialog({
                     value={email}
                     onChange={(e) => setEmail(e.target.value)}
                     placeholder="name@example.com"
-                    className="h-10 w-full rounded-md border border-black/10 bg-surface px-3 text-sm text-text outline-none focus:border-waymarks-gold focus:ring-2 focus:ring-waymarks-gold/40 dark:border-white/10"
+                    className="h-10 w-full rounded-md border border-black/10 bg-surface px-3 text-sm text-text outline-none focus:border-waymarks-gold focus:ring-2 focus:ring-waymarks-gold dark:border-white/10"
                   />
                 </Field>
 
@@ -229,7 +229,7 @@ export function NewInvitationDialog({
                         className={
                           'flex cursor-pointer items-start gap-2 rounded-md border p-2 transition-colors ' +
                           (role === opt.value
-                            ? 'border-waymarks-gold/50 bg-waymarks-gold-soft dark:bg-white/5'
+                            ? 'border-waymarks-gold bg-waymarks-gold-soft dark:bg-white/5'
                             : 'border-black/10 hover:bg-black/5 dark:border-white/10 dark:hover:bg-white/5')
                         }
                       >
@@ -255,7 +255,7 @@ export function NewInvitationDialog({
                     <select
                       value={floorId}
                       onChange={(e) => setFloorId(e.target.value)}
-                      className="h-10 w-full rounded-md border border-black/10 bg-surface px-3 text-sm text-text outline-none focus:border-waymarks-gold focus:ring-2 focus:ring-waymarks-gold/40 dark:border-white/10"
+                      className="h-10 w-full rounded-md border border-black/10 bg-surface px-3 text-sm text-text outline-none focus:border-waymarks-gold focus:ring-2 focus:ring-waymarks-gold dark:border-white/10"
                     >
                       <option value="">— Choose a floor —</option>
                       {(floors.data ?? []).map((f) => (
@@ -272,7 +272,7 @@ export function NewInvitationDialog({
                     <select
                       value={tenantId}
                       onChange={(e) => setTenantId(e.target.value)}
-                      className="h-10 w-full rounded-md border border-black/10 bg-surface px-3 text-sm text-text outline-none focus:border-waymarks-gold focus:ring-2 focus:ring-waymarks-gold/40 dark:border-white/10"
+                      className="h-10 w-full rounded-md border border-black/10 bg-surface px-3 text-sm text-text outline-none focus:border-waymarks-gold focus:ring-2 focus:ring-waymarks-gold dark:border-white/10"
                     >
                       <option value="">— Choose a tenant —</option>
                       {(tenants.data ?? []).map((t) => (
@@ -298,7 +298,7 @@ export function NewInvitationDialog({
                     value={expiresInDays}
                     onChange={(e) => setExpiresInDays(e.target.value)}
                     placeholder={role === 'auditor' ? '30' : 'never'}
-                    className="h-10 w-full rounded-md border border-black/10 bg-surface px-3 text-sm text-text outline-none focus:border-waymarks-gold focus:ring-2 focus:ring-waymarks-gold/40 dark:border-white/10"
+                    className="h-10 w-full rounded-md border border-black/10 bg-surface px-3 text-sm text-text outline-none focus:border-waymarks-gold focus:ring-2 focus:ring-waymarks-gold dark:border-white/10"
                   />
                 </Field>
               </form>

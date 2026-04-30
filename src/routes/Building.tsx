@@ -2,6 +2,7 @@ import { Link, useParams } from 'react-router-dom';
 import { ArrowLeft, MapPin, Layers, ImageOff, Trash2 } from 'lucide-react';
 import { AppShell } from '@/components/waymarks/AppShell';
 import { AccessManagementCard } from '@/components/waymarks/AccessManagementCard';
+import { BuildingPhotoUpload } from '@/components/waymarks/BuildingPhotoUpload';
 import { ResumeAuditBanner } from '@/components/waymarks/ResumeAuditBanner';
 import { useBuilding } from '@/hooks/useBuildings';
 import { useFloors } from '@/hooks/useFloors';
@@ -14,6 +15,7 @@ export function Building() {
   const { data: floors = [], isLoading: fLoading } = useFloors(id);
   const isSuperAdmin = useIsSuperAdmin();
   const canManageAccess = useCan('manage_access', { type: 'building', id: id ?? '' });
+  const canConfigure = useCan('configure', { type: 'building', id: id ?? '' });
 
   if (bLoading) return <Skeleton />;
 
@@ -21,7 +23,7 @@ export function Building() {
     return (
       <AppShell>
         <div className="mx-auto max-w-3xl px-4 py-12 sm:px-6">
-          <h1 className="font-serif text-2xl">Building not found</h1>
+          <h1 className="font-semibold text-3xl">Building not found</h1>
           <p className="mt-2 text-sm text-text-muted">
             It may have been removed or you may not have access.
           </p>
@@ -38,18 +40,28 @@ export function Building() {
 
   return (
     <AppShell>
-      <div className="mx-auto w-full max-w-4xl px-4 py-10 sm:px-6 sm:py-12">
+      <div className="mx-auto w-full max-w-5xl px-4 py-8 sm:px-6 sm:py-12">
         <Link
           to="/"
           className="mb-4 inline-flex items-center gap-1 text-xs text-text-muted hover:text-text"
         >
           <ArrowLeft size={12} aria-hidden /> All buildings
         </Link>
-        <header className="mb-8 space-y-2">
-          <p className="text-xs font-medium uppercase tracking-[0.2em] text-text-faint">Building</p>
-          <h1 className="font-serif text-3xl text-text sm:text-4xl">{building.name}</h1>
-          <p className="flex items-center gap-1.5 text-sm text-text-muted">
-            <MapPin size={14} aria-hidden />
+
+        <BuildingPhotoUpload
+          buildingId={building.id}
+          photoPath={building.photo_url}
+          canEdit={canConfigure}
+          variant="hero"
+        />
+
+        <header className="mt-6 mb-10 space-y-2">
+          <p className="text-[11px] font-medium uppercase tracking-[0.28em] text-waymarks-gold">
+            Building
+          </p>
+          <h1 className="font-semibold text-4xl leading-tight text-text sm:text-5xl">{building.name}</h1>
+          <p className="flex items-center gap-1.5 text-base text-text-muted">
+            <MapPin size={15} aria-hidden />
             <span>
               {building.address}, {building.city}
               {building.region ? `, ${building.region}` : ''}
@@ -72,7 +84,7 @@ export function Building() {
         )}
 
         <section className="space-y-3">
-          <h2 className="text-xs font-medium uppercase tracking-[0.18em] text-text-faint">
+          <h2 className="text-[11px] font-medium uppercase tracking-[0.22em] text-text-faint">
             Floors
           </h2>
           {fLoading ? (
@@ -91,7 +103,7 @@ export function Building() {
         </section>
 
         {canManageAccess && (
-          <section className="mt-8">
+          <section className="mt-10">
             <AccessManagementCard buildingId={building.id} />
           </section>
         )}
@@ -105,10 +117,10 @@ function FloorCard({ floor }: { floor: Floor }) {
     <li>
       <Link
         to={`/floors/${floor.id}`}
-        className="flex items-center gap-3 rounded-lg border border-black/10 bg-surface p-4 transition-colors hover:border-black/20 hover:bg-waymarks-gold-soft dark:border-white/10 dark:hover:border-white/20 dark:hover:bg-white/5"
+        className="group flex items-center gap-3 rounded-lg border border-black/10 bg-surface p-4 transition-all hover:-translate-y-0.5 hover:border-waymarks-gold hover:shadow-sm dark:border-white/10"
       >
-        <span className="inline-flex h-9 w-9 items-center justify-center rounded-md bg-waymarks-gold-soft text-waymarks-ink dark:bg-white/5 dark:text-white">
-          <Layers size={16} aria-hidden />
+        <span className="inline-flex h-10 w-10 items-center justify-center rounded-md bg-waymarks-gold-soft text-waymarks-gold dark:bg-white/5 dark:text-white">
+          <Layers size={18} aria-hidden />
         </span>
         <span className="flex-1">
           <span className="block font-medium text-text">{floor.label}</span>
@@ -135,9 +147,10 @@ function FloorListSkeleton() {
 function Skeleton() {
   return (
     <AppShell>
-      <div className="mx-auto max-w-4xl px-4 py-12 sm:px-6">
-        <div className="h-7 w-40 animate-pulse rounded-md bg-black/5 dark:bg-white/5" />
-        <div className="mt-3 h-4 w-72 animate-pulse rounded-md bg-black/5 dark:bg-white/5" />
+      <div className="mx-auto max-w-5xl px-4 py-12 sm:px-6">
+        <div className="h-48 w-full animate-pulse rounded-xl bg-black/5 dark:bg-white/5 sm:h-64" />
+        <div className="mt-6 h-10 w-72 animate-pulse rounded-md bg-black/5 dark:bg-white/5" />
+        <div className="mt-3 h-4 w-96 animate-pulse rounded-md bg-black/5 dark:bg-white/5" />
         <div className="mt-8 h-32 animate-pulse rounded-lg bg-black/5 dark:bg-white/5" />
       </div>
     </AppShell>

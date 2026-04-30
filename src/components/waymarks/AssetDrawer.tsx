@@ -111,7 +111,7 @@ export function AssetDrawer({
           <header className="flex items-start justify-between gap-3 border-b border-black/10 p-4 dark:border-white/10">
             <Dialog.Title asChild>
               <div className="min-w-0">
-                <p className="truncate font-serif text-xl">{asset?.name ?? 'Asset'}</p>
+                <p className="truncate font-semibold text-xl">{asset?.name ?? 'Asset'}</p>
                 {asset && (
                   <p className="mt-0.5 truncate text-xs text-text-muted">
                     {prettyType(asset.type)} · {asset.category}
@@ -225,7 +225,7 @@ function LockBar({
         'flex items-center gap-2 rounded-md border px-3 py-2 text-xs ' +
         (locked
           ? 'border-black/10 bg-surface-soft text-text-muted dark:border-white/10'
-          : 'border-waymarks-gold/40 bg-waymarks-gold-soft text-waymarks-ink dark:bg-white/5 dark:text-white')
+          : 'border-waymarks-gold bg-waymarks-gold-soft text-waymarks-ink dark:bg-white/5 dark:text-white')
       }
     >
       {locked ? (
@@ -246,7 +246,7 @@ function LockBar({
           'inline-flex h-7 items-center rounded-md border px-2 text-[11px] font-medium transition-colors disabled:opacity-50 ' +
           (locked
             ? 'border-black/10 hover:bg-black/5 dark:border-white/10 dark:hover:bg-white/5'
-            : 'border-waymarks-gold/40 bg-waymarks-gold text-white hover:bg-waymarks-gold/90')
+            : 'border-waymarks-gold bg-waymarks-gold text-white hover:bg-waymarks-gold-deep')
         }
       >
         {locked ? 'Unlock' : 'Lock pin'}
@@ -467,7 +467,7 @@ function EditPanel({
         <input
           value={name}
           onChange={(e) => setName(e.target.value)}
-          className="h-10 w-full rounded-md border border-black/10 bg-surface px-3 text-sm text-text outline-none focus:border-waymarks-gold focus:ring-2 focus:ring-waymarks-gold/40 dark:border-white/10"
+          className="h-10 w-full rounded-md border border-black/10 bg-surface px-3 text-sm text-text outline-none focus:border-waymarks-gold focus:ring-2 focus:ring-waymarks-gold dark:border-white/10"
         />
       </FieldLabel>
 
@@ -475,7 +475,7 @@ function EditPanel({
         <select
           value={type}
           onChange={(e) => setType(e.target.value)}
-          className="h-10 w-full rounded-md border border-black/10 bg-surface px-3 text-sm text-text outline-none focus:border-waymarks-gold focus:ring-2 focus:ring-waymarks-gold/40 dark:border-white/10"
+          className="h-10 w-full rounded-md border border-black/10 bg-surface px-3 text-sm text-text outline-none focus:border-waymarks-gold focus:ring-2 focus:ring-waymarks-gold dark:border-white/10"
         >
           <optgroup label="Signage">
             {SIGNAGE_TYPES.map((t) => (
@@ -500,7 +500,7 @@ function EditPanel({
           value={notes}
           onChange={(e) => setNotes(e.target.value)}
           placeholder='e.g. "East elevator lobby, mounted at 5′. Replaced in 2024."'
-          className="w-full rounded-md border border-black/10 bg-surface p-3 text-sm text-text outline-none focus:border-waymarks-gold focus:ring-2 focus:ring-waymarks-gold/40 dark:border-white/10"
+          className="w-full rounded-md border border-black/10 bg-surface p-3 text-sm text-text outline-none focus:border-waymarks-gold focus:ring-2 focus:ring-waymarks-gold dark:border-white/10"
         />
       </FieldLabel>
 
@@ -509,7 +509,7 @@ function EditPanel({
           value={manufacturer}
           onChange={(e) => setManufacturer(e.target.value)}
           placeholder="e.g. Officemark"
-          className="h-10 w-full rounded-md border border-black/10 bg-surface px-3 text-sm text-text outline-none focus:border-waymarks-gold focus:ring-2 focus:ring-waymarks-gold/40 dark:border-white/10"
+          className="h-10 w-full rounded-md border border-black/10 bg-surface px-3 text-sm text-text outline-none focus:border-waymarks-gold focus:ring-2 focus:ring-waymarks-gold dark:border-white/10"
         />
       </FieldLabel>
 
@@ -519,7 +519,7 @@ function EditPanel({
             type="date"
             value={installed ?? ''}
             onChange={(e) => setInstalled(e.target.value)}
-            className="h-10 w-full rounded-md border border-black/10 bg-surface px-3 text-sm text-text outline-none focus:border-waymarks-gold focus:ring-2 focus:ring-waymarks-gold/40 dark:border-white/10"
+            className="h-10 w-full rounded-md border border-black/10 bg-surface px-3 text-sm text-text outline-none focus:border-waymarks-gold focus:ring-2 focus:ring-waymarks-gold dark:border-white/10"
           />
         </FieldLabel>
 
@@ -531,7 +531,7 @@ function EditPanel({
             value={cycle}
             onChange={(e) => setCycle(e.target.value)}
             placeholder="default 90"
-            className="h-10 w-full rounded-md border border-black/10 bg-surface px-3 text-sm text-text outline-none focus:border-waymarks-gold focus:ring-2 focus:ring-waymarks-gold/40 dark:border-white/10"
+            className="h-10 w-full rounded-md border border-black/10 bg-surface px-3 text-sm text-text outline-none focus:border-waymarks-gold focus:ring-2 focus:ring-waymarks-gold dark:border-white/10"
           />
         </FieldLabel>
       </div>

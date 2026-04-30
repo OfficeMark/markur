@@ -60,7 +60,7 @@ export function AcceptInvitation() {
             <div className="flex items-start gap-2">
               <Check size={18} aria-hidden className="mt-0.5" />
               <div>
-                <p className="font-serif text-xl">Welcome aboard.</p>
+                <p className="font-semibold text-xl">Welcome aboard.</p>
                 <p className="mt-1 text-sm">
                   Your access is set up. Heading to your dashboard…
                 </p>
@@ -80,7 +80,7 @@ export function AcceptInvitation() {
           <p className="flex items-center gap-1.5 text-[11px] font-medium uppercase tracking-[0.18em] text-text-faint">
             <ShieldCheck size={12} aria-hidden /> Invitation
           </p>
-          <h1 className="font-serif text-3xl text-text sm:text-4xl">You're invited</h1>
+          <h1 className="font-semibold text-3xl text-text sm:text-4xl">You're invited</h1>
         </header>
 
         <div className="space-y-4 rounded-lg border border-black/10 bg-surface p-5 dark:border-white/10">
@@ -157,7 +157,7 @@ function ErrorPanel({ reason }: { reason: 'invalid' | 'expired' | 'accepted' }) 
           <div className="flex items-start gap-2">
             <X size={18} aria-hidden className="mt-0.5" />
             <div>
-              <p className="font-serif text-xl">Invitation unavailable</p>
+              <p className="font-semibold text-xl">Invitation unavailable</p>
               <p className="mt-1 text-sm">{message}</p>
               <Link to="/" className="mt-3 inline-block text-sm underline">
                 Back to dashboard

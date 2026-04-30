@@ -220,18 +220,27 @@ export function Floor() {
 
   // Per-asset status (cycle-aware via lastAuditByAsset). Used by the
   // Audit-due chip count and the optional filter.
-  const auditDueAssets = useMemo(() => {
-    if (!assets.length) return [] as Asset[];
-    return assets.filter((a) => {
+  const statusCounts = useMemo(() => {
+    let good = 0;
+    let attention = 0;
+    let flagged = 0;
+    const auditDue: Asset[] = [];
+    for (const a of assets) {
       const status = computeStatus({
         asset: a,
         lastAuditAt: lastAuditByAsset?.get(a.id) ?? null,
         openFlagCount: a.status === 'flagged' ? 1 : 0,
       });
-      return status === 'attention';
-    });
+      if (status === 'good') good++;
+      else if (status === 'attention') {
+        attention++;
+        auditDue.push(a);
+      } else if (status === 'flagged') flagged++;
+    }
+    return { good, attention, flagged, auditDue };
   }, [assets, lastAuditByAsset]);
 
+  const auditDueAssets = statusCounts.auditDue;
   const visibleAssets = auditDueOnly ? auditDueAssets : assets;
 
   if (fLoading) return <Skeleton />;
@@ -240,7 +249,7 @@ export function Floor() {
     return (
       <AppShell>
         <div className="mx-auto max-w-3xl px-4 py-12 sm:px-6">
-          <h1 className="font-serif text-2xl">Floor not found</h1>
+          <h1 className="font-semibold text-2xl">Floor not found</h1>
           <p className="mt-2 text-sm text-text-muted">
             It may have been removed or you may not have access.
           </p>
@@ -270,13 +279,10 @@ export function Floor() {
         </Link>
         <header className="mb-6 flex flex-wrap items-end justify-between gap-3">
           <div>
-            <p className="text-xs font-medium uppercase tracking-[0.2em] text-text-faint">
+            <p className="text-xs font-medium uppercase tracking-[0.22em] text-text-faint">
               {building ? `${building.name} · floor` : 'Floor'}
             </p>
-            <h1 className="font-serif text-3xl text-text sm:text-4xl">{floor.label}</h1>
-            <p className="mt-1 text-xs text-text-faint">
-              {assets.length} {assets.length === 1 ? 'pin' : 'pins'}
-            </p>
+            <h1 className="mt-1 font-semibold text-4xl leading-tight text-text sm:text-5xl">{floor.label}</h1>
           </div>
           <div className="flex flex-wrap items-center gap-2">
             {floor.plan_url && assets.length > 0 && (
@@ -347,6 +353,17 @@ export function Floor() {
           </div>
         </header>
 
+        {assets.length > 0 && (
+          <FloorStats
+            total={assets.length}
+            good={statusCounts.good}
+            attention={statusCounts.attention}
+            flagged={statusCounts.flagged}
+            auditDueOnly={auditDueOnly}
+            onToggleAuditDue={() => setAuditDueOnly((v) => !v)}
+          />
+        )}
+
         {cacheError && (
           <div className="mb-4 rounded-md border border-danger/30 bg-danger-bg p-3 text-xs text-danger">
             Could not cache this floor: {cacheError}
@@ -357,7 +374,7 @@ export function Floor() {
           <div
             role="status"
             aria-live="polite"
-            className="mb-4 flex flex-wrap items-center gap-2 rounded-md border border-waymarks-gold/40 bg-waymarks-gold-soft p-3 text-sm dark:bg-white/5"
+            className="mb-4 flex flex-wrap items-center gap-2 rounded-md border border-waymarks-gold bg-waymarks-gold-soft p-3 text-sm dark:bg-white/5"
           >
             <ClipboardList size={14} aria-hidden className="text-waymarks-gold" />
             <p className="flex-1 text-waymarks-ink dark:text-white">
@@ -377,7 +394,7 @@ export function Floor() {
           ) : !signedUrl || !planKind ? (
             <div className="flex h-[60vh] items-center justify-center rounded-xl border border-black/10 bg-waymarks-gold-soft text-text-faint dark:border-white/10 dark:bg-white/5">
               <div
-                className="h-6 w-6 animate-spin rounded-full border-2 border-waymarks-gold/40 border-t-waymarks-gold"
+                className="h-6 w-6 animate-spin rounded-full border-2 border-waymarks-gold border-t-waymarks-gold"
                 aria-hidden
               />
               <span className="sr-only">Loading plan…</span>
@@ -501,6 +518,92 @@ export function Floor() {
         />
       )}
     </AppShell>
+  );
+}
+
+
+
+function FloorStats({
+  total,
+  good,
+  attention,
+  flagged,
+  auditDueOnly,
+  onToggleAuditDue,
+}: {
+  total: number;
+  good: number;
+  attention: number;
+  flagged: number;
+  auditDueOnly: boolean;
+  onToggleAuditDue: () => void;
+}) {
+  return (
+    <div className="mb-6 grid grid-cols-2 gap-3 sm:grid-cols-4">
+      <Tile label="Total" value={total} accent="ink" />
+      <Tile label="Good" value={good} accent="success" />
+      <Tile
+        label="Audit due"
+        value={attention}
+        accent="warning"
+        active={auditDueOnly}
+        onClick={attention > 0 ? onToggleAuditDue : undefined}
+      />
+      <Tile label="Flagged" value={flagged} accent="danger" />
+    </div>
+  );
+}
+
+function Tile({
+  label,
+  value,
+  accent,
+  active,
+  onClick,
+}: {
+  label: string;
+  value: number;
+  accent: 'ink' | 'success' | 'warning' | 'danger';
+  active?: boolean;
+  onClick?: () => void;
+}) {
+  const accentLabel =
+    accent === 'success'
+      ? 'text-success'
+      : accent === 'warning'
+        ? 'text-warning'
+        : accent === 'danger'
+          ? 'text-danger'
+          : 'text-waymarks-gold';
+  const accentNumber =
+    accent === 'success'
+      ? 'text-success'
+      : accent === 'warning'
+        ? 'text-warning'
+        : accent === 'danger'
+          ? 'text-danger'
+          : 'text-text';
+  const Tag = onClick ? 'button' : 'div';
+  return (
+    <Tag
+      type={onClick ? 'button' : undefined}
+      onClick={onClick}
+      aria-pressed={onClick ? !!active : undefined}
+      className={
+        'group rounded-lg border bg-surface px-4 py-3 text-left transition-colors ' +
+        (active
+          ? 'border-warning/50 bg-warning-bg shadow-sm'
+          : 'border-black/10 hover:border-black/20 dark:border-white/10') +
+        (onClick ? ' cursor-pointer' : '')
+      }
+    >
+      <p className={'text-[11px] font-medium uppercase tracking-[0.22em] ' + accentLabel}>
+        {label}
+      </p>
+      <p className={'mt-1 font-semibold tabular-nums text-4xl leading-none sm:text-5xl ' + accentNumber}>
+        {value}
+      </p>
+    </Tag>
   );
 }
 

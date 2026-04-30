@@ -141,7 +141,7 @@ export function FloorPlanUploadDialog({
         >
           <div className="flex items-start justify-between gap-3">
             <div>
-              <Dialog.Title className="font-serif text-xl">{title}</Dialog.Title>
+              <Dialog.Title className="font-semibold text-xl">{title}</Dialog.Title>
               <Dialog.Description id="upload-dialog-desc" className="mt-1 text-sm text-text-muted">
                 {description}
               </Dialog.Description>
@@ -234,7 +234,7 @@ function PickArea(props: {
 function AnalyzingPanel({ name }: { name: string }) {
   return (
     <div className="flex items-center gap-3 rounded-lg border border-black/10 bg-surface p-4 text-sm dark:border-white/10">
-      <div className="h-5 w-5 animate-spin rounded-full border-2 border-waymarks-gold/40 border-t-waymarks-gold" />
+      <div className="h-5 w-5 animate-spin rounded-full border-2 border-waymarks-gold border-t-waymarks-gold" />
       <span>
         Reading <span className="font-medium">{name}</span>…
       </span>
@@ -300,7 +300,7 @@ function ReviewPanel(props: {
 function UploadingPanel() {
   return (
     <div className="flex items-center gap-3 rounded-lg border border-black/10 bg-surface p-4 text-sm dark:border-white/10">
-      <div className="h-5 w-5 animate-spin rounded-full border-2 border-waymarks-gold/40 border-t-waymarks-gold" />
+      <div className="h-5 w-5 animate-spin rounded-full border-2 border-waymarks-gold border-t-waymarks-gold" />
       <span>Uploading…</span>
     </div>
   );

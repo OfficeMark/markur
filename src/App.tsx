@@ -10,6 +10,7 @@ import { Login } from '@/routes/Login';
 import { ProtectedRoute } from '@/routes/ProtectedRoute';
 import { Trash } from '@/routes/Trash';
 import { AcceptInvitation } from '@/routes/AcceptInvitation';
+import { Help } from '@/routes/Help';
 import { OfflineSync } from '@/components/waymarks/OfflineSync';
 
 const queryClient = new QueryClient({
@@ -62,6 +63,14 @@ export default function App() {
                 element={
                   <ProtectedRoute>
                     <Floor />
+                  </ProtectedRoute>
+                }
+              />
+              <Route
+                path="/help"
+                element={
+                  <ProtectedRoute>
+                    <Help />
                   </ProtectedRoute>
                 }
               />

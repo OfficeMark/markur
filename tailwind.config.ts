@@ -11,6 +11,7 @@ export default {
         waymarks: {
           ink: 'rgb(var(--waymarks-ink) / <alpha-value>)',
           gold: 'rgb(var(--waymarks-gold) / <alpha-value>)',
+          'gold-deep': 'rgb(var(--waymarks-gold-deep) / <alpha-value>)',
           'gold-soft': 'rgb(var(--waymarks-gold-soft) / <alpha-value>)',
           cream: 'rgb(var(--waymarks-cream) / <alpha-value>)',
         },
@@ -48,7 +49,9 @@ export default {
       },
       fontFamily: {
         sans: ['Inter', 'system-ui', 'sans-serif'],
-        serif: ['"Cormorant Garamond"', 'Georgia', 'serif'],
+        // Cormorant Garamond is retired (M10b) — the wordmark image carries
+        // the brand voice; the app interface stays in Inter throughout.
+        serif: ['Inter', 'system-ui', 'sans-serif'],
         mono: ['"JetBrains Mono"', 'ui-monospace', 'monospace'],
       },
       borderRadius: {

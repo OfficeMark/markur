@@ -29,7 +29,7 @@ export function EmptyState({
         </div>
       )}
       <div className="space-y-2">
-        <h2 className="font-serif text-2xl text-text">{title}</h2>
+        <h2 className="font-semibold text-2xl text-text">{title}</h2>
         <p className="text-sm text-text-muted">{description}</p>
       </div>
       {(primaryAction || secondaryAction) && (

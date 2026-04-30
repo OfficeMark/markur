@@ -250,6 +250,7 @@ export type Database = {
           id: string;
           name: string;
           owner_org_id: string | null;
+          photo_url: string | null;
           region: string | null;
           settings: Json;
           total_floors: number;
@@ -264,6 +265,7 @@ export type Database = {
           id?: string;
           name: string;
           owner_org_id?: string | null;
+          photo_url?: string | null;
           region?: string | null;
           settings?: Json;
           total_floors: number;
@@ -278,6 +280,7 @@ export type Database = {
           id?: string;
           name?: string;
           owner_org_id?: string | null;
+          photo_url?: string | null;
           region?: string | null;
           settings?: Json;
           total_floors?: number;
@@ -490,6 +493,7 @@ export type Database = {
     Views: { [_ in never]: never };
     Functions: {
       storage_asset_photo_asset_id: { Args: { p_name: string }; Returns: string };
+      storage_building_photo_building_id: { Args: { p_name: string }; Returns: string };
       storage_floor_plan_floor_id: { Args: { p_name: string }; Returns: string };
       user_can: {
         Args: { p_capability: string; p_scope_id: string; p_scope_type: string };

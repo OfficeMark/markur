@@ -59,7 +59,7 @@ export function StepUpDialog({
           className="fixed left-1/2 top-1/2 z-50 w-[min(96vw,440px)] -translate-x-1/2 -translate-y-1/2 rounded-lg border border-black/10 bg-surface p-5 text-text shadow-sheet outline-none dark:border-white/10"
         >
           <div className="mb-4 flex items-start justify-between gap-3">
-            <Dialog.Title className="font-serif text-lg">{title}</Dialog.Title>
+            <Dialog.Title className="font-semibold text-lg">{title}</Dialog.Title>
             <Dialog.Close asChild>
               <button
                 aria-label="Close"
@@ -93,7 +93,7 @@ export function StepUpDialog({
               autoCorrect="off"
               autoCapitalize="off"
               spellCheck={false}
-              className="h-10 w-full rounded-md border border-black/10 bg-surface px-3 text-sm text-text outline-none focus:border-waymarks-gold focus:ring-2 focus:ring-waymarks-gold/40 dark:border-white/10"
+              className="h-10 w-full rounded-md border border-black/10 bg-surface px-3 text-sm text-text outline-none focus:border-waymarks-gold focus:ring-2 focus:ring-waymarks-gold dark:border-white/10"
             />
           </label>
 

@@ -142,7 +142,7 @@ export function NewAssetDialog({
         <Dialog.Content className="fixed left-1/2 top-1/2 z-50 max-h-[92vh] w-[min(94vw,540px)] -translate-x-1/2 -translate-y-1/2 overflow-y-auto rounded-xl border border-black/10 bg-surface p-5 text-text shadow-sheet outline-none dark:border-white/10">
           <div className="flex items-start justify-between gap-3">
             <div>
-              <Dialog.Title className="font-serif text-xl">Add asset</Dialog.Title>
+              <Dialog.Title className="font-semibold text-xl">Add asset</Dialog.Title>
               <Dialog.Description className="mt-1 text-sm text-text-muted">
                 Place a sign at the spot you clicked on the plan.
               </Dialog.Description>
@@ -172,7 +172,7 @@ export function NewAssetDialog({
               <select
                 id="asset-type"
                 {...register('type')}
-                className="h-11 w-full rounded-md border border-black/10 bg-surface px-3 text-sm text-text outline-none focus:border-waymarks-gold focus:ring-2 focus:ring-waymarks-gold/40 dark:border-white/10"
+                className="h-11 w-full rounded-md border border-black/10 bg-surface px-3 text-sm text-text outline-none focus:border-waymarks-gold focus:ring-2 focus:ring-waymarks-gold dark:border-white/10"
               >
                 <option value="">Choose a type…</option>
                 <optgroup label="Signage">
@@ -197,7 +197,7 @@ export function NewAssetDialog({
                 id="asset-name"
                 {...register('name')}
                 placeholder='e.g. "Lobby directory"'
-                className="h-11 w-full rounded-md border border-black/10 bg-surface px-3 text-sm text-text outline-none focus:border-waymarks-gold focus:ring-2 focus:ring-waymarks-gold/40 dark:border-white/10"
+                className="h-11 w-full rounded-md border border-black/10 bg-surface px-3 text-sm text-text outline-none focus:border-waymarks-gold focus:ring-2 focus:ring-waymarks-gold dark:border-white/10"
               />
             </Field>
 
@@ -212,7 +212,7 @@ export function NewAssetDialog({
                 rows={2}
                 {...register('location_notes')}
                 placeholder='e.g. "East elevator lobby, mounted at 5′"'
-                className="w-full rounded-md border border-black/10 bg-surface p-3 text-sm text-text outline-none focus:border-waymarks-gold focus:ring-2 focus:ring-waymarks-gold/40 dark:border-white/10"
+                className="w-full rounded-md border border-black/10 bg-surface p-3 text-sm text-text outline-none focus:border-waymarks-gold focus:ring-2 focus:ring-waymarks-gold dark:border-white/10"
               />
             </Field>
 

@@ -47,7 +47,7 @@ export function AuditCompleteSummary({
                 <p className="text-[11px] font-medium uppercase tracking-[0.18em] text-text-faint">
                   Audit complete
                 </p>
-                <p className="font-serif text-xl">Review session</p>
+                <p className="font-semibold text-xl">Review session</p>
               </div>
             </Dialog.Title>
             <Dialog.Close asChild>

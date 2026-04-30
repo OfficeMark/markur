@@ -53,7 +53,7 @@ export function AccessManagementCard({ buildingId }: AccessManagementCardProps) 
           <p className="flex items-center gap-1.5 text-[11px] font-medium uppercase tracking-[0.18em] text-text-faint">
             <ShieldCheck size={12} aria-hidden /> Access management
           </p>
-          <h2 className="font-serif text-lg text-text">People with access</h2>
+          <h2 className="font-semibold text-lg text-text">People with access</h2>
         </div>
         <Button
           size="sm"
@@ -189,7 +189,7 @@ function InvitationRow({
   const url = inviteUrlFor(invitation.token);
   const [copied, setCopied] = useState(false);
   return (
-    <li className="flex flex-col gap-2 rounded-md border border-waymarks-gold/30 bg-waymarks-gold-soft p-3 dark:bg-white/5 sm:flex-row sm:items-center">
+    <li className="flex flex-col gap-2 rounded-md border border-waymarks-gold bg-waymarks-gold-soft p-3 dark:bg-white/5 sm:flex-row sm:items-center">
       <div className="min-w-0 flex-1">
         <p className="flex flex-wrap items-center gap-1.5 text-sm">
           <span className="truncate font-medium text-text">{invitation.email}</span>

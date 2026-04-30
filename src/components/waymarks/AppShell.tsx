@@ -1,5 +1,6 @@
 import { Link } from 'react-router-dom';
 import type { ReactNode } from 'react';
+import { HelpCircle } from 'lucide-react';
 import { LiveSyncChip } from './LiveSyncChip';
 import { UserMenu } from './UserMenu';
 import { BuildingNav, BuildingNavSheet } from './BuildingNav';
@@ -16,7 +17,7 @@ type AppShellProps = {
 export function AppShell({ children, withSidebar = true }: AppShellProps) {
   return (
     <div className="flex min-h-screen flex-col bg-waymarks-cream text-text">
-      <header className="sticky top-0 z-40 border-b border-black/10 bg-waymarks-ink text-white">
+      <header className="sticky top-0 z-40 bg-waymarks-ink text-white shadow-[0_2px_0_0_rgb(var(--waymarks-gold))]">
         <div className="mx-auto flex h-14 w-full max-w-[1600px] items-center justify-between gap-3 px-3 sm:px-6">
           <div className="flex items-center gap-1">
             {withSidebar && <BuildingNavSheet />}
@@ -36,6 +37,13 @@ export function AppShell({ children, withSidebar = true }: AppShellProps) {
           </div>
           <div className="flex items-center gap-2 sm:gap-3">
             <LiveSyncChip />
+            <Link
+              to="/help"
+              aria-label="Help and tutorial"
+              className="inline-flex h-9 w-9 items-center justify-center rounded-md text-white/80 hover:bg-white/10 hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-waymarks-gold"
+            >
+              <HelpCircle size={18} aria-hidden />
+            </Link>
             <UserMenu />
           </div>
         </div>

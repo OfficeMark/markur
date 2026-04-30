@@ -76,7 +76,7 @@ export function Trash() {
             <p className="text-xs font-medium uppercase tracking-[0.2em] text-text-faint">
               Trash · super admin
             </p>
-            <h1 className="font-serif text-3xl text-text sm:text-4xl">Recently deleted assets</h1>
+            <h1 className="font-semibold text-3xl text-text sm:text-4xl">Recently deleted assets</h1>
             <p className="mt-1 text-xs text-text-faint">
               Restorable for {RETENTION_DAYS} days. After that, deletion is permanent.
             </p>
