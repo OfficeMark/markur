@@ -5,11 +5,11 @@
 @layer base {
   :root {
     /* Brand */
-    --waymarks-ink: 31 41 56; /* #1F2938 — dark slate, header bg */
-    --waymarks-gold: 237 126 44; /* #ED7E2C — Markur orange */
-    --waymarks-gold-deep: 192 101 31; /* #C0651F — pressed/hover, never use opacity on the gold */
-    --waymarks-gold-soft: 251 240 228; /* #FBF0E4 — orange-tinted soft surface */
-    --waymarks-cream: 245 241 232; /* #F5F1E8 — page surface */
+    --waymarks-ink: 31 41 56;
+    --waymarks-gold: 237 126 44;
+    --waymarks-gold-deep: 192 101 31;
+    --waymarks-gold-soft: 251 240 228;
+    --waymarks-cream: 245 241 232;
 
     /* Semantic */
     --color-success: 31 110 74;
@@ -29,21 +29,16 @@
     --color-surface-soft: 247 245 238;
   }
 
-  /* Dark mode is class-based for now (toggled by ThemeToggle).
-     Per spec 02, the design dark palette is reserved for after M5,
-     but we wire a usable inverted set so the toggle is testable today. */
+  /* Minimal dark mode (M10g). Swap ONLY two tokens:
+     - --waymarks-cream (page bg) -> dark grey
+     - --color-text (default body text) -> near-white
+     Cards (--color-surface = white), gold accents, ink sidebar/header,
+     status colors all stay the same. The previous full-invert dark theme
+     kept breaking surfaces; this one only flips the two things that
+     materially affect "the page is dark". */
   .dark {
-    --waymarks-ink: 245 241 232; /* swap ink and cream */
-    --waymarks-gold: 244 152 86; /* #F49856 — Markur orange, dark-mode tuning */
-    --waymarks-gold-deep: 218 117 51; /* #DA7533 — dark-mode pressed/hover */
-    --waymarks-gold-soft: 38 48 64;
-    --waymarks-cream: 23 28 38;
-
-    --color-text: 240 235 224;
-    --color-text-muted: 178 175 166;
-    --color-text-faint: 130 128 122;
-    --color-surface: 23 28 38;
-    --color-surface-soft: 31 41 56;
+    --waymarks-cream: 38 43 50;
+    --color-text: 240 240 235;
   }
 
   html {
@@ -59,16 +54,12 @@
   h1,
   h2,
   h3 {
-    /* Inter at heavier weight reads cleaner for property managers vs the
-       editorial-feeling Cormorant we used briefly. The wordmark image
-       carries the brand voice; the app interface stays workmanlike. */
     font-family: 'Inter', system-ui, sans-serif;
     line-height: 1.15;
     font-weight: 600;
     letter-spacing: -0.01em;
   }
 
-  /* Visible focus everywhere. Override only with replacement, never bare. */
   :focus-visible {
     @apply outline-none ring-2 ring-waymarks-gold ring-offset-2 ring-offset-waymarks-cream;
   }

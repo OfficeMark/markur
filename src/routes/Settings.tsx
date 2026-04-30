@@ -9,6 +9,7 @@ import {
   Moon,
   Save,
   ShieldCheck,
+  Sun,
   Trash2,
 } from 'lucide-react';
 import { AppShell } from '@/components/waymarks/AppShell';
@@ -17,6 +18,7 @@ import { Avatar } from '@/components/ui/Avatar';
 import { useAuth } from '@/lib/auth-context';
 import { usePermissions } from '@/lib/permissions-context';
 import { updateMyProfile } from '@/lib/queries/profile';
+import { useTheme } from '@/components/waymarks/theme-context';
 
 export function Settings() {
   const { user, profile, signOut, refreshProfile } = useAuth();
@@ -87,7 +89,7 @@ export function Settings() {
 
         <h1 className="font-semibold text-3xl">Account settings</h1>
         <p className="mt-1 text-sm text-text-muted">
-          Manage your name, sign out, or request account deletion.
+          Manage your name, theme, sign out, or request account deletion.
         </p>
 
         <section className="mt-6 rounded-lg border border-black/10 bg-surface p-5">
@@ -156,23 +158,7 @@ export function Settings() {
           </div>
         </section>
 
-        <section className="mt-5 rounded-lg border border-black/10 bg-surface p-5">
-          <p className="text-[11px] font-medium uppercase tracking-[0.18em] text-text-faint">
-            Appearance
-          </p>
-          <h2 className="mt-1 font-semibold text-lg">Theme</h2>
-          <div className="mt-3 flex items-start gap-3 rounded-md border border-black/10 bg-bg p-3 text-sm">
-            <Moon size={14} aria-hidden className="mt-0.5 shrink-0 text-text-muted" />
-            <div>
-              <p className="font-medium">Light mode only, for now.</p>
-              <p className="mt-1 text-xs text-text-muted">
-                We are holding off on dark mode until we can ship a properly
-                tested version. Markur stays in the Markur cream theme regardless
-                of your operating-system preference.
-              </p>
-            </div>
-          </div>
-        </section>
+        <ThemeSection />
 
         <section className="mt-5 rounded-lg border border-black/10 bg-surface p-5">
           <p className="text-[11px] font-medium uppercase tracking-[0.18em] text-text-faint">
@@ -237,5 +223,58 @@ function ReadOnlyField({
         {value || '-'}
       </p>
     </div>
+  );
+}
+
+function ThemeSection() {
+  const { theme, setTheme } = useTheme();
+  const isDark = theme === 'dark';
+  return (
+    <section className="mt-5 rounded-lg border border-black/10 bg-surface p-5">
+      <p className="text-[11px] font-medium uppercase tracking-[0.18em] text-text-faint">
+        Appearance
+      </p>
+      <h2 className="mt-1 font-semibold text-lg">Theme</h2>
+      <p className="mt-1 text-sm text-text-muted">
+        Light mode is the default. Dark mode swaps the page background to a
+        soft grey and keeps the content cards white.
+      </p>
+      <div
+        role="radiogroup"
+        aria-label="Theme"
+        className="mt-3 inline-flex rounded-md border border-black/10 p-0.5"
+      >
+        <button
+          type="button"
+          role="radio"
+          aria-checked={!isDark}
+          onClick={() => setTheme('light')}
+          className={
+            'inline-flex items-center gap-1.5 rounded-[5px] px-3 py-1.5 text-sm transition-colors ' +
+            (!isDark
+              ? 'bg-waymarks-ink text-white'
+              : 'text-text-muted hover:text-text')
+          }
+        >
+          <Sun size={14} aria-hidden />
+          Light
+        </button>
+        <button
+          type="button"
+          role="radio"
+          aria-checked={isDark}
+          onClick={() => setTheme('dark')}
+          className={
+            'inline-flex items-center gap-1.5 rounded-[5px] px-3 py-1.5 text-sm transition-colors ' +
+            (isDark
+              ? 'bg-waymarks-ink text-white'
+              : 'text-text-muted hover:text-text')
+          }
+        >
+          <Moon size={14} aria-hidden />
+          Dark
+        </button>
+      </div>
+    </section>
   );
 }
