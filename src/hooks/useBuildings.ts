@@ -1,12 +1,15 @@
 import { useEffect, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
+  createBuilding,
   getBuilding,
   listBuildings,
   removeBuildingPhoto,
   signedBuildingPhotoUrl,
   uploadBuildingPhoto,
+  type NewBuildingInput,
 } from '@/lib/queries/buildings';
+import { accessKeys } from '@/hooks/useAccess';
 
 export const buildingKeys = {
   all: ['buildings'] as const,
@@ -27,6 +30,22 @@ export function useBuilding(id: string | undefined) {
     queryKey: id ? buildingKeys.detail(id) : ['buildings', 'detail', 'none'],
     queryFn: () => (id ? getBuilding(id) : Promise.resolve(null)),
     enabled: !!id,
+  });
+}
+
+/**
+ * Create a new building (M10h). The trigger on the buildings table also
+ * inserts a building_admin grant for the creator, so we invalidate the
+ * permissions cache after success.
+ */
+export function useCreateBuilding() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (input: NewBuildingInput) => createBuilding(input),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: buildingKeys.list() });
+      qc.invalidateQueries({ queryKey: accessKeys.all });
+    },
   });
 }
 

@@ -6,6 +6,12 @@ export type PermissionsState = {
   grants: readonly Grant[];
   /** Initial fetch in flight. UI should be conservative while true. */
   loading: boolean;
+  /**
+   * Re-fetch the signed-in user's access_grants. Call after operations that
+   * mint a new grant (e.g. creating a building, accepting an invitation) so
+   * the UI immediately reflects the new permissions without a page reload.
+   */
+  refreshGrants: () => Promise<void>;
 };
 
 export const PermissionsContext = createContext<PermissionsState | null>(null);

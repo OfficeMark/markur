@@ -1,12 +1,6 @@
 import { supabase } from '@/lib/supabase';
 import type { Building } from '@/types/database';
 
-/**
- * Per CLAUDE.md: server data goes through TanStack Query, never raw
- * `await supabase.from(...)` inside components. This file is the only place
- * that talks to public.buildings — components call the wrappers via the
- * useBuildings* hooks.
- */
 export async function listBuildings(): Promise<Building[]> {
   const { data, error } = await supabase
     .from('buildings')
@@ -28,16 +22,31 @@ export async function getBuilding(id: string): Promise<Building | null> {
   return data;
 }
 
-// =========================================================================
-// Building photos (M10b)
-// =========================================================================
+export type NewBuildingInput = {
+  name: string;
+  address: string;
+  city: string;
+  region?: string | null;
+};
+
+export async function createBuilding(input: NewBuildingInput): Promise<Building> {
+  const { data, error } = await supabase
+    .from('buildings')
+    .insert({
+      name: input.name,
+      address: input.address,
+      city: input.city,
+      region: input.region ?? null,
+      total_floors: 0,
+    })
+    .select('*')
+    .single();
+  if (error) throw error;
+  return data as Building;
+}
 
 const BUILDING_PHOTO_BUCKET = 'building-photos';
 
-/**
- * Path scheme: `<building_id>.<ext>` (single hero photo per building).
- * Per migration 0014's storage policies, only edit-capable users can write.
- */
 function buildingPhotoPath(buildingId: string, file: File): string {
   const ext = file.name.split('.').pop()?.toLowerCase() ?? 'jpg';
   return `${buildingId}.${ext}`;
@@ -92,11 +101,6 @@ export async function removeBuildingPhoto(buildingId: string): Promise<Building>
   return data;
 }
 
-/**
- * Generates a 1-hour signed URL for a building photo. Used by the Home
- * card thumbnail and the Building hero. We don't memoize — TanStack Query
- * handles caching at the hook layer.
- */
 export async function signedBuildingPhotoUrl(path: string | null | undefined): Promise<string | null> {
   if (!path) return null;
   const { data, error } = await supabase.storage

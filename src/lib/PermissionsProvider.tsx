@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import type { ReactNode } from 'react';
 import { supabase } from './supabase';
 import { useAuth } from './auth-context';
@@ -15,11 +15,22 @@ export function PermissionsProvider({ children }: { children: ReactNode }) {
   const [grants, setGrants] = useState<readonly Grant[]>([]);
   const [loading, setLoading] = useState(true);
 
+  const fetchGrants = useCallback(async (userId: string): Promise<readonly Grant[]> => {
+    const { data, error } = await supabase
+      .from('access_grants')
+      .select('id, role, scope_type, scope_id, expires_at')
+      .eq('user_id', userId);
+    if (error) {
+      console.warn('[permissions] fetch failed', error);
+      return [];
+    }
+    return (data ?? []) as Grant[];
+  }, []);
+
   useEffect(() => {
     let cancelled = false;
 
     if (authLoading) {
-      // Wait for auth to settle.
       return;
     }
 
@@ -31,28 +42,26 @@ export function PermissionsProvider({ children }: { children: ReactNode }) {
 
     setLoading(true);
     void (async () => {
-      const { data, error } = await supabase
-        .from('access_grants')
-        .select('id, role, scope_type, scope_id, expires_at')
-        .eq('user_id', user.id);
+      const next = await fetchGrants(user.id);
       if (cancelled) return;
-      if (error) {
-        console.warn('[permissions] fetch failed', error);
-        setGrants([]);
-      } else {
-        setGrants((data ?? []) as Grant[]);
-      }
+      setGrants(next);
       setLoading(false);
     })();
 
     return () => {
       cancelled = true;
     };
-  }, [user, authLoading]);
+  }, [user, authLoading, fetchGrants]);
+
+  const refreshGrants = useCallback(async () => {
+    if (!user) return;
+    const next = await fetchGrants(user.id);
+    setGrants(next);
+  }, [user, fetchGrants]);
 
   const value = useMemo<PermissionsState>(
-    () => ({ grants, loading: loading || authLoading }),
-    [grants, loading, authLoading]
+    () => ({ grants, loading: loading || authLoading, refreshGrants }),
+    [grants, loading, authLoading, refreshGrants]
   );
 
   return <PermissionsContext.Provider value={value}>{children}</PermissionsContext.Provider>;

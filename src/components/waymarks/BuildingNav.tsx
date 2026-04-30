@@ -1,18 +1,18 @@
 import { useState } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import * as Dialog from '@radix-ui/react-dialog';
-import { Building2, Layers, ChevronRight, Menu, X } from 'lucide-react';
+import { Building2, Layers, ChevronRight, Menu, Plus, X } from 'lucide-react';
 import { useBuildings } from '@/hooks/useBuildings';
 import { useFloors } from '@/hooks/useFloors';
 import { cn } from '@/lib/utils';
 import type { Building, Floor } from '@/types/database';
+import { NewBuildingDialog } from '@/components/waymarks/NewBuildingDialog';
 
 /**
  * Left sidebar listing buildings + their floors. Per spec 05 / 08 / M10b:
- *   * desktop (lg+): fixed 240px column on the left, slate-ink background
- *     (matches the AppShell header — frames the cream content area).
+ *   * desktop (lg+): fixed 240px column on the left, slate-ink background.
  *   * tablet/phone: hidden; the AppShell shows a hamburger that opens
- *     `<BuildingNavSheet>` — a left-slide Radix Dialog containing the same
+ *     `<BuildingNavSheet>` - a left-slide Radix Dialog containing the same
  *     dark-themed content. Tapping any link auto-dismisses the sheet.
  */
 export function BuildingNav() {
@@ -28,9 +28,6 @@ export function BuildingNav() {
   );
 }
 
-/**
- * Hamburger button + sheet for phone/tablet. Renders nothing on desktop.
- */
 export function BuildingNavSheet() {
   const [open, setOpen] = useState(false);
   return (
@@ -48,23 +45,20 @@ export function BuildingNavSheet() {
         <Dialog.Overlay className="fixed inset-0 z-50 bg-black/50 data-[state=open]:animate-in data-[state=open]:fade-in-0" />
         <Dialog.Content
           aria-describedby={undefined}
-          className="fixed inset-y-0 left-0 z-50 flex w-[min(86vw,320px)] flex-col bg-waymarks-ink text-white/90 shadow-sheet outline-none"
+          className="fixed inset-y-0 left-0 z-50 w-[min(86vw,300px)] overflow-y-auto bg-waymarks-ink p-3 text-white/90 shadow-sheet outline-none data-[state=open]:animate-in data-[state=open]:slide-in-from-left"
         >
-          <header className="flex items-center justify-between border-b border-white/10 p-3">
-            <Dialog.Title className="font-semibold text-lg text-white">Buildings</Dialog.Title>
+          <div className="mb-3 flex items-center justify-between">
+            <Dialog.Title className="text-sm font-semibold text-white">Markur</Dialog.Title>
             <Dialog.Close asChild>
               <button
-                type="button"
                 aria-label="Close navigation"
-                className="rounded-md p-1 text-white/70 hover:bg-white/10"
+                className="rounded-md p-1 text-white/70 hover:bg-white/10 hover:text-white"
               >
-                <X size={16} aria-hidden />
+                <X size={14} aria-hidden />
               </button>
             </Dialog.Close>
-          </header>
-          <div className="flex-1 overflow-y-auto p-3">
-            <NavList onNavigate={() => setOpen(false)} />
           </div>
+          <NavList onNavigate={() => setOpen(false)} />
         </Dialog.Content>
       </Dialog.Portal>
     </Dialog.Root>
@@ -73,21 +67,48 @@ export function BuildingNavSheet() {
 
 function NavList({ onNavigate }: { onNavigate?: () => void }) {
   const { data: buildings, isLoading } = useBuildings();
+  const [createOpen, setCreateOpen] = useState(false);
 
-  if (isLoading) return <NavSkeleton />;
-  if (!buildings || buildings.length === 0) {
-    return <p className="px-2 py-1.5 text-xs text-white/50">No buildings yet.</p>;
-  }
   return (
     <>
-      <div className="mb-2 px-2 text-[11px] font-medium uppercase tracking-[0.22em] text-white/40">
-        Buildings
+      <div className="mb-2 flex items-center justify-between px-2">
+        <span className="text-[11px] font-medium uppercase tracking-[0.22em] text-white/40">
+          Buildings
+        </span>
+        <button
+          type="button"
+          onClick={() => setCreateOpen(true)}
+          aria-label="New building"
+          title="New building"
+          className="inline-flex h-6 w-6 items-center justify-center rounded-md text-white/60 hover:bg-white/10 hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-waymarks-gold"
+        >
+          <Plus size={14} aria-hidden />
+        </button>
       </div>
-      <ul className="space-y-3">
-        {buildings.map((b) => (
-          <BuildingItem key={b.id} building={b} onNavigate={onNavigate} />
-        ))}
-      </ul>
+
+      {isLoading ? (
+        <NavSkeleton />
+      ) : !buildings || buildings.length === 0 ? (
+        <div className="space-y-2 px-2">
+          <p className="text-xs text-white/50">No buildings yet.</p>
+          <button
+            type="button"
+            onClick={() => setCreateOpen(true)}
+            className="inline-flex items-center gap-1 rounded-md border border-white/15 bg-white/5 px-2 py-1 text-xs text-white/85 hover:bg-white/10 hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-waymarks-gold"
+          >
+            <Plus size={12} aria-hidden />
+            Add the first one
+          </button>
+        </div>
+      ) : (
+        <ul className="space-y-3">
+          {buildings.map((b) => (
+            <BuildingItem key={b.id} building={b} onNavigate={onNavigate} />
+          ))}
+        </ul>
+      )}
+
+      <NewBuildingDialog open={createOpen} onOpenChange={setCreateOpen} />
     </>
   );
 }
@@ -156,7 +177,7 @@ function NavSkeleton() {
   return (
     <ul className="space-y-2" aria-hidden>
       {[0, 1, 2].map((i) => (
-        <li key={i} className="h-7 animate-pulse rounded-md bg-white/10" />
+        <li key={i} className="h-7 animate-pulse rounded-md bg-white/5" />
       ))}
     </ul>
   );
