@@ -20,8 +20,8 @@ import { colorForType, labelForType } from '@/lib/pin-types';
  * `unlocked` adds a dashed Markur-orange ring + grab cursor (M4 quick-nudge).
  * `repositioning` is the deliberate-reposition target visual (M5).
  *
- * Sizing (M10e+): visible dot is 28px on touch, 20px on desktop (was
- * 36/28). The ::before pseudo-element extends an invisible 6px tap-pad
+ * Sizing (M10e+): visible dot is 24px on touch, 14px on desktop (was
+ * 36/28). The ::before pseudo-element extends an invisible 10px tap-pad
  * around the dot so touch targets stay comfortable. Real fix for dense
  * floors is the clustering work in the next slice.
  */
@@ -104,10 +104,10 @@ export const PinMarker = forwardRef<HTMLButtonElement, PinMarkerProps>(function 
       aria-label={`${name} (${typeName}, ${statusLabel(status)}${lockSuffix})`}
       style={{ backgroundColor: resolvedFill }}
       className={cn(
-        // 28px touch / 20px desktop visible dot
-        'group relative inline-flex h-7 w-7 -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-full lg:h-5 lg:w-5',
-        // Invisible 6px tap-padding ring (no extra visual bulk)
-        'before:absolute before:-inset-1.5 before:rounded-full before:content-[""]',
+        // 24px touch / 14px desktop visible dot
+        'group relative inline-flex h-6 w-6 -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-full lg:h-[14px] lg:w-[14px]',
+        // Invisible 10px tap-padding ring (effective ~44px tap area)
+        'before:absolute before:-inset-2.5 before:rounded-full before:content-[""]',
         'border border-white shadow-sm transition-transform',
         'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-waymarks-gold focus-visible:ring-offset-1',
         // Status overlay ring (only for attention/flagged - good gets nothing)
@@ -125,7 +125,7 @@ export const PinMarker = forwardRef<HTMLButtonElement, PinMarkerProps>(function 
         faded && 'opacity-40'
       )}
     >
-      <Icon size={8} className="fill-white text-white" aria-hidden />
+      <Icon size={6} className="fill-white text-white" aria-hidden />
     </button>
   );
 });
