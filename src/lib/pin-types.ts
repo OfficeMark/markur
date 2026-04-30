@@ -1,14 +1,13 @@
 /**
- * Per-type pin colors (M10b feedback). The original Waymarks prototype
- * colored pins by *type* — not by status — and that's what surfaces the
- * floor's identity at a glance ("look at all those Egress signs"). The
- * audit walkaround still flips to status colors via PinOverlay's
- * `statusOverride` map.
+ * Pin type catalog (M11 - per-org customizable).
  *
- * Palette tuned for readability on a white floor plan backdrop. Colors
- * are bright enough to register on a busy plan, distinct enough to
- * differentiate, and respect color-blindness by also varying the icon
- * shape (set in PinMarker by the asset's status, not type).
+ * The static map below is a fallback that ships in the bundle so the app
+ * can render pins even before the per-org catalog is fetched. Once
+ * useAssetTypes() loads the merged DB list, it calls
+ * `setRuntimeAssetTypes` to overlay the dynamic data on top of these
+ * defaults. Sync helpers (`colorForType`, `labelForType`) read the
+ * runtime map, so existing call sites keep working without becoming
+ * hooks themselves.
  */
 
 export type AssetTypeColor = {
@@ -17,44 +16,62 @@ export type AssetTypeColor = {
   category: 'signage' | 'facility';
 };
 
-export const TYPE_COLORS: Record<string, AssetTypeColor> = {
-  // Signage
-  directory: { fill: '#2563EB', label: 'Directory', category: 'signage' }, // blue
-  tenant_id: { fill: '#7C3AED', label: 'Tenant ID', category: 'signage' }, // violet
-  wayfinding: { fill: '#059669', label: 'Wayfinding', category: 'signage' }, // emerald
-  tenant_products: { fill: '#0D9488', label: 'Tenant products', category: 'signage' }, // teal
-  evacuation: { fill: '#EA580C', label: 'Evacuation', category: 'signage' }, // amber-orange
-  emergency: { fill: '#DC2626', label: 'Emergency', category: 'signage' }, // red
-  egress: { fill: '#16A34A', label: 'Egress', category: 'signage' }, // green
-
-  // Recognition / nameplate / decorative (M10d) — visible features property
-  // managers also need to track. Tones picked to slot between the existing
-  // signage colors without colliding (donor warm gold → bronze, nameplates
-  // muted slate-blue, mural pink-magenta, decorative warm rose).
-  donor_plaque: { fill: '#B45309', label: 'Donor plaque', category: 'signage' }, // bronze
-  donor_wall: { fill: '#92400E', label: 'Donor wall', category: 'signage' }, // dark bronze
-  nameplate: { fill: '#1E40AF', label: 'Nameplate', category: 'signage' }, // navy
-  wall_mural: { fill: '#BE185D', label: 'Wall mural', category: 'signage' }, // magenta
-  decorative_feature: { fill: '#9F1239', label: 'Decorative feature', category: 'signage' }, // rose
-
-  other: { fill: '#475569', label: 'Other', category: 'signage' }, // slate
-
-  // Facility
-  stairwell: { fill: '#15803D', label: 'Stairwell', category: 'facility' }, // forest
-  service_room: { fill: '#334155', label: 'Service room', category: 'facility' }, // dark slate
-  utility_room: { fill: '#6D28D9', label: 'Utility room', category: 'facility' }, // deep violet
+const DEFAULT_TYPES: Record<string, AssetTypeColor> = {
+  directory: { fill: '#2563EB', label: 'Directory', category: 'signage' },
+  tenant_id: { fill: '#7C3AED', label: 'Tenant ID', category: 'signage' },
+  wayfinding: { fill: '#059669', label: 'Wayfinding', category: 'signage' },
+  tenant_products: { fill: '#0D9488', label: 'Tenant products', category: 'signage' },
+  evacuation: { fill: '#EA580C', label: 'Evacuation', category: 'signage' },
+  emergency: { fill: '#DC2626', label: 'Emergency', category: 'signage' },
+  egress: { fill: '#16A34A', label: 'Egress', category: 'signage' },
+  donor_plaque: { fill: '#B45309', label: 'Donor plaque', category: 'signage' },
+  donor_wall: { fill: '#92400E', label: 'Donor wall', category: 'signage' },
+  nameplate: { fill: '#1E40AF', label: 'Nameplate', category: 'signage' },
+  wall_mural: { fill: '#BE185D', label: 'Wall mural', category: 'signage' },
+  decorative_feature: { fill: '#9F1239', label: 'Decorative feature', category: 'signage' },
+  other: { fill: '#475569', label: 'Other', category: 'signage' },
+  stairwell: { fill: '#15803D', label: 'Stairwell', category: 'facility' },
+  service_room: { fill: '#334155', label: 'Service room', category: 'facility' },
+  utility_room: { fill: '#6D28D9', label: 'Utility room', category: 'facility' },
 };
 
+let RUNTIME_TYPES: Record<string, AssetTypeColor> = { ...DEFAULT_TYPES };
+
+/**
+ * Replace the runtime asset-type catalog. Called by useAssetTypes after the
+ * org_asset_types fetch completes. Keep this idempotent - same input
+ * produces the same map.
+ */
+export function setRuntimeAssetTypes(map: Record<string, AssetTypeColor>): void {
+  RUNTIME_TYPES = map;
+}
+
+/** Static defaults for components that need a synchronous list pre-fetch. */
+export const TYPE_COLORS = DEFAULT_TYPES;
+
 export function colorForType(type: string): string {
-  return TYPE_COLORS[type]?.fill ?? '#475569';
+  return RUNTIME_TYPES[type]?.fill ?? '#475569';
 }
 
 export function labelForType(type: string): string {
-  return TYPE_COLORS[type]?.label ?? type;
+  return RUNTIME_TYPES[type]?.label ?? type;
 }
 
-/** Convenience: ordered list for filter UIs. */
-export const TYPE_LIST = Object.entries(TYPE_COLORS).map(([value, info]) => ({
+export function categoryForType(type: string): 'signage' | 'facility' | undefined {
+  return RUNTIME_TYPES[type]?.category;
+}
+
+/** Convenience: ordered list of the runtime catalog for filter UIs. */
+export function getTypeList(): Array<{ value: string } & AssetTypeColor> {
+  return Object.entries(RUNTIME_TYPES).map(([value, info]) => ({ value, ...info }));
+}
+
+/**
+ * Static fallback list. Import this only as a last resort - prefer
+ * `useAssetTypes()` from hooks for components that should reflect
+ * org customizations.
+ */
+export const TYPE_LIST = Object.entries(DEFAULT_TYPES).map(([value, info]) => ({
   value,
   ...info,
 }));

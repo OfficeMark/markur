@@ -8,37 +8,14 @@ import { Button } from '@/components/ui/Button';
 import { useCreateAsset } from '@/hooks/useAssets';
 import { type AssetCategory } from '@/lib/queries/assets';
 import { addAssetPhoto, validateAssetPhotoFile } from '@/lib/queries/asset-photos';
+import { useAssetTypes } from '@/hooks/useAssetTypes';
 import { cn } from '@/lib/utils';
 import type { Asset } from '@/types/database';
 
-// Asset types per the CHECK constraint in 0001_init.sql, extended in
-// 0015_m10d_new_asset_types.sql with donor / nameplate / mural / decorative.
-const SIGNAGE_TYPES = [
-  { value: 'directory', label: 'Directory' },
-  { value: 'tenant_id', label: 'Tenant ID' },
-  { value: 'wayfinding', label: 'Wayfinding' },
-  { value: 'tenant_products', label: 'Tenant products' },
-  { value: 'evacuation', label: 'Evacuation' },
-  { value: 'emergency', label: 'Emergency' },
-  { value: 'egress', label: 'Egress' },
-  { value: 'donor_plaque', label: 'Donor plaque' },
-  { value: 'donor_wall', label: 'Donor wall' },
-  { value: 'nameplate', label: 'Nameplate' },
-  { value: 'wall_mural', label: 'Wall mural' },
-  { value: 'decorative_feature', label: 'Decorative feature' },
-  { value: 'other', label: 'Other' },
-] as const;
-
-const FACILITY_TYPES = [
-  { value: 'stairwell', label: 'Stairwell' },
-  { value: 'service_room', label: 'Service room' },
-  { value: 'utility_room', label: 'Utility room' },
-] as const;
-
-const FORM_TYPES = [
-  ...SIGNAGE_TYPES.map((t) => ({ ...t, category: 'signage' as const })),
-  ...FACILITY_TYPES.map((t) => ({ ...t, category: 'facility' as const })),
-];
+// Asset types come from org_asset_types via useAssetTypes (M11).
+// Static fallback for the very first render before the fetch resolves
+// is provided by lib/pin-types.ts; the hook overlays org-specific
+// entries on top.
 
 const schema = z.object({
   type: z.string().min(1, 'Pick a type'),
@@ -64,6 +41,7 @@ export function NewAssetDialog({
   onCreated,
 }: NewAssetDialogProps) {
   const create = useCreateAsset();
+  const { signage: signageTypes, facility: facilityTypes, list: allTypes } = useAssetTypes();
   const [photos, setPhotos] = useState<File[]>([]);
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [photoErrors, setPhotoErrors] = useState<string[]>([]);
@@ -82,7 +60,7 @@ export function NewAssetDialog({
 
   const selectedType = watch('type');
   const category: AssetCategory =
-    FORM_TYPES.find((t) => t.value === selectedType)?.category ?? 'signage';
+    (allTypes.find((t) => t.key === selectedType)?.category as AssetCategory) ?? 'signage';
 
   function appendFiles(list: FileList | null) {
     if (!list || list.length === 0) return;
@@ -182,15 +160,15 @@ export function NewAssetDialog({
               >
                 <option value="">Choose a type…</option>
                 <optgroup label="Signage">
-                  {SIGNAGE_TYPES.map((t) => (
-                    <option key={t.value} value={t.value}>
+                  {signageTypes.map((t) => (
+                    <option key={t.id} value={t.key}>
                       {t.label}
                     </option>
                   ))}
                 </optgroup>
                 <optgroup label="Facility">
-                  {FACILITY_TYPES.map((t) => (
-                    <option key={t.value} value={t.value}>
+                  {facilityTypes.map((t) => (
+                    <option key={t.id} value={t.key}>
                       {t.label}
                     </option>
                   ))}

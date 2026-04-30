@@ -1,14 +1,13 @@
 import * as Popover from '@radix-ui/react-popover';
 import { Check, Filter, X } from 'lucide-react';
-import { TYPE_LIST } from '@/lib/pin-types';
+import { useAssetTypes } from '@/hooks/useAssetTypes';
 
 /**
- * Filter-by-type popover (M10c). Modeled on the original Waymarks prototype:
- * two columns (Signage / Facilities) of colored-dot checkboxes, plus All /
- * None shortcuts. Drives the visible-pins set on the Floor view.
+ * Filter-by-type popover. Pulls types from the per-org catalog (M11) so
+ * custom types added via /settings show up here automatically.
  *
- * The selected set is a Set<string> of type values; an empty set behaves as
- * "all types visible" (no active filter). Parent wraps the active state.
+ * The selected set is a Set<string> of type keys; an empty set behaves
+ * as "all types visible" (no active filter).
  */
 
 export type FilterByTypePopoverProps = {
@@ -17,9 +16,8 @@ export type FilterByTypePopoverProps = {
 };
 
 export function FilterByTypePopover({ selectedTypes, onChange }: FilterByTypePopoverProps) {
-  const all = TYPE_LIST.map((t) => t.value);
-  const signage = TYPE_LIST.filter((t) => t.category === 'signage');
-  const facility = TYPE_LIST.filter((t) => t.category === 'facility');
+  const { signage, facility, list } = useAssetTypes();
+  const all = list.map((t) => t.key);
 
   const noneSelected = selectedTypes.size === 0;
   const allSelected = selectedTypes.size === all.length;
@@ -42,7 +40,7 @@ export function FilterByTypePopover({ selectedTypes, onChange }: FilterByTypePop
             'inline-flex h-9 items-center gap-1.5 rounded-md border px-3 text-xs font-medium transition-colors ' +
             (isFiltering
               ? 'border-waymarks-gold bg-waymarks-gold-soft text-waymarks-ink'
-              : 'border-black/15 bg-surface text-text-muted hover:border-black/25 hover:text-text dark:border-white/15')
+              : 'border-black/15 bg-surface text-text-muted hover:border-black/25 hover:text-text')
           }
         >
           <Filter size={12} aria-hidden />
@@ -58,7 +56,7 @@ export function FilterByTypePopover({ selectedTypes, onChange }: FilterByTypePop
         <Popover.Content
           align="start"
           sideOffset={6}
-          className="z-50 w-[min(92vw,420px)] rounded-lg border border-black/10 bg-surface p-4 text-text shadow-sheet outline-none dark:border-white/10"
+          className="z-50 w-[min(92vw,420px)] rounded-lg border border-black/10 bg-surface p-4 text-text shadow-sheet outline-none"
         >
           <header className="mb-3 flex items-center justify-between">
             <p className="text-[11px] font-medium uppercase tracking-[0.22em] text-text-faint">
@@ -67,7 +65,7 @@ export function FilterByTypePopover({ selectedTypes, onChange }: FilterByTypePop
             <Popover.Close asChild>
               <button
                 aria-label="Close filter"
-                className="rounded-md p-1 text-text-muted hover:bg-black/5 dark:hover:bg-white/5"
+                className="rounded-md p-1 text-text-muted hover:bg-black/5"
               >
                 <X size={14} aria-hidden />
               </button>
@@ -79,18 +77,18 @@ export function FilterByTypePopover({ selectedTypes, onChange }: FilterByTypePop
             <Section label="Facilities" items={facility} selected={selectedTypes} onToggle={toggle} />
           </div>
 
-          <footer className="mt-3 flex justify-between gap-2 border-t border-black/10 pt-3 dark:border-white/10">
+          <footer className="mt-3 flex justify-between gap-2 border-t border-black/10 pt-3">
             <button
               type="button"
               onClick={() => onChange(new Set(all))}
-              className="inline-flex h-8 items-center rounded-md border border-black/10 px-3 text-xs font-medium text-text hover:bg-black/5 dark:border-white/10 dark:hover:bg-white/5"
+              className="inline-flex h-8 items-center rounded-md border border-black/10 px-3 text-xs font-medium text-text hover:bg-black/5"
             >
               All
             </button>
             <button
               type="button"
               onClick={() => onChange(new Set())}
-              className="inline-flex h-8 items-center rounded-md border border-black/10 px-3 text-xs font-medium text-text hover:bg-black/5 dark:border-white/10 dark:hover:bg-white/5"
+              className="inline-flex h-8 items-center rounded-md border border-black/10 px-3 text-xs font-medium text-text hover:bg-black/5"
             >
               None
             </button>
@@ -108,7 +106,7 @@ function Section({
   onToggle,
 }: {
   label: string;
-  items: { value: string; label: string; fill: string }[];
+  items: { id: string; key: string; label: string; color: string }[];
   selected: Set<string>;
   onToggle: (value: string) => void;
 }) {
@@ -119,19 +117,19 @@ function Section({
       </p>
       <ul className="space-y-0.5">
         {items.map((t) => {
-          const isOn = selected.has(t.value) || selected.size === 0;
+          const isOn = selected.has(t.key) || selected.size === 0;
           return (
-            <li key={t.value}>
+            <li key={t.id}>
               <button
                 type="button"
-                onClick={() => onToggle(t.value)}
+                onClick={() => onToggle(t.key)}
                 aria-pressed={isOn}
-                className="group flex w-full items-center gap-2 rounded px-2 py-1 text-left text-sm hover:bg-black/5 dark:hover:bg-white/5"
+                className="group flex w-full items-center gap-2 rounded px-2 py-1 text-left text-sm hover:bg-black/5"
               >
                 <span
                   className={
                     'inline-flex h-4 w-4 shrink-0 items-center justify-center rounded border ' +
-                    (isOn ? 'border-waymarks-ink bg-waymarks-ink text-white' : 'border-black/20 bg-surface dark:border-white/20')
+                    (isOn ? 'border-waymarks-ink bg-waymarks-ink text-white' : 'border-black/20 bg-surface')
                   }
                   aria-hidden
                 >
@@ -140,7 +138,7 @@ function Section({
                 <span
                   aria-hidden
                   className="inline-block h-2.5 w-2.5 shrink-0 rounded-full border border-white shadow-sm"
-                  style={{ backgroundColor: t.fill }}
+                  style={{ backgroundColor: t.color }}
                 />
                 <span className="flex-1 truncate text-text">{t.label}</span>
               </button>

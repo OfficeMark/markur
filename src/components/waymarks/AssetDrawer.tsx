@@ -33,6 +33,7 @@ import {
   validateAssetPhotoFile,
 } from '@/lib/queries/asset-photos';
 import { computeStatus, statusLabel, type AssetStatus } from '@/lib/asset-status';
+import { useAssetTypes } from '@/hooks/useAssetTypes';
 import { useCan } from '@/lib/permissions-context';
 import { cn } from '@/lib/utils';
 import type { Asset, AssetPhoto, AuditLogEntry } from '@/types/database';
@@ -61,27 +62,9 @@ const STATUS_OPTIONS: Array<{ value: AssetStatus; label: string; icon: typeof Ch
   { value: 'flagged', label: 'Flagged', icon: Flag },
 ];
 
-const SIGNAGE_TYPES = [
-  { value: 'directory', label: 'Directory' },
-  { value: 'tenant_id', label: 'Tenant ID' },
-  { value: 'wayfinding', label: 'Wayfinding' },
-  { value: 'tenant_products', label: 'Tenant products' },
-  { value: 'evacuation', label: 'Evacuation' },
-  { value: 'emergency', label: 'Emergency' },
-  { value: 'egress', label: 'Egress' },
-  { value: 'donor_plaque', label: 'Donor plaque' },
-  { value: 'donor_wall', label: 'Donor wall' },
-  { value: 'nameplate', label: 'Nameplate' },
-  { value: 'wall_mural', label: 'Wall mural' },
-  { value: 'decorative_feature', label: 'Decorative feature' },
-  { value: 'other', label: 'Other' },
-] as const;
-
-const FACILITY_TYPES = [
-  { value: 'stairwell', label: 'Stairwell' },
-  { value: 'service_room', label: 'Service room' },
-  { value: 'utility_room', label: 'Utility room' },
-] as const;
+// Asset types come from useAssetTypes (M11). The static fallback lives in
+// lib/pin-types.ts so colors and labels render even before the org_asset_types
+// fetch resolves.
 
 export function AssetDrawer({
   assetId,
@@ -371,6 +354,7 @@ function EditPanel({
     status: AssetStatus;
   }) => Promise<void>;
 }) {
+  const { signage: signageTypes, facility: facilityTypes } = useAssetTypes();
   const [name, setName] = useState(asset.name);
   const [type, setType] = useState(asset.type);
   const [notes, setNotes] = useState(asset.location_notes ?? '');
@@ -483,15 +467,15 @@ function EditPanel({
           className="h-10 w-full rounded-md border border-black/10 bg-surface px-3 text-sm text-text outline-none focus:border-waymarks-gold focus:ring-2 focus:ring-waymarks-gold dark:border-white/10"
         >
           <optgroup label="Signage">
-            {SIGNAGE_TYPES.map((t) => (
-              <option key={t.value} value={t.value}>
+            {signageTypes.map((t) => (
+              <option key={t.id} value={t.key}>
                 {t.label}
               </option>
             ))}
           </optgroup>
           <optgroup label="Facility">
-            {FACILITY_TYPES.map((t) => (
-              <option key={t.value} value={t.value}>
+            {facilityTypes.map((t) => (
+              <option key={t.id} value={t.key}>
                 {t.label}
               </option>
             ))}
