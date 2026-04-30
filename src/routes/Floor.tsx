@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
-import { ArrowLeft, Check, ClipboardList, Download, ImageOff, Plus, RefreshCw, Trash2 } from 'lucide-react';
+import { ArrowLeft, Check, ClipboardList, Download, ImageOff, LayoutGrid, Map as MapIcon, Plus, RefreshCw, Trash2 } from 'lucide-react';
 import { AppShell } from '@/components/waymarks/AppShell';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { Button } from '@/components/ui/Button';
@@ -12,6 +12,8 @@ import { AssetDrawer } from '@/components/waymarks/AssetDrawer';
 import { RepositionToolbar } from '@/components/waymarks/RepositionToolbar';
 import { StepUpDialog } from '@/components/waymarks/StepUpDialog';
 import { AuditModeShell } from '@/components/waymarks/AuditModeShell';
+import { AssetGridView } from '@/components/waymarks/AssetGridView';
+import { FilterByTypePopover } from '@/components/waymarks/FilterByTypePopover';
 import { useFloor } from '@/hooks/useFloors';
 import { useBuilding } from '@/hooks/useBuildings';
 import { useAssets, useSoftDeleteAsset, useUpdateAsset } from '@/hooks/useAssets';
@@ -62,6 +64,10 @@ export function Floor() {
 
   // M8 — audit-due filter (deferred from M6).
   const [auditDueOnly, setAuditDueOnly] = useState(false);
+
+  // M10c — view mode (Map / Grid) + filter-by-type set
+  const [viewMode, setViewMode] = useState<'map' | 'grid'>('map');
+  const [filterTypes, setFilterTypes] = useState<Set<string>>(new Set());
 
   // M9 — take this floor offline (pre-cache for the audit walkaround).
   const [cacheState, setCacheState] = useState<'idle' | 'caching' | 'cached' | 'error'>(
@@ -241,7 +247,9 @@ export function Floor() {
   }, [assets, lastAuditByAsset]);
 
   const auditDueAssets = statusCounts.auditDue;
-  const visibleAssets = auditDueOnly ? auditDueAssets : assets;
+  const baseSet = auditDueOnly ? auditDueAssets : assets;
+  const visibleAssets =
+    filterTypes.size === 0 ? baseSet : baseSet.filter((a) => filterTypes.has(a.type));
 
   if (fLoading) return <Skeleton />;
 
@@ -277,16 +285,58 @@ export function Floor() {
         >
           <ArrowLeft size={12} aria-hidden /> {building?.name ?? 'Building'}
         </Link>
-        <header className="mb-6 flex flex-wrap items-end justify-between gap-3">
-          <div>
-            <p className="text-xs font-medium uppercase tracking-[0.22em] text-text-faint">
-              {building ? `${building.name} · floor` : 'Floor'}
-            </p>
-            <h1 className="mt-1 font-semibold text-4xl leading-tight text-text sm:text-5xl">{floor.label}</h1>
-          </div>
-          <div className="flex flex-wrap items-center gap-2">
+        <header className="mb-3">
+          <p className="text-[11px] font-medium uppercase tracking-[0.22em] text-waymarks-gold">
+            {building ? `${building.name} · floor` : 'Floor'}
+          </p>
+          <h1 className="mt-0.5 font-semibold text-3xl leading-tight text-text sm:text-4xl">
+            {floor.label}
+          </h1>
+        </header>
+
+        {/* Dense toolbar — view toggle + filter on the left, primary actions on the right */}
+        <div className="mb-3 flex flex-wrap items-center gap-2 rounded-lg border border-black/10 bg-surface p-2 shadow-sm dark:border-white/10">
+          {/* Map / Grid toggle */}
+          {floor.plan_url && (
+            <div role="group" aria-label="View mode" className="inline-flex rounded-md border border-black/15 bg-surface text-xs font-medium dark:border-white/15">
+              <button
+                type="button"
+                onClick={() => setViewMode('map')}
+                aria-pressed={viewMode === 'map'}
+                className={
+                  'inline-flex h-9 items-center gap-1.5 rounded-l-md px-3 transition-colors ' +
+                  (viewMode === 'map'
+                    ? 'bg-waymarks-ink text-white'
+                    : 'text-text-muted hover:bg-black/5 dark:hover:bg-white/5')
+                }
+              >
+                <MapIcon size={12} aria-hidden /> Map
+              </button>
+              <button
+                type="button"
+                onClick={() => setViewMode('grid')}
+                aria-pressed={viewMode === 'grid'}
+                className={
+                  'inline-flex h-9 items-center gap-1.5 rounded-r-md border-l border-black/10 px-3 transition-colors dark:border-white/10 ' +
+                  (viewMode === 'grid'
+                    ? 'bg-waymarks-ink text-white'
+                    : 'text-text-muted hover:bg-black/5 dark:hover:bg-white/5')
+                }
+              >
+                <LayoutGrid size={12} aria-hidden /> Grid
+              </button>
+            </div>
+          )}
+
+          {/* Filter by type */}
+          {floor.plan_url && assets.length > 0 && (
+            <FilterByTypePopover selectedTypes={filterTypes} onChange={setFilterTypes} />
+          )}
+
+          <div className="ml-auto flex flex-wrap items-center gap-2">
             {showAuditCta && (
               <Button
+                size="sm"
                 variant="gold"
                 iconLeft={<ClipboardList size={14} aria-hidden />}
                 loading={startAudit.isPending}
@@ -297,6 +347,7 @@ export function Floor() {
             )}
             {floor.plan_url && canCreate && (
               <Button
+                size="sm"
                 variant={placing ? 'gold' : 'secondary'}
                 iconLeft={<Plus size={14} aria-hidden />}
                 onClick={() => setPlacing((p) => !p)}
@@ -306,6 +357,7 @@ export function Floor() {
             )}
             {floor.plan_url && (
               <Button
+                size="sm"
                 variant="secondary"
                 iconLeft={
                   cacheState === 'cached' ? (
@@ -322,6 +374,7 @@ export function Floor() {
             )}
             {floor.plan_url && canUploadPlan && (
               <Button
+                size="sm"
                 variant="secondary"
                 iconLeft={<RefreshCw size={14} aria-hidden />}
                 onClick={() => setUploadOpen(true)}
@@ -330,7 +383,7 @@ export function Floor() {
               </Button>
             )}
           </div>
-        </header>
+        </div>
 
         {assets.length > 0 && (
           <FloorStatsBar
@@ -378,6 +431,13 @@ export function Floor() {
               />
               <span className="sr-only">Loading plan…</span>
             </div>
+          ) : viewMode === 'grid' ? (
+            <AssetGridView
+              assets={visibleAssets}
+              selectedAssetId={selectedAssetId}
+              onSelectAsset={(a: Asset) => setSelectedAssetId(a.id)}
+              lastAuditByAsset={lastAuditByAsset ?? null}
+            />
           ) : (
             <div className="relative">
               <FloorPlanCanvas

@@ -16,26 +16,30 @@ ReactDOM.createRoot(rootEl).render(
   </React.StrictMode>
 );
 
-// Register the service worker. autoUpdate means new builds activate without
-// a user prompt; we just reload silently when one's ready. The registration
-// is best-effort — if it fails (e.g. no SW support) we keep going without
-// the PWA layer.
+// Service worker auto-update (M10c).
+//
+// vite-plugin-pwa registers the SW with `registerType: 'autoUpdate'`. When a
+// new build hits Netlify, the SW activates and takes over — but the user's
+// open tab still serves the *old* JS until they reload. We bridge that gap
+// here: as soon as `controllerchange` fires (a new SW assumed control),
+// reload once. The `reloading` guard prevents Chrome's quirky double-fire.
 if ('serviceWorker' in navigator) {
+  let reloading = false;
+  navigator.serviceWorker.addEventListener('controllerchange', () => {
+    if (reloading) return;
+    reloading = true;
+    window.location.reload();
+  });
+
   registerSW({
     immediate: true,
-    onRegisteredSW(_url, registration) {
-      // Surface a non-blocking refresh once a new SW takes control. We avoid
-      // doing this on first install (no controller yet).
-      if (registration && navigator.serviceWorker.controller) {
-        registration.addEventListener('updatefound', () => {
-          const installing = registration.installing;
-          installing?.addEventListener('statechange', () => {
-            if (installing.state === 'activated') {
-              window.location.reload();
-            }
-          });
-        });
-      }
+    onNeedRefresh() {
+      // autoUpdate flow already calls skipWaiting under the hood; the
+      // controllerchange listener above will catch it. No prompt UI here.
+    },
+    onOfflineReady() {
+      // Service worker installed for the first time; the app is now
+      // available offline. No notification needed.
     },
   });
 }
