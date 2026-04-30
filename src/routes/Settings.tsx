@@ -18,17 +18,6 @@ import { useAuth } from '@/lib/auth-context';
 import { usePermissions } from '@/lib/permissions-context';
 import { updateMyProfile } from '@/lib/queries/profile';
 
-/**
- * /settings — minimal account-settings page (M10e+).
- *
- * Sections:
- *  1. Profile — display_name (editable), email (read-only), role badge
- *  2. Appearance — note that dark mode is disabled, no toggle
- *  3. Account — sign out, request account deletion (mailto)
- *
- * Future scope (not in this slice): avatar upload, change-password, change
- * email, MFA, session list. Those are M11+ if there's demand.
- */
 export function Settings() {
   const { user, profile, signOut, refreshProfile } = useAuth();
   const { grants } = usePermissions();
@@ -39,7 +28,6 @@ export function Settings() {
   const [savedAt, setSavedAt] = useState<number | null>(null);
   const [error, setError] = useState<string | null>(null);
 
-  // Keep the form in sync if the profile is hydrated after this page loads.
   useEffect(() => {
     setDisplayName(profile?.display_name ?? '');
   }, [profile?.display_name]);
@@ -47,16 +35,12 @@ export function Settings() {
   const dirty =
     displayName.trim().length > 0 && displayName !== (profile?.display_name ?? '');
 
-  // Show the highest-priority role we can find on this user. Super-admin
-  // wins; otherwise pick the first non-expired grant. (Multi-role users
-  // do exist via grants; we just label them by the strongest single role
-  // here for visual clarity.)
   const now = Date.now();
   const active = grants.filter(
     (g) => !g.expires_at || new Date(g.expires_at).getTime() > now
   );
   const isSuper = active.some((g) => g.role === 'super_admin');
-  const isAdmin = active.some((g) => g.role === 'admin');
+  const isAdmin = active.some((g) => g.role === 'building_admin');
   const isAuditor = active.some((g) => g.role === 'auditor');
   const isFacility = active.some((g) => g.role === 'tenant_rep');
   const roleLabel = isSuper
@@ -106,7 +90,6 @@ export function Settings() {
           Manage your name, sign out, or request account deletion.
         </p>
 
-        {/* --- Profile --- */}
         <section className="mt-6 rounded-lg border border-black/10 bg-surface p-5">
           <header className="mb-4 flex items-center gap-3">
             <Avatar
@@ -173,7 +156,6 @@ export function Settings() {
           </div>
         </section>
 
-        {/* --- Appearance --- */}
         <section className="mt-5 rounded-lg border border-black/10 bg-surface p-5">
           <p className="text-[11px] font-medium uppercase tracking-[0.18em] text-text-faint">
             Appearance
@@ -184,7 +166,7 @@ export function Settings() {
             <div>
               <p className="font-medium">Light mode only, for now.</p>
               <p className="mt-1 text-xs text-text-muted">
-                We're holding off on dark mode until we can ship a properly
+                We are holding off on dark mode until we can ship a properly
                 tested version. Markur stays in the Markur cream theme regardless
                 of your operating-system preference.
               </p>
@@ -192,7 +174,6 @@ export function Settings() {
           </div>
         </section>
 
-        {/* --- Account --- */}
         <section className="mt-5 rounded-lg border border-black/10 bg-surface p-5">
           <p className="text-[11px] font-medium uppercase tracking-[0.18em] text-text-faint">
             Account
@@ -215,8 +196,8 @@ export function Settings() {
             <div className="text-sm">
               <p className="font-medium text-danger">Delete my account</p>
               <p className="mt-0.5 text-xs text-text-muted">
-                We don't have self-serve deletion yet. Email us and we'll process
-                the deletion within 30 days, per our{' '}
+                We do not have self-serve deletion yet. Email us and we will
+                process the deletion within 30 days, per our{' '}
                 <Link to="/legal/privacy" className="underline">
                   privacy policy
                 </Link>
@@ -253,7 +234,7 @@ function ReadOnlyField({
         {label}
       </p>
       <p className="mt-1 truncate rounded-md border border-black/10 bg-bg px-3 py-2 text-sm text-text">
-        {value || '—'}
+        {value || '-'}
       </p>
     </div>
   );

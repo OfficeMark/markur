@@ -4,13 +4,8 @@ import { Button } from '@/components/ui/Button';
 
 /**
  * Top-level error boundary (M10e). Wraps the entire route tree so a single
- * component crash (a bad PDF render, a missing avatar field, etc.) doesn't
- * blank the whole app. We log to the console for now — a real error
- * reporter (Sentry / similar) is post-MVP.
- *
- * The fallback UI is intentionally Markur-branded and friendly, not a stack
- * trace. Property managers should see "something went wrong, try reload"
- * not a wall of red text.
+ * component crash does not blank the whole app. Logs to console; a real
+ * error reporter (Sentry) is post-MVP.
  */
 
 type ErrorBoundaryProps = {
@@ -22,25 +17,22 @@ type ErrorBoundaryState = {
 };
 
 export class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundaryState> {
-  state: ErrorBoundaryState = { error: null };
+  override state: ErrorBoundaryState = { error: null };
 
   static getDerivedStateFromError(error: Error): ErrorBoundaryState {
     return { error };
   }
 
-  componentDidCatch(error: Error, info: ErrorInfo): void {
+  override componentDidCatch(error: Error, info: ErrorInfo): void {
     // eslint-disable-next-line no-console
     console.error('[Markur] Uncaught error in app tree:', error, info.componentStack);
   }
 
   handleReload = (): void => {
-    // Hard reload — bypasses the in-memory state that triggered the crash
-    // and gets the user back to a clean tree. The SW will hand them the
-    // current build either way.
     window.location.reload();
   };
 
-  render(): ReactNode {
+  override render(): ReactNode {
     if (this.state.error) {
       return (
         <div
@@ -55,8 +47,8 @@ export class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundarySt
               <div className="flex-1">
                 <h1 className="font-semibold text-lg">Something went wrong</h1>
                 <p className="mt-1 text-sm text-text-muted">
-                  Markur hit an unexpected error and couldn't render this view. Your
-                  data is safe — reloading the page should put you back where you were.
+                  Markur hit an unexpected error and could not render this view.
+                  Your data is safe - reloading should put you back where you were.
                 </p>
 
                 {import.meta.env.DEV && (
