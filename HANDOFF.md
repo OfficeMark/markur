@@ -1,4 +1,4 @@
-# Handoff — how to work with Claude Code on Waymarks
+# Handoff — how to work with Claude Code on Markur
 
 Written for Randy (the owner), who isn't a developer. This is a plain-language guide to using Claude Code as your developer, what to expect, and what to ask for.
 
@@ -89,7 +89,7 @@ Claude Code knows how to do all of this and can walk you through it. Don't memor
 
 These are things you (or a friend with DNS access) need to do, not Claude Code:
 
-- Point `waymarks.ca` away from the GoDaddy lander to either Netlify (production) or a marketing page.
+- Point `markur.ca` away from the GoDaddy lander to either Netlify (production) or a marketing page.
 - Set up a custom email domain (for invites, audit notifications) — you can use Resend, Postmark, or Supabase's built-in if good enough.
 - If you want SSO for clients (Google, Microsoft), enable those providers in Supabase Auth.
 
@@ -119,7 +119,7 @@ So roughly $50/month all-in for a small production deployment. Costs scale with 
 
 Tell Claude Code in plain language. Examples:
 
-> The site is down. https://waymarks.ca shows a 500 error.
+> The site is down. https://markur.ca shows a 500 error.
 > A client can't sign in. Their email is `client@example.com`. Check what's happening.
 > Someone uploaded a 200MB PDF and now the page is slow. Find a fix.
 

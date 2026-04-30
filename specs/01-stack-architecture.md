@@ -1,6 +1,6 @@
 # 01 — Stack and architecture
 
-This document explains the tech stack chosen for Waymarks, the rationale for each piece, and the high-level architecture. Read this before writing any code.
+This document explains the tech stack chosen for Markur, the rationale for each piece, and the high-level architecture. Read this before writing any code.
 
 ## Stack at a glance
 
@@ -22,7 +22,7 @@ This document explains the tech stack chosen for Waymarks, the rationale for eac
 
 ## Why these and not alternatives
 
-- **Why not Next.js?** Waymarks is a SPA with a backend (Supabase). We don't need server-side rendering or React Server Components for this use case, and a static SPA on Netlify is simpler to operate.
+- **Why not Next.js?** Markur is a SPA with a backend (Supabase). We don't need server-side rendering or React Server Components for this use case, and a static SPA on Netlify is simpler to operate.
 - **Why not Tailwind v4?** v4 is still settling. v3 is stable and well-supported.
 - **Why not Redux?** Overkill. Zustand for client state, TanStack Query for server state, React state for component-local stuff.
 - **Why not Firebase?** Supabase is Postgres-first, which means real SQL, real foreign keys, and Row-Level Security policies that map cleanly to the role model. Firestore's ad-hoc security rules don't scale to this kind of multi-tenant permission model.
@@ -107,7 +107,7 @@ src/
 │   │   ├── ChipFilter.tsx
 │   │   ├── Spinner.tsx
 │   │   └── ...
-│   └── waymarks/         ← Domain UI
+│   └── Markur/         ← Domain UI
 │       ├── FloorPlanCanvas.tsx
 │       ├── PinMarker.tsx
 │       ├── SyncChip.tsx
@@ -185,7 +185,7 @@ Backend (Supabase) migrations are applied via `npm run db:setup` against the pro
 
 If this is a fresh checkout and the project hasn't been scaffolded yet:
 
-1. Run `npm create vite@latest waymarks -- --template react-ts` to scaffold.
+1. Run `npm create vite@latest Markur -- --template react-ts` to scaffold.
 2. Install all dependencies in the stack list above.
 3. Configure Tailwind, TypeScript paths, ESLint, Prettier.
 4. Set up Supabase client and types.

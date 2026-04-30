@@ -6,14 +6,14 @@ Hi Randy. M0 is the toolchain skeleton — no real product yet, just proof that 
 
 - `package.json`, `package-lock.json` — dependencies pinned
 - `vite.config.ts`, `tsconfig.*.json` — Vite + strict TypeScript with `@/*` alias
-- `tailwind.config.ts`, `src/styles/globals.css` — Tailwind v3 with the full Waymarks color/font theme from `specs/02-design-system.md`
+- `tailwind.config.ts`, `src/styles/globals.css` — Tailwind v3 with the full Markur color/font theme from `specs/02-design-system.md`
 - `eslint.config.js`, `.prettierrc.json` — linting and formatting (lint-staged + husky wired into `npm install`)
 - `playwright.config.ts` — Playwright config for desktop, iPad, mobile viewports (no tests yet)
 - `vitest` setup in `vite.config.ts` + `src/test/setup.ts`
 - `netlify.toml` — Netlify build settings, SPA redirect, security headers
 - `.env.example` — Supabase placeholders (real keys go in `.env.local`, gitignored)
 - `src/main.tsx`, `src/App.tsx`, `src/routes/Home.tsx` — the hero landing page
-- `src/components/waymarks/{ThemeProvider,ThemeToggle,theme-context}` — light/dark toggle, persisted to localStorage
+- `src/components/Markur/{ThemeProvider,ThemeToggle,theme-context}` — light/dark toggle, persisted to localStorage
 - `tests/unit/theme-toggle.test.tsx` — one passing test that proves the toggle works
 - Folder skeleton matching `CLAUDE.md` § "Repo layout"
 
@@ -30,9 +30,9 @@ I built the project in a clean Linux scratch directory and ran the full check pi
 
 ## Important: OneDrive issue
 
-`Waymarks Claude Code` is sitting on OneDrive. OneDrive locks files inside `node_modules` while it tries to sync them, which broke `npm install` and `git init` from inside this session. Two ways to fix it on your end (either works):
+`Markur Claude Code` is sitting on OneDrive. OneDrive locks files inside `node_modules` while it tries to sync them, which broke `npm install` and `git init` from inside this session. Two ways to fix it on your end (either works):
 
-1. **Recommended:** move the project off OneDrive into a regular folder, e.g. `C:\Users\randy\dev\waymarks`. node_modules is build output, not source, and shouldn't be backed up.
+1. **Recommended:** move the project off OneDrive into a regular folder, e.g. `C:\Users\randy\dev\Markur`. node_modules is build output, not source, and shouldn't be backed up.
 2. **Alternative:** in the OneDrive Windows app, exclude `node_modules` and `.git` from sync for this folder (Settings → Sync and backup → Manage backup).
 
 If you don't fix this, every `npm install` and most git operations will be flaky.
@@ -44,7 +44,7 @@ If you don't fix this, every `npm install` and most git operations will be flaky
 On Windows, open PowerShell or Command Prompt and:
 
 ```
-cd "C:\Users\randy\OneDrive\Documents\artwork 2020\randy 2018\OFFICE MARK\WayMarks\Waymarks Claude Code"
+cd "C:\Users\randy\OneDrive\Documents\artwork 2020\randy 2018\OFFICE MARK\WayMarks\Markur Claude Code"
 ```
 
 (Or wherever you've moved it.)
@@ -82,7 +82,7 @@ npm run dev
 
 Open `http://localhost:5173`. You should see:
 
-- A dark header bar with the "Waymarks" wordmark (the "marks" half in gold)
+- A dark header bar with the "Markur" wordmark (the "marks" half in gold)
 - A serif headline "Every sign on every floor, accounted for and audit-ready."
 - A "Light" / "Dark" toggle button — click it and the page should invert (cream becomes dark slate, text colors flip)
 - Three color swatches: Ink, Gold, Cream
@@ -100,7 +100,7 @@ git add -A
 git commit -m "M0: project skeleton"
 ```
 
-Then on github.com create a **new** private repo (don't reuse the old prototype's repo). Name suggestion: `waymarks` or `waymarks-rebuild`. Don't initialize it with a README — it should be empty. Then back in your terminal:
+Then on github.com create a **new** private repo (don't reuse the old prototype's repo). Name suggestion: `Markur` or `waymarks-rebuild`. Don't initialize it with a README — it should be empty. Then back in your terminal:
 
 ```
 git remote add origin https://github.com/<your-username>/<repo-name>.git
@@ -126,7 +126,7 @@ Open the Netlify URL on your phone and on an iPad if you have one. The page shou
 
 ## Acceptance for M0 (per `specs/07-build-order.md`)
 
-- [x] `npm run dev` opens a styled "Waymarks" hero on `localhost:5173`
+- [x] `npm run dev` opens a styled "Markur" hero on `localhost:5173`
 - [x] `npm run check` is green
 - [ ] **Netlify preview URL works** — needs you to do steps 6 and 7 above
 

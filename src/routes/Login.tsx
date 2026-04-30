@@ -30,9 +30,24 @@ export function Login() {
         <header className="space-y-3 text-center">
           <Link
             to="/"
-            className="inline-block font-serif text-3xl text-waymarks-ink outline-none focus-visible:text-waymarks-gold dark:text-white"
+            aria-label="Markur home"
+            className="inline-flex items-center outline-none focus-visible:ring-2 focus-visible:ring-waymarks-gold focus-visible:ring-offset-2 focus-visible:ring-offset-waymarks-cream rounded"
           >
-            Way<span className="text-waymarks-gold">marks</span>
+            <img
+              src="/icons/markur-wordmark.png"
+              alt="Markur, by Officemark"
+              className="h-12 w-auto dark:hidden"
+              width={1587}
+              height={521}
+            />
+            <img
+              src="/icons/markur-wordmark-light.png"
+              alt=""
+              aria-hidden
+              className="hidden h-12 w-auto dark:block"
+              width={1587}
+              height={521}
+            />
           </Link>
           <p className="text-sm text-text-muted">
             Sign in to manage signage across your buildings.

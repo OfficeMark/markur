@@ -15,9 +15,9 @@ export default defineConfig({
       registerType: 'autoUpdate',
       includeAssets: ['icons/icon-192.png', 'icons/icon-512.png'],
       manifest: {
-        name: 'Waymarks',
-        short_name: 'Waymarks',
-        description: 'Building signage passport — every sign, accounted for.',
+        name: 'Markur by OfficeMark',
+        short_name: 'Markur',
+        description: 'A digital passport for every sign in your building — by OfficeMark.',
         theme_color: '#1d1b1a',
         background_color: '#f5f0e8',
         display: 'standalone',

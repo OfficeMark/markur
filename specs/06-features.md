@@ -355,7 +355,7 @@ The product must work without a network connection.
 Cache lives in IndexedDB via Dexie. Schema:
 
 ```ts
-const db = new Dexie('waymarks');
+const db = new Dexie('Markur');
 db.version(1).stores({
   buildings: '&id, owner_org_id',
   floors: '&id, building_id',
@@ -498,7 +498,7 @@ Per `02-design-system.md`:
 
 ### Sign-up flows
 
-- **Direct sign-up**: only for super admins (Waymarks team). Disabled for everyone else.
+- **Direct sign-up**: only for super admins (Markur team). Disabled for everyone else.
 - **Invitation**: clicking an invite link → if not signed up, prompts for name + password → creates auth user → consumes the `pending_invitations` row → creates `access_grant`.
 
 ### First-time experience by role
@@ -509,7 +509,7 @@ Per `02-design-system.md`:
 
 ### Email templates
 
-- Invitation: "{Inviter} invited you to Waymarks for {building}. Accept here: {link}"
+- Invitation: "{Inviter} invited you to Markur for {building}. Accept here: {link}"
 - Audit due: "Floor {N} of {building} is due for audit on {date}"
 - Flag raised: "{User} raised a flag on {asset} at {building}: '{description}'"
 

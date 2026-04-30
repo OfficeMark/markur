@@ -216,9 +216,9 @@ type CanProps = {
 </Can>
 ```
 
-## Domain components (`src/components/waymarks/`)
+## Domain components (`src/components/Markur/`)
 
-These know about the Waymarks data model.
+These know about the Markur data model.
 
 ### FloorPlanCanvas
 

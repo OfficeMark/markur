@@ -6,7 +6,7 @@ The big behavioural changes aren't on desktop — they show up when you shrink t
 
 ## 1. Mobile / phone (≤767px)
 
-1. Open the site at iPhone width. The header now shows a hamburger icon to the left of the Waymarks wordmark.
+1. Open the site at iPhone width. The header now shows a hamburger icon to the left of the Markur wordmark.
 2. Tap the hamburger. A left-slide drawer appears showing buildings + floors. Tap any link — the drawer auto-closes and you're navigated.
 3. Open a floor with pins. Tap a pin. The asset drawer slides up from the bottom (rounded-top, ~88vh tall) instead of from the right.
 4. Pin markers should look noticeably larger (~36px) so they're tappable. The icon shape inside is the same.

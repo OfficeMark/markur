@@ -13,8 +13,8 @@ Floor plan upload + rendering is live. What was built and what to test.
 - `src/lib/pdf-mismatch.ts` — pure heuristics for detecting that a PDF doesn't match the building / floor it's being uploaded to. Zero dependencies.
 - `src/lib/pdf-metadata.ts` — PDF.js wrapper that extracts title, author, page count, first-page text from a File. Re-exports the mismatch helpers.
 - `src/lib/upload.ts` — file validation (size + mime) + storage upload + signed URL helpers.
-- `src/components/waymarks/FloorPlanCanvas.tsx` — renders a PDF (page 1) or image into a canvas with mouse-wheel zoom, drag-pan, keyboard zoom (+/-/0) and pan (arrows). Pin overlay layer is empty for M3 (pins arrive M4).
-- `src/components/waymarks/FloorPlanUploadDialog.tsx` — Radix Dialog with file picker / drag-drop, mismatch warning, replace-confirmation, upload progress.
+- `src/components/Markur/FloorPlanCanvas.tsx` — renders a PDF (page 1) or image into a canvas with mouse-wheel zoom, drag-pan, keyboard zoom (+/-/0) and pan (arrows). Pin overlay layer is empty for M3 (pins arrive M4).
+- `src/components/Markur/FloorPlanUploadDialog.tsx` — Radix Dialog with file picker / drag-drop, mismatch warning, replace-confirmation, upload progress.
 - `src/routes/Floor.tsx` — updated to render the canvas when a plan is set, or an empty state with an "Upload floor plan" CTA when not. Replace-CTA in the header for floors that already have a plan. All gated by `useCan('upload_plan', ...)`.
 - `tests/fixtures/sample-furniture-plan.pdf` — synthetic public-domain office layout (small ~2.5 KB PDF) for demo / e2e use. Generator at `scripts/gen-sample-plan.mjs`.
 - 12 new unit tests (43 total passing).

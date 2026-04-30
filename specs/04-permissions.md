@@ -6,7 +6,7 @@ The four-role security model. This is the most security-critical part of the sys
 
 | Role | Scope | Description |
 |---|---|---|
-| `super_admin` | Global | Waymarks operator team. All buildings, all floors, full edit. Used for setup and resolving issues. |
+| `super_admin` | Global | Markur operator team. All buildings, all floors, full edit. Used for setup and resolving issues. |
 | `building_admin` | One building | Property manager / facilities lead. Owns the building end-to-end. |
 | `auditor` | Assigned floors | Internal or third-party. Audits and flags but cannot edit metadata or place pins. |
 | `tenant_rep` | Their floor only (and their tenant's assets) | Tenant's contact. Sees their own floor. Can flag missing or wrong signs. |

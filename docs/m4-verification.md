@@ -15,11 +15,11 @@ Pins are real. You can place signs on the floor plan, click them, and see their 
 - `src/lib/asset-status.ts` — pure helper computing `good` / `attention` / `flagged`.
 - `src/hooks/useAssets.ts`, `useActivity.ts` — TanStack Query wrappers + mutations.
 - `src/components/ui/Chip.tsx`, `MetricCard.tsx` — primitives from spec 05.
-- `src/components/waymarks/PinMarker.tsx` — accessible pin (status conveyed by **color + icon shape** so colorblind users can read a floor).
-- `src/components/waymarks/PinOverlay.tsx` — percent-positioned layer over the canvas; pins pan + zoom with the plan.
-- `src/components/waymarks/NewAssetDialog.tsx` — type/name/notes/photo with React Hook Form + Zod, mobile camera capture.
-- `src/components/waymarks/AssetDrawer.tsx` — right-side panel with photo, type chips, status row (3 metrics), attributes grid, activity timeline, permissions footer.
-- `src/components/waymarks/FloorPlanCanvas.tsx` — refactored to support a `placing` mode + `pinOverlay` slot. Click vs. drag distinguished by a 4 px movement threshold.
+- `src/components/Markur/PinMarker.tsx` — accessible pin (status conveyed by **color + icon shape** so colorblind users can read a floor).
+- `src/components/Markur/PinOverlay.tsx` — percent-positioned layer over the canvas; pins pan + zoom with the plan.
+- `src/components/Markur/NewAssetDialog.tsx` — type/name/notes/photo with React Hook Form + Zod, mobile camera capture.
+- `src/components/Markur/AssetDrawer.tsx` — right-side panel with photo, type chips, status row (3 metrics), attributes grid, activity timeline, permissions footer.
+- `src/components/Markur/FloorPlanCanvas.tsx` — refactored to support a `placing` mode + `pinOverlay` slot. Click vs. drag distinguished by a 4 px movement threshold.
 - `src/routes/Floor.tsx` — toolbar with **Add asset** + **Replace plan**, full canvas integration.
 
 **Tests:** 53/53 passing (10 new for asset-status + PinMarker + queries).

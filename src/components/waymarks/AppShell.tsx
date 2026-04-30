@@ -22,9 +22,16 @@ export function AppShell({ children, withSidebar = true }: AppShellProps) {
             {withSidebar && <BuildingNavSheet />}
             <Link
               to="/"
-              className="font-serif text-2xl tracking-tight text-white outline-none transition-colors focus-visible:text-waymarks-gold"
+              aria-label="Markur home"
+              className="inline-flex items-center outline-none focus-visible:ring-2 focus-visible:ring-waymarks-gold focus-visible:ring-offset-2 focus-visible:ring-offset-waymarks-ink rounded"
             >
-              Way<span className="text-waymarks-gold">marks</span>
+              <img
+                src="/icons/markur-wordmark-light.png"
+                alt="Markur, by Officemark"
+                className="h-9 w-auto"
+                width={1587}
+                height={521}
+              />
             </Link>
           </div>
           <div className="flex items-center gap-2 sm:gap-3">

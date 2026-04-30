@@ -21,7 +21,7 @@ The full SQL is also in `supabase/migrations/` so you can read the source of tru
 - `src/lib/AuthProvider.tsx` + `src/lib/auth-context.ts` — `<AuthProvider>` and the `useAuth()` / `useCurrentUser()` hooks.
 - `src/lib/PermissionsProvider.tsx` + `src/lib/permissions-context.ts` + `src/lib/permissions-types.ts` + `src/lib/Can.tsx` — the front-end mirror of `user_can()`. Use `<Can action="..." resource={...}>` and `useCan()` everywhere instead of `if (role === ...)`.
 - `src/components/ui/{Button,Avatar,EmptyState}.tsx` — UI primitives.
-- `src/components/waymarks/{AppShell,UserMenu,SyncChip,RoleBadge}.tsx` — the persistent header layout.
+- `src/components/Markur/{AppShell,UserMenu,SyncChip,RoleBadge}.tsx` — the persistent header layout.
 - `src/routes/Login.tsx` — sign-in / sign-up tabs with React Hook Form + Zod validation.
 - `src/routes/ProtectedRoute.tsx` — route guard that redirects unauthenticated users to `/login`.
 - `src/routes/Home.tsx` — the empty state ("no buildings yet") for a signed-in user with no grants.
@@ -58,7 +58,7 @@ After adding both, click **"Deploys"** in the left nav → **"Trigger deploy"** 
 Open PowerShell:
 
 ```
-cd "C:\Users\randy\DEV\Waymarks Claude Code"
+cd "C:\Users\randy\DEV\Markur Claude Code"
 npm run dev
 ```
 
@@ -103,4 +103,4 @@ That last box is the only thing I can't tick automatically. Ping me your email a
 
 ## What's coming in M2
 
-Buildings + floors (read-only). I'll seed your project with one example building (161 Bay St., 5 floors B2 → 3) so you have something to click around. After that, M3 is uploading floor plan PDFs.
+Buildings + floors (read-only). I'll seed your project with one example building (161 Bay St., 5 floor

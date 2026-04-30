@@ -1,7 +1,8 @@
-# Waymarks — Building Signage Passport
+# Markur — Building Signage Passport (formerly Waymarks)
 
-> Live demo (current build): https://waymarks-app.netlify.app
-> Production domain target: https://waymarks.ca (currently parked on a GoDaddy lander — needs to be repointed)
+> Live build (current): https://waymarks-rebuild.netlify.app  ← Netlify site rename to `markur` is owner-pending
+> Production domain target: https://markur.ca (already owned by Randy; DNS pointing to Netlify is M10 work)
+> Brand: **Markur, by Officemark.** Final name as of 2026-04-30 (history: PlaqueMark → MarkView → Markur → Markur). Trademark cleared in CIPO Canada; clean NUANS June 2023.
 > Owner: Randy (rancherdesign.ca / officemark.ca) — non-developer; you (Claude Code) are the implementing developer
 
 ## What this is
@@ -48,7 +49,7 @@ Rationale for these choices is in `specs/01-stack-architecture.md`.
 ## Repo layout
 
 ```
-waymarks/
+markur/
 ├── CLAUDE.md                     ← you are here
 ├── README.md                     ← public-facing project description
 ├── HANDOFF.md                    ← non-developer owner's guide
@@ -66,7 +67,7 @@ waymarks/
 │   ├── features/                 ← Feature modules (audit, asset-detail, building, floor)
 │   ├── components/
 │   │   ├── ui/                   ← Generic UI primitives (Button, Card, Drawer, etc.)
-│   │   └── waymarks/             ← Domain components (FloorPlanCanvas, PinMarker, etc.)
+│   │   └── waymarks/             ← Domain components (FloorPlanCanvas, PinMarker, etc.) — directory name kept for now; renaming to `markur/` is Path-2 churn deferred past first customer
 │   ├── lib/
 │   │   ├── supabase.ts           ← Supabase client + typed helpers
 │   │   ├── permissions.ts        ← Capability checks (Can component, useCan hook)

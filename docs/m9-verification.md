@@ -9,7 +9,7 @@ The most-valuable surface to verify is the audit walkaround. The flow:
 
 1. Open the site in Chrome desktop after the new build lands.
 2. DevTools → Application → Service Workers: should show `sw.js` activated. Cache Storage shows `workbox-precache-v2-*` and `waymarks-storage` caches.
-3. The address bar shows an "Install Waymarks" icon. Click it - opens as a standalone app with the gold pin icon.
+3. The address bar shows an "Install Markur" icon. Click it - opens as a standalone app with the gold pin icon.
 4. On iOS Safari: Share → Add to Home Screen. Tap the resulting icon - opens fullscreen, no Safari chrome.
 5. On Android Chrome: menu → Install app. Same fullscreen behaviour.
 

@@ -32,7 +32,7 @@ Goal: A running React app at `localhost:5173` that proves the toolchain.
 
 ### Acceptance
 
-- [x] `npm run dev` opens a styled "Waymarks" hero on `localhost:5173`
+- [x] `npm run dev` opens a styled "Markur" hero on `localhost:5173`
 - [x] `npm run check` is green
 - [x] Netlify preview URL works — https://waymarks-rebuild.netlify.app
 
@@ -321,7 +321,7 @@ Goal: Ship to first paying customer.
 ### Tasks
 
 - [ ] Replace placeholder copy and demo data
-- [ ] Wire `waymarks.ca` to Netlify (DNS records)
+- [ ] Wire `markur.ca` to Netlify (DNS records)
 - [ ] SSL via Netlify
 - [ ] Email domain (Resend or Postmark) for invitations + notifications
 - [ ] Privacy policy + ToS pages (`/legal/privacy`, `/legal/terms`)

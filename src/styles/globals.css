@@ -6,8 +6,8 @@
   :root {
     /* Brand */
     --waymarks-ink: 31 41 56; /* #1F2938 — dark slate, header bg */
-    --waymarks-gold: 193 161 105; /* #C1A169 — primary accent */
-    --waymarks-gold-soft: 247 245 238; /* #F7F5EE — gold-tinted surface */
+    --waymarks-gold: 237 126 44; /* #ED7E2C — Markur orange (was #C1A169 gold under the Waymarks name) */
+    --waymarks-gold-soft: 251 240 228; /* #FBF0E4 — orange-tinted soft surface */
     --waymarks-cream: 245 241 232; /* #F5F1E8 — page surface */
 
     /* Semantic */
@@ -33,7 +33,7 @@
      but we wire a usable inverted set so the toggle is testable today. */
   .dark {
     --waymarks-ink: 245 241 232; /* swap ink and cream */
-    --waymarks-gold: 209 178 122;
+    --waymarks-gold: 244 152 86; /* #F49856 — Markur orange, dark-mode tuning */
     --waymarks-gold-soft: 38 48 64;
     --waymarks-cream: 23 28 38;
 

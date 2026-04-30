@@ -1,6 +1,6 @@
 # 02 — Design system
 
-The visual language for Waymarks. Everything in this file is implemented in `tailwind.config.ts`, `src/styles/globals.css`, and the components in `src/components/ui/`.
+The visual language for Markur. Everything in this file is implemented in `tailwind.config.ts`, `src/styles/globals.css`, and the components in `src/components/ui/`.
 
 ## Brand voice
 
@@ -156,7 +156,7 @@ UI primitives (`src/components/ui/`):
 - `SyncChip` (the header sync state indicator)
 - `PermissionGate` (the `<Can>` wrapper)
 
-Domain components (`src/components/waymarks/`):
+Domain components (`src/components/Markur/`):
 - `FloorPlanCanvas` (renders PDF or image; provides zoom, pan, pin overlay)
 - `PinMarker` (single asset pin; status color, selected state, draggable in admin mode)
 - `BuildingNav` (sidebar/sheet listing buildings + floors)
@@ -236,7 +236,7 @@ export default {
   theme: {
     extend: {
       colors: {
-        waymarks: {
+        Markur: {
           ink: 'rgb(var(--waymarks-ink) / <alpha-value>)',
           gold: 'rgb(var(--waymarks-gold) / <alpha-value>)',
           'gold-soft': 'rgb(var(--waymarks-gold-soft) / <alpha-value>)',
