@@ -26,6 +26,17 @@ export const TYPE_COLORS: Record<string, AssetTypeColor> = {
   evacuation: { fill: '#EA580C', label: 'Evacuation', category: 'signage' }, // amber-orange
   emergency: { fill: '#DC2626', label: 'Emergency', category: 'signage' }, // red
   egress: { fill: '#16A34A', label: 'Egress', category: 'signage' }, // green
+
+  // Recognition / nameplate / decorative (M10d) — visible features property
+  // managers also need to track. Tones picked to slot between the existing
+  // signage colors without colliding (donor warm gold → bronze, nameplates
+  // muted slate-blue, mural pink-magenta, decorative warm rose).
+  donor_plaque: { fill: '#B45309', label: 'Donor plaque', category: 'signage' }, // bronze
+  donor_wall: { fill: '#92400E', label: 'Donor wall', category: 'signage' }, // dark bronze
+  nameplate: { fill: '#1E40AF', label: 'Nameplate', category: 'signage' }, // navy
+  wall_mural: { fill: '#BE185D', label: 'Wall mural', category: 'signage' }, // magenta
+  decorative_feature: { fill: '#9F1239', label: 'Decorative feature', category: 'signage' }, // rose
+
   other: { fill: '#475569', label: 'Other', category: 'signage' }, // slate
 
   // Facility

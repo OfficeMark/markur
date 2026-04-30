@@ -69,6 +69,11 @@ const SIGNAGE_TYPES = [
   { value: 'evacuation', label: 'Evacuation' },
   { value: 'emergency', label: 'Emergency' },
   { value: 'egress', label: 'Egress' },
+  { value: 'donor_plaque', label: 'Donor plaque' },
+  { value: 'donor_wall', label: 'Donor wall' },
+  { value: 'nameplate', label: 'Nameplate' },
+  { value: 'wall_mural', label: 'Wall mural' },
+  { value: 'decorative_feature', label: 'Decorative feature' },
   { value: 'other', label: 'Other' },
 ] as const;
 
