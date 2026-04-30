@@ -1,12 +1,21 @@
+import { useNavigate } from 'react-router-dom';
 import * as DropdownMenu from '@radix-ui/react-dropdown-menu';
-import { ChevronDown, LogOut, Moon, Sun, User } from 'lucide-react';
+import { ChevronDown, LogOut, Settings as SettingsIcon } from 'lucide-react';
 import { Avatar } from '@/components/ui/Avatar';
-import { useTheme } from '@/components/waymarks/theme-context';
 import { useAuth } from '@/lib/auth-context';
 
+/**
+ * UserMenu (M10e+). Trimmed down compared to earlier builds:
+ *
+ *  - Account settings is now a real link to /settings (was a "(soon)"
+ *    placeholder before).
+ *  - The dark/light theme toggle was removed — dark mode is intentionally
+ *    disabled (M10d) so the toggle was a no-op confusing users. The
+ *    Settings page explains the situation.
+ */
 export function UserMenu() {
   const { user, profile, signOut } = useAuth();
-  const { theme, toggle } = useTheme();
+  const navigate = useNavigate();
 
   if (!user) return null;
   const name = profile?.display_name ?? user.email ?? 'You';
@@ -28,7 +37,7 @@ export function UserMenu() {
         <DropdownMenu.Content
           align="end"
           sideOffset={6}
-          className="z-50 min-w-[220px] rounded-lg border border-black/10 bg-surface p-1 text-sm text-text shadow-sheet dark:border-white/10"
+          className="z-50 min-w-[220px] rounded-lg border border-black/10 bg-surface p-1 text-sm text-text shadow-sheet"
         >
           <div className="flex items-center gap-2 px-2 py-2">
             <Avatar name={name} src={profile?.avatar_url ?? undefined} size="md" />
@@ -37,25 +46,18 @@ export function UserMenu() {
               <div className="truncate text-xs text-text-muted">{user.email}</div>
             </div>
           </div>
-          <DropdownMenu.Separator className="my-1 h-px bg-black/10 dark:bg-white/10" />
+          <DropdownMenu.Separator className="my-1 h-px bg-black/10" />
           <DropdownMenu.Item
             onSelect={(e) => {
               e.preventDefault();
-              toggle();
+              navigate('/settings');
             }}
-            className="flex cursor-pointer items-center gap-2 rounded-md px-2 py-2 outline-none data-[highlighted]:bg-black/5 dark:data-[highlighted]:bg-white/5"
+            className="flex cursor-pointer items-center gap-2 rounded-md px-2 py-2 outline-none data-[highlighted]:bg-black/5"
           >
-            {theme === 'dark' ? <Sun size={14} aria-hidden /> : <Moon size={14} aria-hidden />}
-            <span>Switch to {theme === 'dark' ? 'light' : 'dark'} mode</span>
+            <SettingsIcon size={14} aria-hidden />
+            <span>Account settings</span>
           </DropdownMenu.Item>
-          <DropdownMenu.Item
-            disabled
-            className="flex cursor-not-allowed items-center gap-2 rounded-md px-2 py-2 text-text-muted opacity-60 outline-none"
-          >
-            <User size={14} aria-hidden />
-            <span>Account settings (soon)</span>
-          </DropdownMenu.Item>
-          <DropdownMenu.Separator className="my-1 h-px bg-black/10 dark:bg-white/10" />
+          <DropdownMenu.Separator className="my-1 h-px bg-black/10" />
           <DropdownMenu.Item
             onSelect={(e) => {
               e.preventDefault();

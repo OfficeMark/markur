@@ -11,6 +11,7 @@ import { ProtectedRoute } from '@/routes/ProtectedRoute';
 import { Trash } from '@/routes/Trash';
 import { AcceptInvitation } from '@/routes/AcceptInvitation';
 import { Help } from '@/routes/Help';
+import { Settings } from '@/routes/Settings';
 import { Privacy } from '@/routes/Privacy';
 import { Terms } from '@/routes/Terms';
 import { OfflineSync } from '@/components/waymarks/OfflineSync';
@@ -76,6 +77,14 @@ export default function App() {
                   element={
                     <ProtectedRoute>
                       <Help />
+                    </ProtectedRoute>
+                  }
+                />
+                <Route
+                  path="/settings"
+                  element={
+                    <ProtectedRoute>
+                      <Settings />
                     </ProtectedRoute>
                   }
                 />

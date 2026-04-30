@@ -68,9 +68,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setProfile(null);
   }, []);
 
+  // Re-fetch the cached profile (called by Settings after editing display_name
+  // or avatar_url so the AppShell / UserMenu reflect the change immediately).
+  const refreshProfile = useCallback(async () => {
+    if (!user) return;
+    const p = await fetchProfile(user.id);
+    setProfile(p);
+  }, [user]);
+
   const value = useMemo<AuthState>(
-    () => ({ loading, session, user, profile, signOut }),
-    [loading, session, user, profile, signOut]
+    () => ({ loading, session, user, profile, signOut, refreshProfile }),
+    [loading, session, user, profile, signOut, refreshProfile]
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

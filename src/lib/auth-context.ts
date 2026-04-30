@@ -13,6 +13,12 @@ export type AuthState = {
   profile: Profile | null;
   /** Sign out and clear local state. */
   signOut: () => Promise<void>;
+  /**
+   * Re-fetch the cached profile row for the signed-in user. Call after
+   * editing display_name / avatar so the UserMenu and AppShell pick up
+   * the new values without a full reload.
+   */
+  refreshProfile: () => Promise<void>;
 };
 
 export const AuthContext = createContext<AuthState | null>(null);
