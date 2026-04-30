@@ -91,8 +91,9 @@ export function AuditModeShell({
       if (e.key !== 'Escape') return;
       if (events.length === 0) {
         // Quick exit if nothing happened yet — they probably opened it by
-        // accident.
-        onClose();
+        // accident. Discard the empty session so the resume banner doesn't
+        // surface it later.
+        void handleDiscardAudit();
       }
     }
     window.addEventListener('keydown', onKey);
@@ -114,11 +115,28 @@ export function AuditModeShell({
 
   async function handleEndAudit() {
     setEndError(null);
-    if (events.length === 0) {
-      setEndError('Record at least one audit before ending the session.');
-      return;
-    }
     setShowSummary(true);
+  }
+
+  /**
+   * Discard the audit entirely without writing a summary or completing the
+   * session — the auditor opened audit mode by mistake or wants to bail.
+   * Sets completed_at so the partial session doesn't haunt the resume banner;
+   * any events already recorded are preserved (they're still part of the
+   * audit trail), just the session counter doesn't get final totals.
+   */
+  async function handleDiscardAudit() {
+    try {
+      await endAudit.mutateAsync({
+        id: session.id,
+        assets_audited: 0,
+        assets_missed: total,
+        notes: 'Audit cancelled before completion.',
+      });
+      onClose();
+    } catch {
+      // Non-fatal — surface in the existing endError region if it ever fails.
+    }
   }
 
   async function confirmEnd() {

@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
-import { ArrowLeft, Check, ClipboardCheck, ClipboardList, Download, ImageOff, Plus, RefreshCw, Trash2 } from 'lucide-react';
+import { ArrowLeft, Check, ClipboardList, Download, ImageOff, Plus, RefreshCw, Trash2 } from 'lucide-react';
 import { AppShell } from '@/components/waymarks/AppShell';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { Button } from '@/components/ui/Button';
@@ -285,27 +285,6 @@ export function Floor() {
             <h1 className="mt-1 font-semibold text-4xl leading-tight text-text sm:text-5xl">{floor.label}</h1>
           </div>
           <div className="flex flex-wrap items-center gap-2">
-            {floor.plan_url && assets.length > 0 && (
-              <button
-                type="button"
-                onClick={() => setAuditDueOnly((v) => !v)}
-                aria-pressed={auditDueOnly}
-                className={
-                  'inline-flex h-9 items-center gap-1.5 rounded-full border px-3 text-xs font-medium transition-colors ' +
-                  (auditDueOnly
-                    ? 'border-warning/40 bg-warning-bg text-warning'
-                    : 'border-black/15 bg-surface text-text-muted hover:border-black/25 hover:text-text dark:border-white/15')
-                }
-              >
-                <ClipboardCheck size={12} aria-hidden />
-                <span>
-                  Audit due
-                  <span className="ml-1 rounded bg-black/5 px-1 font-mono text-[11px] dark:bg-white/10">
-                    {auditDueAssets.length}
-                  </span>
-                </span>
-              </button>
-            )}
             {showAuditCta && (
               <Button
                 variant="gold"
@@ -354,7 +333,7 @@ export function Floor() {
         </header>
 
         {assets.length > 0 && (
-          <FloorStats
+          <FloorStatsBar
             total={assets.length}
             good={statusCounts.good}
             attention={statusCounts.attention}
@@ -392,7 +371,7 @@ export function Floor() {
               Couldn't load plan: {signedUrlError}
             </div>
           ) : !signedUrl || !planKind ? (
-            <div className="flex h-[60vh] items-center justify-center rounded-xl border border-black/10 bg-waymarks-gold-soft text-text-faint dark:border-white/10 dark:bg-white/5">
+            <div className="flex h-[60vh] items-center justify-center rounded-xl border border-black/10 bg-surface text-text-faint dark:border-white/10 dark:bg-white/5">
               <div
                 className="h-6 w-6 animate-spin rounded-full border-2 border-waymarks-gold border-t-waymarks-gold"
                 aria-hidden
@@ -523,7 +502,7 @@ export function Floor() {
 
 
 
-function FloorStats({
+function FloorStatsBar({
   total,
   good,
   attention,
@@ -539,22 +518,22 @@ function FloorStats({
   onToggleAuditDue: () => void;
 }) {
   return (
-    <div className="mb-6 grid grid-cols-2 gap-3 sm:grid-cols-4">
-      <Tile label="Total" value={total} accent="ink" />
-      <Tile label="Good" value={good} accent="success" />
-      <Tile
+    <div className="mb-3 flex flex-wrap items-center justify-end gap-x-5 gap-y-2 text-sm">
+      <Stat label="Total" value={total} accent="ink" />
+      <Stat label="Good" value={good} accent="success" />
+      <Stat
         label="Audit due"
         value={attention}
         accent="warning"
         active={auditDueOnly}
         onClick={attention > 0 ? onToggleAuditDue : undefined}
       />
-      <Tile label="Flagged" value={flagged} accent="danger" />
+      <Stat label="Flagged" value={flagged} accent="danger" />
     </div>
   );
 }
 
-function Tile({
+function Stat({
   label,
   value,
   accent,
@@ -567,14 +546,6 @@ function Tile({
   active?: boolean;
   onClick?: () => void;
 }) {
-  const accentLabel =
-    accent === 'success'
-      ? 'text-success'
-      : accent === 'warning'
-        ? 'text-warning'
-        : accent === 'danger'
-          ? 'text-danger'
-          : 'text-waymarks-gold';
   const accentNumber =
     accent === 'success'
       ? 'text-success'
@@ -583,26 +554,27 @@ function Tile({
         : accent === 'danger'
           ? 'text-danger'
           : 'text-text';
-  const Tag = onClick ? 'button' : 'div';
+  const interactive = !!onClick;
+  const Tag = interactive ? 'button' : 'span';
   return (
     <Tag
-      type={onClick ? 'button' : undefined}
+      type={interactive ? 'button' : undefined}
       onClick={onClick}
-      aria-pressed={onClick ? !!active : undefined}
+      aria-pressed={interactive ? !!active : undefined}
       className={
-        'group rounded-lg border bg-surface px-4 py-3 text-left transition-colors ' +
-        (active
-          ? 'border-warning/50 bg-warning-bg shadow-sm'
-          : 'border-black/10 hover:border-black/20 dark:border-white/10') +
-        (onClick ? ' cursor-pointer' : '')
+        'inline-flex items-baseline gap-1.5 rounded px-1 ' +
+        (interactive
+          ? 'cursor-pointer transition-colors hover:bg-warning-bg ' +
+            (active ? 'bg-warning-bg' : '')
+          : '')
       }
     >
-      <p className={'text-[11px] font-medium uppercase tracking-[0.22em] ' + accentLabel}>
+      <span className="text-[10px] font-medium uppercase tracking-[0.18em] text-text-faint">
         {label}
-      </p>
-      <p className={'mt-1 font-semibold tabular-nums text-4xl leading-none sm:text-5xl ' + accentNumber}>
+      </span>
+      <span className={'font-semibold tabular-nums text-base ' + accentNumber}>
         {value}
-      </p>
+      </span>
     </Tag>
   );
 }

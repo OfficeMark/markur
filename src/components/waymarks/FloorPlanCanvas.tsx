@@ -246,7 +246,7 @@ export function FloorPlanCanvas({
       onPointerUp={onPointerUp}
       onPointerCancel={onPointerUp}
       className={cn(
-        'relative h-[70vh] w-full overflow-hidden rounded-xl border border-black/10 bg-waymarks-gold-soft outline-none focus-visible:ring-2 focus-visible:ring-waymarks-gold dark:border-white/10 dark:bg-white/5',
+        'relative h-[70vh] w-full overflow-hidden rounded-xl border border-black/10 bg-surface outline-none focus-visible:ring-2 focus-visible:ring-waymarks-gold dark:border-white/10 dark:bg-white/5',
         cursor,
         className
       )}

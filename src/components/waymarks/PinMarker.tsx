@@ -3,18 +3,22 @@ import { Circle, Triangle, Square } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import type { AssetStatus } from '@/lib/asset-status';
 import { statusLabel } from '@/lib/asset-status';
+import { colorForType, labelForType } from '@/lib/pin-types';
 
 /**
- * Single asset pin. Per spec 02 § Accessibility: status conveyed by *both*
- * color and icon shape so colorblind users can read a floor.
+ * Single asset pin (M10b).
  *
- *   good      → green dot
- *   attention → gold triangle
- *   flagged   → red square
+ * Default pin color comes from the asset's TYPE (Directory blue, Egress
+ * green, etc. — see lib/pin-types). The status (good/attention/flagged) is
+ * conveyed by the icon shape inside the dot AND a thin ring overlay when
+ * the pin needs attention or is flagged. This way the floor reads as a
+ * "what's where" map at a glance, while still surfacing audit issues.
  *
- * `unlocked` adds a dashed gold ring + grab cursor — the placer (or anyone
- * with edit on the building) can drag the pin to nudge its position before
- * locking it via the AssetDrawer.
+ *   icon: good → Circle, attention → Triangle, flagged → Square
+ *   ring: attention → warning gold, flagged → danger red, good → none
+ *
+ * `unlocked` adds a dashed Markur-orange ring + grab cursor (M4 quick-nudge).
+ * `repositioning` is the deliberate-reposition target visual (M5).
  */
 
 export type PinMarkerProps = {
@@ -24,28 +28,18 @@ export type PinMarkerProps = {
   status: AssetStatus;
   selected?: boolean;
   pendingSync?: boolean;
-  /** When true the pin renders a draggable affordance and accepts drag. */
   unlocked?: boolean;
-  /**
-   * Deliberate-reposition target. Visually emphatic (larger, brighter dashed
-   * ring) so the user knows this is the heavier, confirmation-gated action,
-   * not the M4 quick-nudge.
-   */
   repositioning?: boolean;
-  /** Render at reduced opacity (used when another pin is being repositioned). */
   faded?: boolean;
   /**
-   * Pointer-down handler used by PinOverlay to start a drag. The button's
-   * own click handler is preserved for opening the drawer when no drag occurs.
+   * Force a specific fill color (used by AuditModeShell to switch to
+   * status-based coloring during a walk: green = audited this session,
+   * red = flagged this session). When omitted, falls back to the asset's
+   * type color from lib/pin-types.
    */
+  fillColor?: string;
   onPointerDownDrag?: (e: React.PointerEvent<HTMLButtonElement>) => void;
   onClick?: () => void;
-};
-
-const FILL_COLOR: Record<AssetStatus, string> = {
-  good: 'bg-pin-good',
-  attention: 'bg-pin-due',
-  flagged: 'bg-pin-flagged',
 };
 
 const ICON_BY_STATUS = {
@@ -65,6 +59,7 @@ export const PinMarker = forwardRef<HTMLButtonElement, PinMarkerProps>(function 
     unlocked,
     repositioning,
     faded,
+    fillColor,
     onPointerDownDrag,
     onClick,
   },
@@ -77,13 +72,20 @@ export const PinMarker = forwardRef<HTMLButtonElement, PinMarkerProps>(function 
     : unlocked
       ? ', unlocked — drag to move'
       : '';
+  const resolvedFill = fillColor ?? colorForType(type);
+  const statusRingClass =
+    status === 'flagged'
+      ? 'ring-2 ring-danger ring-offset-1 ring-offset-white'
+      : status === 'attention'
+        ? 'ring-2 ring-warning ring-offset-1 ring-offset-white'
+        : '';
+  const typeName = labelForType(type);
   return (
     <button
       ref={ref}
       type="button"
       data-asset-id={assetId}
       onPointerDown={(e) => {
-        // Prevent the canvas's pan-drag from capturing the pointer.
         e.stopPropagation();
         if (dragAccept) onPointerDownDrag?.(e);
       }}
@@ -91,12 +93,14 @@ export const PinMarker = forwardRef<HTMLButtonElement, PinMarkerProps>(function 
         e.stopPropagation();
         onClick?.();
       }}
-      aria-label={`${name} (${type}, ${statusLabel(status)}${lockSuffix})`}
+      aria-label={`${name} (${typeName}, ${statusLabel(status)}${lockSuffix})`}
+      style={{ backgroundColor: resolvedFill }}
       className={cn(
         'group relative inline-flex h-9 w-9 -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-full lg:h-7 lg:w-7',
         'border-2 border-white shadow-sm transition-transform',
         'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-waymarks-gold focus-visible:ring-offset-1',
-        FILL_COLOR[status],
+        // Status overlay ring (only for attention/flagged — good gets nothing)
+        !repositioning && !unlocked && !selected && statusRingClass,
         selected && 'scale-110',
         repositioning && 'scale-125 cursor-grab touch-none ring-4 ring-waymarks-gold ring-offset-2',
         repositioning &&
@@ -110,11 +114,7 @@ export const PinMarker = forwardRef<HTMLButtonElement, PinMarkerProps>(function 
         faded && 'opacity-40'
       )}
     >
-      <Icon
-        size={10}
-        className="fill-white text-white"
-        aria-hidden
-      />
+      <Icon size={10} className="fill-white text-white" aria-hidden />
     </button>
   );
 });

@@ -111,7 +111,7 @@ function BuildingItem({
         className={cn(
           'group flex items-center gap-2 rounded-md px-2 py-1.5 text-sm transition-colors',
           buildingActive
-            ? 'bg-waymarks-gold-soft text-white shadow-[inset_2px_0_0_0_var(--tw-shadow-color)] shadow-waymarks-gold'
+            ? 'bg-white/[0.06] text-white shadow-[inset_3px_0_0_0_var(--tw-shadow-color)] shadow-waymarks-gold'
             : 'text-white/85 hover:bg-white/5 hover:text-white'
         )}
       >

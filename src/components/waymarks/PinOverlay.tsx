@@ -207,6 +207,7 @@ export function PinOverlay({
               name={asset.name}
               type={asset.type}
               status={status}
+              fillColor={statusOverride ? statusFillColor(status) : undefined}
               selected={asset.id === selectedAssetId}
               unlocked={draggable && !isRepositionTarget}
               repositioning={isRepositionTarget}
@@ -241,6 +242,22 @@ export function PinOverlay({
       })}
     </div>
   );
+}
+
+
+function statusFillColor(status: AssetStatus): string {
+  // Audit-mode pin colors: green = audited+confirmed, red = flagged this
+  // session, amber = unvisited or skipped. Matches the spec 06 § Audit
+  // walkaround color treatment.
+  switch (status) {
+    case 'good':
+      return '#16A34A';
+    case 'flagged':
+      return '#DC2626';
+    case 'attention':
+    default:
+      return '#D97706';
+  }
 }
 
 function clamp01(v: number): number {
