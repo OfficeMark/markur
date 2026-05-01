@@ -232,11 +232,16 @@ export function useDrainPendingAuditEvents(online: boolean): void {
       for (const e of eligible) {
         if (cancelled) return;
         try {
+          // M12: pin the original queue time as created_at. Without this,
+          // an event queued at 09:00 and drained at 11:00 gets stamped
+          // 11:00, which scrambles the audit trail when devices drain
+          // out of order.
           await createEvent({
             session_id: e.session_id,
             asset_id: e.asset_id,
             outcome: e.outcome,
             notes: e.notes,
+            created_at: e.created_at,
           });
           await deletePending(e.local_id);
           // Refresh the visible session's events.

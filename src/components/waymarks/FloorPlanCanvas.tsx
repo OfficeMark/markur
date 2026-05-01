@@ -10,7 +10,7 @@ import {
 } from 'react';
 import { getDocument, GlobalWorkerOptions } from 'pdfjs-dist';
 import pdfWorkerUrl from 'pdfjs-dist/build/pdf.worker.min.mjs?url';
-import { Loader2, ImageOff } from 'lucide-react';
+import { Loader2, ImageOff, LocateFixed } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 if (typeof window !== 'undefined' && !GlobalWorkerOptions.workerSrc) {
@@ -128,6 +128,15 @@ export function FloorPlanCanvas({
     };
   }, [src, kind, scale]);
 
+  // Recenter: reset pan + zoom to the initial fit (M12). Used by both the
+  // keyboard '0' shortcut and the floating recenter button. Hard to find your
+  // way back to the original view after pinch-zooming on a phone, so this is
+  // also bound to a button.
+  const recenterView = useCallback(() => {
+    setZoom(1);
+    setPan({ x: 0, y: 0 });
+  }, []);
+
   const onWheel = useCallback((e: RWheelEvent<HTMLDivElement>) => {
     if (!e.ctrlKey && !e.metaKey && Math.abs(e.deltaY) < 4) return;
     e.preventDefault();
@@ -204,8 +213,7 @@ export function FloorPlanCanvas({
           break;
         case '0':
           e.preventDefault();
-          setZoom(1);
-          setPan({ x: 0, y: 0 });
+          recenterView();
           break;
         case 'ArrowUp':
           setPan((p) => ({ ...p, y: p.y + PAN_STEP }));
@@ -223,7 +231,7 @@ export function FloorPlanCanvas({
     }
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, []);
+  }, [recenterView]);
 
   const transform = useMemo(
     () => `translate(${pan.x}px, ${pan.y}px) scale(${zoom})`,
@@ -288,8 +296,23 @@ export function FloorPlanCanvas({
         </div>
       </div>
       {status === 'ready' && (
-        <div className="pointer-events-none absolute bottom-2 right-2 rounded-md bg-waymarks-ink/80 px-2 py-1 font-mono text-[10px] uppercase tracking-wide text-white/80">
-          {Math.round(zoom * 100)}%
+        <div className="absolute bottom-2 right-2 flex items-center gap-2">
+          <button
+            type="button"
+            onPointerDown={(e) => e.stopPropagation()}
+            onClick={(e) => {
+              e.stopPropagation();
+              recenterView();
+            }}
+            aria-label="Re-center plan"
+            title="Re-center (0)"
+            className="inline-flex h-9 w-9 items-center justify-center rounded-md bg-waymarks-ink/85 text-white/90 shadow-sm transition-colors hover:bg-waymarks-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-waymarks-gold focus-visible:ring-offset-1 lg:h-7 lg:w-7"
+          >
+            <LocateFixed size={16} aria-hidden />
+          </button>
+          <div className="pointer-events-none rounded-md bg-waymarks-ink/80 px-2 py-1 font-mono text-[10px] uppercase tracking-wide text-white/80">
+            {Math.round(zoom * 100)}%
+          </div>
         </div>
       )}
       {mode === 'placing' && status === 'ready' && (

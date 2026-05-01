@@ -45,7 +45,19 @@ export type PinOverlayProps = {
    * status.
    */
   statusOverride?: ReadonlyMap<string, AssetStatus> | null;
+
+  // Long-press reposition (M12) -------------------------------------------
+  /**
+   * Touch-only: 500ms press-and-hold on a pin invokes this with the
+   * asset's id. Parent uses it to enter the deliberate-reposition flow
+   * (same as the desktop "Move pin" button in the drawer). Only fires
+   * when the user's finger has not moved beyond the drag threshold and
+   * no reposition is already in progress.
+   */
+  onLongPress?: (assetId: string) => void;
 };
+
+const LONG_PRESS_MS = 500;
 
 const DRAG_THRESHOLD_PX = 4;
 
@@ -79,12 +91,23 @@ export function PinOverlay({
   pendingRepositionCoords,
   lastAuditByAsset,
   statusOverride,
+  onLongPress,
 }: PinOverlayProps) {
   const layerRef = useRef<HTMLDivElement | null>(null);
   // dragRef is always-current; the React state below is for visualization only.
   const dragRef = useRef<DragState | null>(null);
   // Used to suppress click-after-drag.
   const justDraggedRef = useRef<string | null>(null);
+  // Long-press timer (M12 - touch only). Cleared on movement / pointerup /
+  // when it fires.
+  const longPressTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  function clearLongPress() {
+    if (longPressTimerRef.current !== null) {
+      clearTimeout(longPressTimerRef.current);
+      longPressTimerRef.current = null;
+    }
+  }
   const [preview, setPreview] = useState<{ assetId: string; x: number; y: number } | null>(
     null
   );
@@ -125,6 +148,9 @@ export function PinOverlay({
     const dy = e.clientY - drag.startClientY;
     if (!drag.moved && Math.hypot(dx, dy) > DRAG_THRESHOLD_PX) {
       drag.moved = true;
+      // Movement past threshold cancels any pending long-press; the user
+      // is dragging, not holding still.
+      clearLongPress();
     }
     if (!drag.moved) return;
     const x = clamp01(drag.startX + dx / drag.rectWidth);
@@ -137,6 +163,7 @@ export function PinOverlay({
   function finishDrag(e: PointerEvent, button: HTMLButtonElement | null) {
     const drag = dragRef.current;
     if (!drag || drag.pointerId !== e.pointerId) return;
+    clearLongPress();
     dragRef.current = null;
     if (button && button.hasPointerCapture(e.pointerId)) {
       button.releasePointerCapture(e.pointerId);
@@ -216,7 +243,8 @@ export function PinOverlay({
                 if (!draggable) return;
                 startDrag(asset, isRepositionTarget, e);
                 const button = e.currentTarget;
-                // Native pointer event listeners — `pointermove` fires after
+                const pointerId = e.pointerId;
+                // Native pointer event listeners - `pointermove` fires after
                 // setPointerCapture even when the cursor leaves the button.
                 const onMove = (ev: PointerEvent) => updateDrag(ev);
                 const onEnd = (ev: PointerEvent) => {
@@ -228,6 +256,47 @@ export function PinOverlay({
                 button.addEventListener('pointermove', onMove);
                 button.addEventListener('pointerup', onEnd);
                 button.addEventListener('pointercancel', onEnd);
+
+                // M12: long-press on touch enters the deliberate reposition
+                // flow. Skipped if we're already a reposition target (the
+                // user is mid-drag inside that mode), or if the parent
+                // didn't wire a callback. Movement past threshold cancels
+                // the timer (handled in updateDrag).
+                if (
+                  e.pointerType === 'touch' &&
+                  onLongPress &&
+                  !repositionAssetId &&
+                  !isRepositionTarget
+                ) {
+                  clearLongPress();
+                  longPressTimerRef.current = setTimeout(() => {
+                    longPressTimerRef.current = null;
+                    const drag = dragRef.current;
+                    // Fire only if the user is still holding still on this pin.
+                    if (!drag || drag.pointerId !== pointerId || drag.moved) return;
+                    if (drag.assetId !== asset.id) return;
+                    // Tear down the in-flight quick-drag before flipping
+                    // modes - the next press will start a fresh drag inside
+                    // reposition mode with confirm-toast semantics.
+                    dragRef.current = null;
+                    setPreview(null);
+                    if (button.hasPointerCapture(pointerId)) {
+                      button.releasePointerCapture(pointerId);
+                    }
+                    button.removeEventListener('pointermove', onMove);
+                    button.removeEventListener('pointerup', onEnd);
+                    button.removeEventListener('pointercancel', onEnd);
+                    // Optional haptic (no-op if unsupported).
+                    if (typeof navigator !== 'undefined' && 'vibrate' in navigator) {
+                      try {
+                        navigator.vibrate?.(20);
+                      } catch {
+                        /* iOS Safari throws on vibrate; ignore */
+                      }
+                    }
+                    onLongPress(asset.id);
+                  }, LONG_PRESS_MS);
+                }
               }}
               onClick={() => {
                 if (justDraggedRef.current === asset.id) return;

@@ -464,6 +464,7 @@ export function Floor() {
                       pendingMove ? { x: pendingMove.to.x, y: pendingMove.to.y } : null
                     }
                     lastAuditByAsset={lastAuditByAsset ?? null}
+                    onLongPress={canEdit ? startReposition : undefined}
                   />
                 }
               />

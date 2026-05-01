@@ -22,12 +22,37 @@ export type CreateEventInput = {
   asset_id: string;
   outcome: AuditOutcome;
   notes?: string | null;
+  /**
+   * Optional ISO timestamp to use as the event's created_at. Live writes
+   * omit this and let Postgres stamp now(). The offline drain (M9 ->
+   * fixed in M12) passes the original queue time so events stay
+   * ordered relative to when the user took the action, not when the
+   * write finally landed.
+   */
+  created_at?: string;
 };
 
 export async function createEvent(input: CreateEventInput): Promise<AuditEvent> {
+  // Build the row explicitly so we omit created_at (and let the column
+  // default to now()) unless the caller supplied one.
+  const row: {
+    session_id: string;
+    asset_id: string;
+    outcome: AuditOutcome;
+    notes: string | null;
+    created_at?: string;
+  } = {
+    session_id: input.session_id,
+    asset_id: input.asset_id,
+    outcome: input.outcome,
+    notes: input.notes ?? null,
+  };
+  if (input.created_at) {
+    row.created_at = input.created_at;
+  }
   const { data, error } = await supabase
     .from('audit_events')
-    .insert(input)
+    .insert(row)
     .select('*')
     .single();
   if (error) throw error;

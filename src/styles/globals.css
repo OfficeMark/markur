@@ -27,6 +27,13 @@
     --color-text-faint: 136 135 128;
     --color-surface: 255 255 255;
     --color-surface-soft: 247 245 238;
+
+    /* Pin sizing (M12 - single source of truth so future tweaks are one line).
+       --pin-size-mobile applies < lg breakpoint (touch); --pin-size-desktop applies >= lg.
+       Touch hit area is enlarged by a before:pseudo-element in PinMarker so the
+       tap target stays usable even at smaller visual sizes. */
+    --pin-size-mobile: 22px;
+    --pin-size-desktop: 21px;
   }
 
   /* Minimal dark mode (M10g). Swap ONLY two tokens:
