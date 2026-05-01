@@ -73,6 +73,16 @@ export function NewInvitationDialog({
   const [error, setError] = useState<string | null>(null);
   const [issuedToken, setIssuedToken] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
+  // M13 — auto-email outcome. 'idle' before submit, 'sending' while the
+  // edge function is in-flight, 'sent' or 'error' after. We always show
+  // the copy-link panel as well so the inviter can fall back if email
+  // delivery fails.
+  const [emailState, setEmailState] = useState<
+    | { kind: 'idle' }
+    | { kind: 'sending' }
+    | { kind: 'sent'; to: string }
+    | { kind: 'error'; message: string }
+  >({ kind: 'idle' });
 
   // Reset on close.
   useEffect(() => {
@@ -85,6 +95,7 @@ export function NewInvitationDialog({
     setError(null);
     setIssuedToken(null);
     setCopied(false);
+    setEmailState({ kind: 'idle' });
   }, [open]);
 
   // Pre-pick scope defaults when role changes.
@@ -142,6 +153,24 @@ export function NewInvitationDialog({
         expires_at,
       });
       setIssuedToken(inv.token);
+      setEmailState({ kind: 'sending' });
+      try {
+        const { data, error: fnError } = await supabase.functions.invoke<{
+          ok: boolean;
+          error?: string;
+          to?: string;
+        }>('send-invitation-email', { body: { invitation_id: inv.id } });
+        if (fnError) throw fnError;
+        if (!data || !data.ok) {
+          throw new Error(data?.error ?? 'Email send failed');
+        }
+        setEmailState({ kind: 'sent', to: data.to ?? email.trim() });
+      } catch (e) {
+        setEmailState({
+          kind: 'error',
+          message: e instanceof Error ? e.message : 'Email send failed',
+        });
+      }
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Failed to create invitation.');
     }
@@ -180,6 +209,7 @@ export function NewInvitationDialog({
             {issuedToken ? (
               <IssuedPanel
                 inviteUrl={inviteUrl}
+                emailState={emailState}
                 copied={copied}
                 onCopy={async () => {
                   try {
@@ -341,23 +371,57 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
   );
 }
 
+type EmailState =
+  | { kind: 'idle' }
+  | { kind: 'sending' }
+  | { kind: 'sent'; to: string }
+  | { kind: 'error'; message: string };
+
 function IssuedPanel({
   inviteUrl,
+  emailState,
   copied,
   onCopy,
   onClose,
 }: {
   inviteUrl: string;
+  emailState: EmailState;
   copied: boolean;
   onCopy: () => void;
   onClose: () => void;
 }) {
   return (
     <div className="space-y-3">
-      <div className="flex items-start gap-2 rounded-md border border-success/30 bg-success-bg p-3 text-sm text-success">
-        <Check size={14} aria-hidden className="mt-0.5" />
-        <p>Invitation created. Send the link below to the recipient.</p>
-      </div>
+      {emailState.kind === 'sending' && (
+        <div className="flex items-start gap-2 rounded-md border border-info/30 bg-info-bg p-3 text-sm text-info">
+          <Mail size={14} aria-hidden className="mt-0.5" />
+          <p>Sending the invitation email...</p>
+        </div>
+      )}
+      {emailState.kind === 'sent' && (
+        <div className="flex items-start gap-2 rounded-md border border-success/30 bg-success-bg p-3 text-sm text-success">
+          <Check size={14} aria-hidden className="mt-0.5" />
+          <p>
+            Invitation sent to <strong>{emailState.to}</strong>. The link below
+            is also yours to copy if needed.
+          </p>
+        </div>
+      )}
+      {emailState.kind === 'error' && (
+        <div className="flex items-start gap-2 rounded-md border border-warning/30 bg-warning-bg p-3 text-sm text-warning">
+          <Mail size={14} aria-hidden className="mt-0.5" />
+          <p>
+            Couldn't send the email automatically ({emailState.message}). Copy
+            the link below and send it manually.
+          </p>
+        </div>
+      )}
+      {emailState.kind === 'idle' && (
+        <div className="flex items-start gap-2 rounded-md border border-success/30 bg-success-bg p-3 text-sm text-success">
+          <Check size={14} aria-hidden className="mt-0.5" />
+          <p>Invitation created. Send the link below to the recipient.</p>
+        </div>
+      )}
       <Field label="Invitation link">
         <div className="flex items-center gap-1.5 rounded-md border border-black/10 bg-surface p-2 dark:border-white/10">
           <code className="min-w-0 flex-1 truncate font-mono text-xs">{inviteUrl}</code>
