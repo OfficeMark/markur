@@ -482,6 +482,50 @@ export type Database = {
           },
         ]
       }
+      org_asset_type_overrides: {
+        Row: {
+          color_override: string | null
+          created_at: string
+          global_key: string
+          hidden: boolean
+          id: string
+          label_override: string | null
+          org_id: string
+          sort_order_override: number | null
+          updated_at: string
+        }
+        Insert: {
+          color_override?: string | null
+          created_at?: string
+          global_key: string
+          hidden?: boolean
+          id?: string
+          label_override?: string | null
+          org_id: string
+          sort_order_override?: number | null
+          updated_at?: string
+        }
+        Update: {
+          color_override?: string | null
+          created_at?: string
+          global_key?: string
+          hidden?: boolean
+          id?: string
+          label_override?: string | null
+          org_id?: string
+          sort_order_override?: number | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "org_asset_type_overrides_org_id_fkey"
+            columns: ["org_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       organizations: {
         Row: {
           created_at: string
@@ -666,3 +710,4 @@ export type AccessGrant = Tbl['access_grants']['Row'];
 export type AuditLogEntry = Tbl['audit_log']['Row'];
 export type PendingInvitation = Tbl['pending_invitations']['Row'];
 export type OrgAssetType = Tbl['org_asset_types']['Row'];
+export type OrgAssetTypeOverrideRow = Tbl['org_asset_type_overrides']['Row'];
