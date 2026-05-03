@@ -860,7 +860,7 @@ function ActivitySection({ items }: { items: AuditLogEntry[] }) {
 function PermissionsFooter() {
   return (
     <p className="border-t border-black/10 pt-3 text-[11px] text-text-faint dark:border-white/10">
-      Reposition is admin-only. Tenant reps can flag.
+      Reposition is admin-only. Facilities can flag.
     </p>
   );
 }

@@ -184,9 +184,9 @@ const SECTIONS: Section[] = [
           "Walks specific floors. Can audit and flag issues but cannot edit pin metadata or place new pins.",
       },
       {
-        label: 'Facilities (tenant rep)',
+        label: 'Facilities',
         detail:
-          "Sees one floor and one tenant's assets. Lands directly on their floor on sign-in. Can flag issues; cannot edit.",
+          "Day-to-day building staff. Sees their assigned floor or area on sign-in. Can flag issues; cannot edit pin metadata.",
       },
     ],
   },

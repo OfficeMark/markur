@@ -22,8 +22,8 @@ type Role = 'super_admin' | 'building_admin' | 'auditor' | 'tenant_rep';
 const ROLE_OPTIONS: Array<{ value: Role; label: string; help: string }> = [
   {
     value: 'building_admin',
-    label: 'Building admin',
-    help: 'Full edit on this building. Can invite others.',
+    label: 'Manager',
+    help: 'Full edit on this building. Can invite Facilities and Auditors.',
   },
   {
     value: 'auditor',
@@ -33,7 +33,7 @@ const ROLE_OPTIONS: Array<{ value: Role; label: string; help: string }> = [
   {
     value: 'tenant_rep',
     label: 'Facilities',
-    help: 'Sees one floor and one tenant. Can flag issues.',
+    help: 'Day-to-day building staff. Sees their assigned floor or area; can flag issues.',
   },
 ];
 

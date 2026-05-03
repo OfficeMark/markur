@@ -20,6 +20,8 @@ import { usePermissions } from '@/lib/permissions-context';
 import { updateMyProfile } from '@/lib/queries/profile';
 import { useTheme } from '@/components/waymarks/theme-context';
 import { AssetTypesCard } from '@/components/waymarks/AssetTypesCard';
+import { MembersCard } from '@/components/waymarks/MembersCard';
+import { PendingInvitationsCard } from '@/components/waymarks/PendingInvitationsCard';
 
 export function Settings() {
   const { user, profile, signOut, refreshProfile } = useAuth();
@@ -49,7 +51,7 @@ export function Settings() {
   const roleLabel = isSuper
     ? 'Super admin'
     : isAdmin
-      ? 'Building admin'
+      ? 'Manager'
       : isAuditor
         ? 'Auditor'
         : isFacility
@@ -162,6 +164,10 @@ export function Settings() {
         <ThemeSection />
 
         <AssetTypesCard />
+
+        <MembersCard />
+
+        <PendingInvitationsCard />
 
         <section className="mt-5 rounded-lg border border-black/10 bg-surface p-5">
           <p className="text-[11px] font-medium uppercase tracking-[0.18em] text-text-faint">
