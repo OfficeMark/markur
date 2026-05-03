@@ -22,6 +22,7 @@ The function will return `500 RESEND_API_KEY not configured` until you set the s
 You can optionally also set:
 - `INVITE_FROM` — once `mail.markur.ca` is verified in Resend, set this to e.g. `Markur <invitations@mail.markur.ca>`. Until then leave it unset; the function defaults to `Markur <onboarding@resend.dev>`.
 - `APP_URL` — once DNS for markur.ca is live, set this to `https://markur.ca`. Otherwise the function falls back to the request's Origin header (which works fine for the Netlify deploy too).
+- `REPLY_TO` — defaults to `randy@markur.ca` (your Hostinger inbox). Override only if you set up a shared support inbox later.
 
 ### 2. Resend: verify a sending domain
 

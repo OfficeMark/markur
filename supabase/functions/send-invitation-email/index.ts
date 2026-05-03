@@ -19,6 +19,11 @@
 //   - APP_URL            — optional, e.g. "https://markur.ca". Default: derived
 //                          from request Origin header. Needed for the link in
 //                          the email to point to the right environment.
+//   - REPLY_TO           — optional, e.g. "randy@markur.ca". Default:
+//                          "randy@markur.ca". Sets Reply-To on the outgoing
+//                          email so when recipients hit Reply, the message
+//                          lands in Randy's real inbox instead of Resend's
+//                          sandbox or the unverified app domain.
 
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.45.4';
 
@@ -159,6 +164,10 @@ Deno.serve(async (req) => {
   const fromAddress =
     Deno.env.get('INVITE_FROM') ?? 'Markur <onboarding@resend.dev>';
 
+  // Reply-To routes recipient replies to a monitored inbox. Default to
+  // Randy's Hostinger address so replies land somewhere a human reads.
+  const replyToAddress = Deno.env.get('REPLY_TO') ?? 'randy@markur.ca';
+
   const roleLabel = ROLE_LABEL[inv.role] ?? inv.role;
   const subject = buildingName
     ? `You're invited to ${buildingName} on Markur`
@@ -201,6 +210,7 @@ Deno.serve(async (req) => {
   const resendBody = {
     from: fromAddress,
     to: [inv.email],
+    reply_to: replyToAddress,
     subject,
     html,
     text,
