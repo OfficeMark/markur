@@ -1,6 +1,7 @@
 import { Link } from 'react-router-dom';
 import type { ReactNode } from 'react';
 import { HelpCircle } from 'lucide-react';
+import { EncryptedChip } from './EncryptedChip';
 import { LiveSyncChip } from './LiveSyncChip';
 import { UserMenu } from './UserMenu';
 import { BuildingNav, BuildingNavSheet } from './BuildingNav';
@@ -42,6 +43,7 @@ export function AppShell({ children, withSidebar = true }: AppShellProps) {
             </Link>
           </div>
           <div className="flex items-center gap-2 sm:gap-3">
+            <EncryptedChip />
             <LiveSyncChip />
             <Link
               to="/help"

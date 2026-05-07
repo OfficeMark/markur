@@ -17,11 +17,13 @@ import {
   Lock,
   LockOpen,
   Move,
+  Eye,
 } from 'lucide-react';
 import { Chip } from '@/components/ui/Chip';
 import { MetricCard } from '@/components/ui/MetricCard';
 import { Button } from '@/components/ui/Button';
 import { useAsset, useUpdateAsset } from '@/hooks/useAssets';
+import { useBuilding } from '@/hooks/useBuildings';
 import { useActivity } from '@/hooks/useActivity';
 import {
   useAddAssetPhoto,
@@ -80,6 +82,7 @@ export function AssetDrawer({
   const canEdit = useCan('edit', { type: 'building', id: buildingId });
   const canReposition = useCan('reposition', { type: 'building', id: buildingId });
   const canDelete = useCan('delete', { type: 'building', id: buildingId });
+  const { data: building } = useBuilding(buildingId);
   const update = useUpdateAsset(floorId);
   const [editing, setEditing] = useState(false);
 
@@ -172,6 +175,10 @@ export function AssetDrawer({
                     />
                   </>
                 )}
+                <VisualizeRow
+                  buildingName={building?.name ?? 'Building'}
+                  assetName={asset.name}
+                />
                 <DetailsSection asset={asset} />
                 <StatusRow asset={asset} flagCount={asset.status === 'flagged' ? 1 : 0} />
                 <AttributesSection asset={asset} />
@@ -284,6 +291,27 @@ function QuickActions({
           );
         })}
       </div>
+    </div>
+  );
+}
+
+function VisualizeRow({ buildingName, assetName }: { buildingName: string; assetName: string }) {
+  const url = `https://viewmark-app.netlify.app/?building=${encodeURIComponent(buildingName)}&asset=${encodeURIComponent(assetName)}`;
+  return (
+    <div className="flex items-center justify-between gap-3 rounded-md border border-waymarks-gold/30 bg-waymarks-gold-soft px-3 py-2 text-xs dark:bg-white/5">
+      <div className="min-w-0">
+        <p className="font-semibold text-waymarks-ink dark:text-white">Visualize a sign here</p>
+        <p className="text-text-muted">Open ViewMark to mock up signage on this wall using a wall photo.</p>
+      </div>
+      <a
+        href={url}
+        target="_blank"
+        rel="noopener noreferrer"
+        className="inline-flex h-8 shrink-0 items-center gap-1.5 rounded-md bg-waymarks-gold px-3 text-xs font-medium text-white hover:bg-waymarks-gold-deep"
+      >
+        <Eye size={12} aria-hidden />
+        Visualize
+      </a>
     </div>
   );
 }

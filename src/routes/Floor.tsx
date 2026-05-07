@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
-import { ArrowLeft, Check, ClipboardList, Download, ImageOff, LayoutGrid, Map as MapIcon, Plus, RefreshCw, Trash2 } from 'lucide-react';
+import { ArrowLeft, Check, ChevronRight, ClipboardList, Download, Eye, ImageOff, LayoutGrid, Map as MapIcon, Plus, RefreshCw, Trash2 } from 'lucide-react';
 import { AppShell } from '@/components/waymarks/AppShell';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { Button } from '@/components/ui/Button';
@@ -276,113 +276,141 @@ export function Floor() {
   const showAuditCta =
     floor.plan_url && canAudit && assets.length > 0;
 
+  // Visualize-in-ViewMark URL. The deeper integration (auth bridge,
+  // floor-context handoff) lands in a later milestone; for now this
+  // is a stub that opens the visualizer with the building name as a
+  // hint via query string. Used both in the floor toolbar and inside
+  // the AssetDrawer.
+  const viewmarkUrl = building?.name
+    ? `https://viewmark-app.netlify.app/?building=${encodeURIComponent(building.name)}`
+    : 'https://viewmark-app.netlify.app/';
+
   return (
     <AppShell>
-      <div className="mx-auto w-full max-w-5xl px-4 py-8 sm:px-6 sm:py-10">
-        <Link
-          to={`/buildings/${floor.building_id}`}
-          className="mb-4 inline-flex items-center gap-1 text-xs text-text-muted hover:text-text"
-        >
-          <ArrowLeft size={12} aria-hidden /> {building?.name ?? 'Building'}
-        </Link>
-        <header className="mb-3">
-          <p className="text-[11px] font-medium uppercase tracking-[0.22em] text-waymarks-gold">
-            {building ? `${building.name} · floor` : 'Floor'}
-          </p>
-          <h1 className="mt-0.5 font-semibold text-3xl leading-tight text-text sm:text-4xl">
-            {floor.label}
-          </h1>
-        </header>
-
-        {/* Dense toolbar — view toggle + filter on the left, primary actions on the right */}
-        <div className="mb-3 flex flex-wrap items-center gap-2 rounded-lg border border-black/10 bg-surface p-2 shadow-sm dark:border-white/10">
-          {/* Map / Grid toggle */}
-          {floor.plan_url && (
-            <div role="group" aria-label="View mode" className="inline-flex rounded-md border border-black/15 bg-surface text-xs font-medium dark:border-white/15">
-              <button
-                type="button"
-                onClick={() => setViewMode('map')}
-                aria-pressed={viewMode === 'map'}
-                className={
-                  'inline-flex h-9 items-center gap-1.5 rounded-l-md px-3 transition-colors ' +
-                  (viewMode === 'map'
-                    ? 'bg-waymarks-ink text-white'
-                    : 'text-text-muted hover:bg-black/5 dark:hover:bg-white/5')
-                }
-              >
-                <MapIcon size={12} aria-hidden /> Map
-              </button>
-              <button
-                type="button"
-                onClick={() => setViewMode('grid')}
-                aria-pressed={viewMode === 'grid'}
-                className={
-                  'inline-flex h-9 items-center gap-1.5 rounded-r-md border-l border-black/10 px-3 transition-colors dark:border-white/10 ' +
-                  (viewMode === 'grid'
-                    ? 'bg-waymarks-ink text-white'
-                    : 'text-text-muted hover:bg-black/5 dark:hover:bg-white/5')
-                }
-              >
-                <LayoutGrid size={12} aria-hidden /> Grid
-              </button>
-            </div>
-          )}
-
-          {/* Filter by type */}
-          {floor.plan_url && assets.length > 0 && (
-            <FilterByTypePopover selectedTypes={filterTypes} onChange={setFilterTypes} />
-          )}
-
-          <div className="ml-auto flex flex-wrap items-center gap-2">
-            {showAuditCta && (
-              <Button
-                size="sm"
-                variant="gold"
-                iconLeft={<ClipboardList size={14} aria-hidden />}
-                loading={startAudit.isPending}
-                onClick={() => void startOrResumeAudit()}
-              >
-                {activeSession ? 'Resume audit' : 'Audit floor'}
-              </Button>
-            )}
-            {floor.plan_url && canCreate && (
-              <Button
-                size="sm"
-                variant={placing ? 'gold' : 'secondary'}
-                iconLeft={<Plus size={14} aria-hidden />}
-                onClick={() => setPlacing((p) => !p)}
-              >
-                {placing ? 'Cancel placing' : 'Add asset'}
-              </Button>
-            )}
+      <div className="mx-auto w-full max-w-5xl px-4 py-4 sm:px-6 sm:py-5">
+        {/* Row 1 - breadcrumb left, Map/Grid + Filter right.
+            One row instead of three (was: back link + eyebrow + giant
+            H1 + boxed toolbar). The big floor label is duplicative of
+            the left sidebar highlight. */}
+        <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
+          <nav aria-label="Breadcrumb" className="flex items-center gap-1.5 text-xs text-text-muted">
+            <Link
+              to="/"
+              className="inline-flex items-center gap-1 rounded px-1 py-0.5 hover:bg-black/5 hover:text-text dark:hover:bg-white/5"
+            >
+              Home
+            </Link>
+            <ChevronRight size={12} aria-hidden className="text-text-faint" />
+            <Link
+              to={`/buildings/${floor.building_id}`}
+              className="rounded px-1 py-0.5 hover:bg-black/5 hover:text-text dark:hover:bg-white/5"
+            >
+              {building?.name ?? 'Building'}
+            </Link>
+            <ChevronRight size={12} aria-hidden className="text-text-faint" />
+            <span className="font-semibold text-text">Floor {floor.label}</span>
+          </nav>
+          <div className="flex items-center gap-1.5">
+            {/* Map / Grid toggle - now compact (24px tall) */}
             {floor.plan_url && (
-              <Button
-                size="sm"
-                variant="secondary"
-                iconLeft={
-                  cacheState === 'cached' ? (
-                    <Check size={14} aria-hidden />
-                  ) : (
-                    <Download size={14} aria-hidden />
-                  )
-                }
-                loading={cacheState === 'caching'}
-                onClick={() => void takeOffline()}
-              >
-                {cacheState === 'cached' ? 'Cached' : 'Take offline'}
-              </Button>
+              <div role="group" aria-label="View mode" className="inline-flex h-7 rounded-md border border-black/15 text-[11px] font-medium dark:border-white/15">
+                <button
+                  type="button"
+                  onClick={() => setViewMode('map')}
+                  aria-pressed={viewMode === 'map'}
+                  className={
+                    'inline-flex h-full items-center gap-1 rounded-l-md px-2.5 transition-colors ' +
+                    (viewMode === 'map'
+                      ? 'bg-waymarks-ink text-white'
+                      : 'text-text-muted hover:bg-black/5 dark:hover:bg-white/5')
+                  }
+                >
+                  <MapIcon size={11} aria-hidden /> Map
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setViewMode('grid')}
+                  aria-pressed={viewMode === 'grid'}
+                  className={
+                    'inline-flex h-full items-center gap-1 rounded-r-md border-l border-black/10 px-2.5 transition-colors dark:border-white/10 ' +
+                    (viewMode === 'grid'
+                      ? 'bg-waymarks-ink text-white'
+                      : 'text-text-muted hover:bg-black/5 dark:hover:bg-white/5')
+                  }
+                >
+                  <LayoutGrid size={11} aria-hidden /> Grid
+                </button>
+              </div>
             )}
-            {floor.plan_url && canUploadPlan && (
-              <Button
-                size="sm"
-                variant="secondary"
-                iconLeft={<RefreshCw size={14} aria-hidden />}
-                onClick={() => setUploadOpen(true)}
-              >
-                Replace plan
-              </Button>
+            {/* Filter by type */}
+            {floor.plan_url && assets.length > 0 && (
+              <FilterByTypePopover selectedTypes={filterTypes} onChange={setFilterTypes} />
             )}
           </div>
+        </div>
+
+        {/* Row 2 - action buttons right-justified, all 28px tall.
+            No surrounding card; the actions sit naturally on the page. */}
+        <div className="mb-3 flex flex-wrap items-center justify-end gap-1.5">
+          {showAuditCta && (
+            <button
+              type="button"
+              onClick={() => void startOrResumeAudit()}
+              disabled={startAudit.isPending}
+              className="inline-flex h-7 items-center gap-1 rounded-md bg-waymarks-gold px-2.5 text-[11px] font-medium text-white hover:bg-waymarks-gold-deep disabled:opacity-60"
+            >
+              <ClipboardList size={11} aria-hidden />
+              {activeSession ? 'Resume audit' : 'Audit'}
+            </button>
+          )}
+          {floor.plan_url && canCreate && (
+            <button
+              type="button"
+              onClick={() => setPlacing((p) => !p)}
+              className={
+                'inline-flex h-7 items-center gap-1 rounded-md px-2.5 text-[11px] font-medium ' +
+                (placing
+                  ? 'bg-waymarks-gold text-white hover:bg-waymarks-gold-deep'
+                  : 'border border-black/15 bg-surface text-text hover:bg-black/5 dark:border-white/15 dark:hover:bg-white/5')
+              }
+            >
+              <Plus size={11} aria-hidden />
+              {placing ? 'Cancel' : 'Add asset'}
+            </button>
+          )}
+          {floor.plan_url && (
+            <button
+              type="button"
+              onClick={() => void takeOffline()}
+              disabled={cacheState === 'caching'}
+              className="inline-flex h-7 items-center gap-1 rounded-md border border-black/15 bg-surface px-2.5 text-[11px] font-medium text-text hover:bg-black/5 disabled:opacity-60 dark:border-white/15 dark:hover:bg-white/5"
+            >
+              {cacheState === 'cached' ? <Check size={11} aria-hidden /> : <Download size={11} aria-hidden />}
+              {cacheState === 'cached' ? 'Cached' : 'Offline'}
+            </button>
+          )}
+          {floor.plan_url && canUploadPlan && (
+            <button
+              type="button"
+              onClick={() => setUploadOpen(true)}
+              className="inline-flex h-7 items-center gap-1 rounded-md border border-black/15 bg-surface px-2.5 text-[11px] font-medium text-text hover:bg-black/5 dark:border-white/15 dark:hover:bg-white/5"
+            >
+              <RefreshCw size={11} aria-hidden />
+              Replace
+            </button>
+          )}
+          {/* M14c - Visualize in ViewMark. Gold outline so it reads as a
+              brand-aligned secondary, distinct from the gold-filled
+              Audit primary. */}
+          <button
+            type="button"
+            onClick={() => window.open(viewmarkUrl, '_blank', 'noopener,noreferrer')}
+            title="Open ViewMark to mock up signage on a wall photo"
+            className="inline-flex h-7 items-center gap-1 rounded-md border border-waymarks-gold bg-surface px-2.5 text-[11px] font-medium text-waymarks-gold hover:bg-waymarks-gold-soft"
+          >
+            <Eye size={11} aria-hidden />
+            Visualize
+          </button>
         </div>
 
         {assets.length > 0 && (
