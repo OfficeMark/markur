@@ -25,7 +25,6 @@ import {
 import { useAuth } from '@/lib/auth-context';
 import { useCan } from '@/lib/permissions-context';
 import { planKindForPath, signedUrlForPlan } from '@/lib/upload';
-import { computeStatus } from '@/lib/asset-status';
 import {
   putAssetsForFloor,
   putBuilding,
@@ -62,8 +61,6 @@ export function Floor() {
   const [newAssetOpen, setNewAssetOpen] = useState(false);
   const [selectedAssetId, setSelectedAssetId] = useState<string | null>(null);
 
-  // M8 — audit-due filter (deferred from M6).
-  const [auditDueOnly, setAuditDueOnly] = useState(false);
 
   // M10c — view mode (Map / Grid) + filter-by-type set
   const [viewMode, setViewMode] = useState<'map' | 'grid'>('map');
@@ -224,30 +221,7 @@ export function Floor() {
 
   const planKind = useMemo(() => planKindForPath(floor?.plan_url), [floor?.plan_url]);
 
-  // Per-asset status (cycle-aware via lastAuditByAsset). Used by the
-  // Audit-due chip count and the optional filter.
-  const statusCounts = useMemo(() => {
-    let good = 0;
-    let attention = 0;
-    let flagged = 0;
-    const auditDue: Asset[] = [];
-    for (const a of assets) {
-      const status = computeStatus({
-        asset: a,
-        lastAuditAt: lastAuditByAsset?.get(a.id) ?? null,
-        openFlagCount: a.status === 'flagged' ? 1 : 0,
-      });
-      if (status === 'good') good++;
-      else if (status === 'attention') {
-        attention++;
-        auditDue.push(a);
-      } else if (status === 'flagged') flagged++;
-    }
-    return { good, attention, flagged, auditDue };
-  }, [assets, lastAuditByAsset]);
-
-  const auditDueAssets = statusCounts.auditDue;
-  const baseSet = auditDueOnly ? auditDueAssets : assets;
+  const baseSet = assets;
   const visibleAssets =
     filterTypes.size === 0 ? baseSet : baseSet.filter((a) => filterTypes.has(a.type));
 
@@ -412,17 +386,6 @@ export function Floor() {
             Visualize
           </button>
         </div>
-
-        {assets.length > 0 && (
-          <FloorStatsBar
-            total={assets.length}
-            good={statusCounts.good}
-            attention={statusCounts.attention}
-            flagged={statusCounts.flagged}
-            auditDueOnly={auditDueOnly}
-            onToggleAuditDue={() => setAuditDueOnly((v) => !v)}
-          />
-        )}
 
         {cacheError && (
           <div className="mb-4 rounded-md border border-danger/30 bg-danger-bg p-3 text-xs text-danger">
@@ -590,37 +553,6 @@ export function Floor() {
 }
 
 
-
-function FloorStatsBar({
-  total,
-  good,
-  attention,
-  flagged,
-  auditDueOnly,
-  onToggleAuditDue,
-}: {
-  total: number;
-  good: number;
-  attention: number;
-  flagged: number;
-  auditDueOnly: boolean;
-  onToggleAuditDue: () => void;
-}) {
-  return (
-    <div className="mb-3 flex flex-wrap items-center justify-end gap-x-5 gap-y-2 text-sm">
-      <Stat label="Total" value={total} accent="ink" />
-      <Stat label="Good" value={good} accent="success" />
-      <Stat
-        label="Audit due"
-        value={attention}
-        accent="warning"
-        active={auditDueOnly}
-        onClick={attention > 0 ? onToggleAuditDue : undefined}
-      />
-      <Stat label="Flagged" value={flagged} accent="danger" />
-    </div>
-  );
-}
 
 function Stat({
   label,

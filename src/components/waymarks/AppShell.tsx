@@ -47,8 +47,9 @@ export function AppShell({ children, withSidebar = true }: AppShellProps) {
             <LiveSyncChip />
             <Link
               to="/help"
-              aria-label="Help and tutorial"
-              className="inline-flex h-9 w-9 items-center justify-center rounded-md text-white/80 hover:bg-white/10 hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-waymarks-gold"
+              aria-label="How to use Markur"
+              title="How to"
+              className="inline-flex h-9 w-9 items-center justify-center rounded-md text-white/80 transition-colors hover:bg-waymarks-gold hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-waymarks-gold"
             >
               <HelpCircle size={18} aria-hidden />
             </Link>
@@ -77,10 +78,4 @@ export function AppShell({ children, withSidebar = true }: AppShellProps) {
             href="mailto:support@officemark.ca"
             className="ml-auto hover:underline"
           >
-            support@officemark.ca
-          </a>
-        </div>
-      </footer>
-    </div>
-  );
-}
+            support
