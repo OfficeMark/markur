@@ -225,7 +225,19 @@ export function Floor() {
   const visibleAssets =
     filterTypes.size === 0 ? baseSet : baseSet.filter((a) => filterTypes.has(a.type));
 
-  if (fLoading) return <Skeleton />;
+  if (fLoading) {
+    return (
+      <AppShell>
+        <div className="mx-auto flex w-full max-w-5xl items-center justify-center px-4 py-16">
+          <div
+            className="h-6 w-6 animate-spin rounded-full border-2 border-waymarks-gold border-t-transparent"
+            aria-hidden
+          />
+          <span className="sr-only">Loading floor…</span>
+        </div>
+      </AppShell>
+    );
+  }
 
   if (fError || !floor) {
     return (
