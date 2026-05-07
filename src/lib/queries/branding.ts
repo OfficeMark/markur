@@ -106,7 +106,8 @@ function inferExt(file: File): string {
   if (type === 'image/webp') return 'webp';
   // Fallback to filename extension if MIME is generic
   const m = file.name.match(/\.(png|jpe?g|svg|webp)$/i);
-  if (m) return m[1].toLowerCase().replace('jpeg', 'jpg');
+  const captured: string | undefined = m?.[1];
+  if (captured) return captured.toLowerCase().replace('jpeg', 'jpg');
   return 'png';
 }
 
