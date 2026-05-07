@@ -22,8 +22,8 @@ export function EncryptedChip({ className, onClick }: EncryptedChipProps) {
     <button
       type="button"
       onClick={onClick}
-      title="Your data is encrypted in transit (TLS) and at rest in the database."
-      aria-label="Data is encrypted in transit and at rest."
+      title="Your data is encrypted in transit (TLS) and at rest. Click for the full security posture."
+      aria-label="Data is encrypted. Open security details."
       className={cn(
         'inline-flex h-7 items-center gap-1.5 rounded-full border px-2.5 text-[11px] font-semibold uppercase tracking-[0.14em] transition-colors',
         'border-waymarks-gold/50 bg-waymarks-gold/15 text-waymarks-gold hover:bg-waymarks-gold/25',

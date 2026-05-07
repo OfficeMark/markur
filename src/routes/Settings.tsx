@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom';
 import {
   AlertCircle,
   ArrowLeft,
+  ArrowRight,
   Check,
   LogOut,
   Mail,
@@ -19,9 +20,8 @@ import { useAuth } from '@/lib/auth-context';
 import { usePermissions } from '@/lib/permissions-context';
 import { updateMyProfile } from '@/lib/queries/profile';
 import { useTheme } from '@/components/waymarks/theme-context';
-import { AssetTypesCard } from '@/components/waymarks/AssetTypesCard';
-import { MembersCard } from '@/components/waymarks/MembersCard';
-import { PendingInvitationsCard } from '@/components/waymarks/PendingInvitationsCard';
+// M15: AssetTypes / Members / PendingInvitations have moved to /admin.
+// /settings is now personal-only (profile, theme, account).
 
 export function Settings() {
   const { user, profile, signOut, refreshProfile } = useAuth();
@@ -163,11 +163,7 @@ export function Settings() {
 
         <ThemeSection />
 
-        <AssetTypesCard />
-
-        <MembersCard />
-
-        <PendingInvitationsCard />
+        <AdminLink isAdmin={isSuper || isAdmin} />
 
         <section className="mt-5 rounded-lg border border-black/10 bg-surface p-5">
           <p className="text-[11px] font-medium uppercase tracking-[0.18em] text-text-faint">
@@ -285,5 +281,29 @@ function ThemeSection() {
         </button>
       </div>
     </section>
+  );
+}
+
+function AdminLink({ isAdmin }: { isAdmin: boolean }) {
+  if (!isAdmin) return null;
+  return (
+    <Link
+      to="/admin"
+      className="mt-5 flex items-center justify-between gap-3 rounded-lg border border-waymarks-gold/40 bg-waymarks-gold-soft p-4 transition-colors hover:bg-waymarks-gold/15"
+    >
+      <div>
+        <p className="flex items-center gap-1.5 text-[11px] font-medium uppercase tracking-[0.18em] text-waymarks-gold">
+          <ShieldCheck size={12} aria-hidden /> Admin
+        </p>
+        <p className="mt-1 font-semibold text-base text-waymarks-ink dark:text-white">
+          Team, asset types, security, and branding
+        </p>
+        <p className="mt-0.5 text-xs text-text-muted">
+          Manage who has access, customize asset types, review your security
+          posture, and brand the app for your org.
+        </p>
+      </div>
+      <ArrowRight size={18} aria-hidden className="shrink-0 text-waymarks-gold" />
+    </Link>
   );
 }

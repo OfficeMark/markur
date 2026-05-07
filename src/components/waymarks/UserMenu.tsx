@@ -1,8 +1,9 @@
 import { useNavigate } from 'react-router-dom';
 import * as DropdownMenu from '@radix-ui/react-dropdown-menu';
-import { ChevronDown, LogOut, Settings as SettingsIcon } from 'lucide-react';
+import { ChevronDown, LogOut, Settings as SettingsIcon, ShieldCheck } from 'lucide-react';
 import { Avatar } from '@/components/ui/Avatar';
 import { useAuth } from '@/lib/auth-context';
+import { usePermissions } from '@/lib/permissions-context';
 
 /**
  * UserMenu (M10e+). Trimmed down compared to earlier builds:
@@ -15,9 +16,19 @@ import { useAuth } from '@/lib/auth-context';
  */
 export function UserMenu() {
   const { user, profile, signOut } = useAuth();
+  const { grants } = usePermissions();
   const navigate = useNavigate();
 
   if (!user) return null;
+
+  // M15 - Admin-gated menu item. Super admin or building_admin sees the
+  // Admin entry; everyone else just sees Account settings + Sign out.
+  const now = Date.now();
+  const isAdmin = grants.some(
+    (g) =>
+      (g.role === 'super_admin' || g.role === 'building_admin') &&
+      (!g.expires_at || new Date(g.expires_at).getTime() > now)
+  );
   const name = profile?.display_name ?? user.email ?? 'You';
 
   return (
@@ -47,6 +58,18 @@ export function UserMenu() {
             </div>
           </div>
           <DropdownMenu.Separator className="my-1 h-px bg-black/10" />
+          {isAdmin && (
+            <DropdownMenu.Item
+              onSelect={(e) => {
+                e.preventDefault();
+                navigate('/admin');
+              }}
+              className="flex cursor-pointer items-center gap-2 rounded-md px-2 py-2 outline-none data-[highlighted]:bg-black/5"
+            >
+              <ShieldCheck size={14} aria-hidden className="text-waymarks-gold" />
+              <span>Admin</span>
+            </DropdownMenu.Item>
+          )}
           <DropdownMenu.Item
             onSelect={(e) => {
               e.preventDefault();

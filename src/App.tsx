@@ -1,5 +1,5 @@
 import { lazy, Suspense } from 'react';
-import { Route, Routes } from 'react-router-dom';
+import { Navigate, Route, Routes } from 'react-router-dom';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { Loader2 } from 'lucide-react';
 import { ThemeProvider } from '@/components/waymarks/ThemeProvider';
@@ -27,6 +27,16 @@ const Help = lazy(() => import('@/routes/Help').then((m) => ({ default: m.Help }
 const Settings = lazy(() => import('@/routes/Settings').then((m) => ({ default: m.Settings })));
 const Privacy = lazy(() => import('@/routes/Privacy').then((m) => ({ default: m.Privacy })));
 const Terms = lazy(() => import('@/routes/Terms').then((m) => ({ default: m.Terms })));
+
+// M15 - Admin section (asset types, members, invitations, security, branding).
+// Each pane is its own lazy chunk so the admin tooling never lands in the
+// initial bundle for users who never visit /admin.
+const Admin = lazy(() => import('@/routes/Admin').then((m) => ({ default: m.Admin })));
+const AdminAssetTypesPane = lazy(() => import('@/components/waymarks/admin/AdminAssetTypesPane').then((m) => ({ default: m.AdminAssetTypesPane })));
+const AdminMembersPane = lazy(() => import('@/components/waymarks/admin/AdminMembersPane').then((m) => ({ default: m.AdminMembersPane })));
+const AdminInvitationsPane = lazy(() => import('@/components/waymarks/admin/AdminInvitationsPane').then((m) => ({ default: m.AdminInvitationsPane })));
+const AdminSecurityPane = lazy(() => import('@/components/waymarks/admin/AdminSecurityPane').then((m) => ({ default: m.AdminSecurityPane })));
+const AdminBrandingPane = lazy(() => import('@/components/waymarks/admin/AdminBrandingPane').then((m) => ({ default: m.AdminBrandingPane })));
 
 function RouteFallback() {
   return (
@@ -108,6 +118,21 @@ export default function App() {
                       </ProtectedRoute>
                     }
                   />
+                  <Route
+                    path="/admin"
+                    element={
+                      <ProtectedRoute>
+                        <Admin />
+                      </ProtectedRoute>
+                    }
+                  >
+                    <Route index element={<Navigate to="asset-types" replace />} />
+                    <Route path="asset-types" element={<AdminAssetTypesPane />} />
+                    <Route path="members" element={<AdminMembersPane />} />
+                    <Route path="invitations" element={<AdminInvitationsPane />} />
+                    <Route path="security" element={<AdminSecurityPane />} />
+                    <Route path="branding" element={<AdminBrandingPane />} />
+                  </Route>
                   <Route path="/accept/:token" element={<AcceptInvitation />} />
                   <Route path="/legal/privacy" element={<Privacy />} />
                   <Route path="/legal/terms" element={<Terms />} />

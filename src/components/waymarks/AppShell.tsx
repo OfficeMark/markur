@@ -1,4 +1,4 @@
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import type { ReactNode } from 'react';
 import { HelpCircle } from 'lucide-react';
 import { EncryptedChip } from './EncryptedChip';
@@ -16,6 +16,7 @@ type AppShellProps = {
 };
 
 export function AppShell({ children, withSidebar = true }: AppShellProps) {
+  const navigate = useNavigate();
   return (
     <div className="flex min-h-screen flex-col bg-waymarks-cream text-text">
       <a
@@ -43,7 +44,7 @@ export function AppShell({ children, withSidebar = true }: AppShellProps) {
             </Link>
           </div>
           <div className="flex items-center gap-2 sm:gap-3">
-            <EncryptedChip />
+            <EncryptedChip onClick={() => navigate('/admin/security')} />
             <LiveSyncChip />
             <Link
               to="/help"
