@@ -78,4 +78,10 @@ export function AppShell({ children, withSidebar = true }: AppShellProps) {
             href="mailto:support@officemark.ca"
             className="ml-auto hover:underline"
           >
-            support
+            support@officemark.ca
+          </a>
+        </div>
+      </footer>
+    </div>
+  );
+}
