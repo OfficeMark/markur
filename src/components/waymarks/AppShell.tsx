@@ -5,6 +5,7 @@ import { EncryptedChip } from './EncryptedChip';
 import { LiveSyncChip } from './LiveSyncChip';
 import { UserMenu } from './UserMenu';
 import { BuildingNav, BuildingNavSheet } from './BuildingNav';
+import { useOrgBranding } from '@/hooks/useBranding';
 
 type AppShellProps = {
   children: ReactNode;
@@ -42,6 +43,7 @@ export function AppShell({ children, withSidebar = true }: AppShellProps) {
                 height={521}
               />
             </Link>
+            <OrgCoBrand />
           </div>
           <div className="flex items-center gap-2 sm:gap-3">
             <EncryptedChip onClick={() => navigate('/admin/security')} />
@@ -83,6 +85,31 @@ export function AppShell({ children, withSidebar = true }: AppShellProps) {
           </a>
         </div>
       </footer>
+    </div>
+  );
+}
+
+/**
+ * "for [Org Name]" co-brand sliver shown next to the Markur wordmark
+ * in the top nav (M16). Renders nothing when the user has no
+ * org_branding row yet — keeps the nav clean for new accounts.
+ */
+function OrgCoBrand() {
+  const { branding, logoUrl } = useOrgBranding();
+  if (!branding) return null;
+  const name = branding.display_name_override?.trim();
+  if (!name && !logoUrl) return null;
+  return (
+    <div className="hidden items-center gap-2 border-l border-white/15 pl-3 sm:flex">
+      <span className="text-[10px] uppercase tracking-[0.18em] text-white/55">for</span>
+      {logoUrl && (
+        <img
+          src={logoUrl}
+          alt={name ? `${name} logo` : 'Organization logo'}
+          className="h-5 w-auto max-w-[100px] object-contain"
+        />
+      )}
+      {name && <span className="text-sm font-medium text-white">{name}</span>}
     </div>
   );
 }

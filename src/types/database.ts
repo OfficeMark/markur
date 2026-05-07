@@ -482,6 +482,41 @@ export type Database = {
           },
         ]
       }
+      org_branding: {
+        Row: {
+          accent_color: string | null
+          created_at: string
+          display_name_override: string | null
+          logo_path: string | null
+          org_id: string
+          updated_at: string
+        }
+        Insert: {
+          accent_color?: string | null
+          created_at?: string
+          display_name_override?: string | null
+          logo_path?: string | null
+          org_id: string
+          updated_at?: string
+        }
+        Update: {
+          accent_color?: string | null
+          created_at?: string
+          display_name_override?: string | null
+          logo_path?: string | null
+          org_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "org_branding_org_id_fkey"
+            columns: ["org_id"]
+            isOneToOne: true
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       org_asset_type_overrides: {
         Row: {
           color_override: string | null
@@ -711,3 +746,4 @@ export type AuditLogEntry = Tbl['audit_log']['Row'];
 export type PendingInvitation = Tbl['pending_invitations']['Row'];
 export type OrgAssetType = Tbl['org_asset_types']['Row'];
 export type OrgAssetTypeOverrideRow = Tbl['org_asset_type_overrides']['Row'];
+export type OrgBrandingRow = Tbl['org_branding']['Row'];
