@@ -1,10 +1,11 @@
 import { useEffect, useMemo, useState } from 'react';
-import { ArrowDown, ArrowUp, ArrowUpDown, ImageOff, MapPin } from 'lucide-react';
+import { ArrowDown, ArrowUp, ArrowUpDown, ImageOff } from 'lucide-react';
 import { format, formatDistanceToNow } from 'date-fns';
 import { useAssetPhotos } from '@/hooks/useAssetPhotos';
 import { signedAssetPhotoUrl } from '@/lib/queries/asset-photos';
 import { TYPE_COLORS, labelForType } from '@/lib/pin-types';
 import { computeStatus, statusLabel, type AssetStatus } from '@/lib/asset-status';
+import type { VendorContact } from '@/lib/queries/assets';
 import { cn } from '@/lib/utils';
 import type { Asset } from '@/types/database';
 
@@ -159,6 +160,19 @@ function Row({
 }) {
   const typeColor = TYPE_COLORS[asset.type]?.fill ?? '#475569';
   const typeName = labelForType(asset.type);
+  const displayName = asset.name?.trim() || 'Untitled';
+  const isUntitled = displayName === 'Untitled';
+
+  const vendor = (asset.vendor_contact ?? null) as VendorContact | null;
+  const vendorLabel = vendor
+    ? (vendor.company?.trim() || vendor.name?.trim() || '').trim() || null
+    : null;
+
+  const metaParts: string[] = [];
+  if (asset.room_number?.trim()) metaParts.push(`Rm ${asset.room_number.trim()}`);
+  if (vendorLabel) metaParts.push(vendorLabel);
+  if (asset.location_notes?.trim()) metaParts.push(asset.location_notes.trim());
+
   return (
     <tr
       tabIndex={0}
@@ -178,11 +192,12 @@ function Row({
         <PhotoThumb assetId={asset.id} />
       </td>
       <td className="py-2 pr-3">
-        <p className="font-medium text-text">{asset.name}</p>
-        {asset.location_notes && (
-          <p className="mt-0.5 flex items-center gap-1 truncate text-xs text-text-faint">
-            <MapPin size={10} aria-hidden />
-            <span className="truncate">{asset.location_notes}</span>
+        <p className={cn('font-medium', isUntitled ? 'italic text-text-muted' : 'text-text')}>
+          {displayName}
+        </p>
+        {metaParts.length > 0 && (
+          <p className="mt-0.5 truncate text-xs text-text-faint">
+            {metaParts.join(' · ')}
           </p>
         )}
       </td>
