@@ -2,15 +2,18 @@ import { supabase } from '@/lib/supabase';
 import type { AssetAttachmentRow } from '@/types/database';
 
 /**
- * Asset attachments — PDFs, Word/Excel docs, images attached to a pin
- * for vendor cut sheets, install instructions, warranty paperwork, etc.
+ * Asset attachments — PDFs, Word/Excel docs, images, and short video clips
+ * attached to a pin for vendor cut sheets, install instructions, warranty
+ * paperwork, field walkthroughs, etc.
  *
  * Storage layout: asset-attachments/<asset_id>/<attachment_id>.<ext>
  * Bucket is private; reads use signed URLs (15-min TTL). Bucket policies
  * (M18 migration) gate read by view-on-floor and write by edit-on-building.
+ *
+ * Size cap is 100 MB (M25). Anything bigger needs resumable / TUS uploads.
  */
 
-export const ASSET_ATTACHMENT_MAX_BYTES = 25 * 1024 * 1024;
+export const ASSET_ATTACHMENT_MAX_BYTES = 100 * 1024 * 1024;
 
 export const ASSET_ATTACHMENT_MIMES = [
   'application/pdf',
@@ -23,16 +26,19 @@ export const ASSET_ATTACHMENT_MIMES = [
   'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
   'text/plain',
   'text/csv',
+  'video/mp4',
+  'video/quicktime',
+  'video/webm',
 ] as const;
 
 export type AssetAttachment = AssetAttachmentRow;
 
 export function validateAttachmentFile(file: File): string | null {
   if (file.size > ASSET_ATTACHMENT_MAX_BYTES) {
-    return `${file.name}: too large (limit 25 MB).`;
+    return `${file.name}: too large (limit 100 MB).`;
   }
   if (!(ASSET_ATTACHMENT_MIMES as readonly string[]).includes(file.type)) {
-    return `${file.name}: unsupported type. Use PDF, Word, Excel, image, or text file.`;
+    return `${file.name}: unsupported type. Use PDF, Word, Excel, image, video, or text file.`;
   }
   return null;
 }
@@ -49,6 +55,9 @@ function extFromMimeOrName(file: File): string {
     'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet': 'xlsx',
     'text/plain': 'txt',
     'text/csv': 'csv',
+    'video/mp4': 'mp4',
+    'video/quicktime': 'mov',
+    'video/webm': 'webm',
   };
   const mapped = m[file.type];
   if (mapped) return mapped;

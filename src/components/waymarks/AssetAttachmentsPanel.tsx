@@ -74,7 +74,7 @@ export function AssetAttachmentsPanel({ assetId, canEdit }: AssetAttachmentsPane
               ref={fileInput}
               type="file"
               multiple
-              accept=".pdf,.doc,.docx,.xls,.xlsx,.png,.jpg,.jpeg,.webp,.txt,.csv"
+              accept=".pdf,.doc,.docx,.xls,.xlsx,.png,.jpg,.jpeg,.webp,.txt,.csv,.mp4,.mov,.webm"
               className="hidden"
               onChange={(e) => {
                 void onPickFiles(e.target.files);
