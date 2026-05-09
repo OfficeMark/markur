@@ -1,5 +1,5 @@
 import { Navigate, NavLink, Outlet } from 'react-router-dom';
-import { Image, Lock, Mail, Tag, Users } from 'lucide-react';
+import { ArrowLeft, Image, Lock, Mail, Tag, Users } from 'lucide-react';
 import { AppShell } from '@/components/waymarks/AppShell';
 import { usePermissions } from '@/lib/permissions-context';
 
@@ -47,6 +47,13 @@ export function Admin() {
     <AppShell>
       <div className="mx-auto flex w-full max-w-6xl flex-col gap-6 px-4 py-6 sm:flex-row sm:px-6 sm:py-8">
         <aside className="shrink-0 sm:sticky sm:top-20 sm:w-56 sm:self-start">
+          <NavLink
+            to="/"
+            className="mb-3 inline-flex items-center gap-1.5 rounded-md px-2.5 py-1.5 text-xs text-text-muted transition-colors hover:bg-black/5 hover:text-text dark:hover:bg-white/5"
+          >
+            <ArrowLeft size={12} aria-hidden />
+            <span>Back to Markur</span>
+          </NavLink>
           <p className="mb-2 px-2 text-[11px] font-medium uppercase tracking-[0.18em] text-text-faint">
             Admin
           </p>

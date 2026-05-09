@@ -783,13 +783,6 @@ function ThumbButton({
 }
 
 function DetailsSection({ asset }: { asset: Asset }) {
-  // M18: vendor_contact is JSONB on the row — TS sees it as Json|null. Cast
-  // through a narrow type to read the structured fields safely.
-  const vendor = (asset.vendor_contact ?? null) as
-    | { name?: string; email?: string; phone?: string; company?: string }
-    | null;
-  const hasVendor = !!(vendor && (vendor.name || vendor.email || vendor.phone || vendor.company));
-
   return (
     <div className="space-y-2.5">
       <div className="flex flex-wrap items-center gap-1">
@@ -811,18 +804,145 @@ function DetailsSection({ asset }: { asset: Asset }) {
           <p className="whitespace-pre-wrap text-sm text-text">{asset.notes}</p>
         </div>
       )}
-      {hasVendor && (
-        <div className="rounded-md border border-black/10 bg-bg p-2.5 text-xs dark:border-white/10">
-          <p className="mb-1 font-medium uppercase tracking-[0.14em] text-[10px] text-text-faint">Vendor</p>
-          {vendor!.name && <p className="text-sm font-medium text-text">{vendor!.name}</p>}
-          {vendor!.email && (
-            <a href={`mailto:${vendor!.email}`} className="block text-sm text-waymarks-gold hover:underline">{vendor!.email}</a>
-          )}
-          {vendor!.phone && (
-            <a href={`tel:${vendor!.phone}`} className="block text-sm text-text-muted hover:text-text">{vendor!.phone}</a>
-          )}
+      <VendorPanel asset={asset} />
+    </div>
+  );
+}
+
+/**
+ * Vendor info — collapsed by default, expandable. Per Randy's directive
+ * (M17b), vendor data is added during audit or from desk later, not
+ * during placement. So this lives in the drawer rather than the
+ * NewAssetDialog. Click "Add vendor info" or the edit pencil to open
+ * the inline form.
+ */
+function VendorPanel({ asset }: { asset: Asset }) {
+  const update = useUpdateAsset(asset.floor_id);
+  const vendor = (asset.vendor_contact ?? null) as
+    | { name?: string; email?: string; phone?: string; company?: string }
+    | null;
+  const hasVendor = !!(vendor && (vendor.name || vendor.email || vendor.phone || vendor.company));
+
+  const [editing, setEditing] = useState(false);
+  const [draftName, setDraftName] = useState(vendor?.name ?? '');
+  const [draftEmail, setDraftEmail] = useState(vendor?.email ?? '');
+  const [draftPhone, setDraftPhone] = useState(vendor?.phone ?? '');
+  const [draftCompany, setDraftCompany] = useState(vendor?.company ?? '');
+
+  function startEdit() {
+    setDraftName(vendor?.name ?? '');
+    setDraftEmail(vendor?.email ?? '');
+    setDraftPhone(vendor?.phone ?? '');
+    setDraftCompany(vendor?.company ?? '');
+    setEditing(true);
+  }
+
+  async function save() {
+    const next =
+      draftName.trim() || draftEmail.trim() || draftPhone.trim() || draftCompany.trim()
+        ? {
+            name: draftName.trim() || undefined,
+            email: draftEmail.trim() || undefined,
+            phone: draftPhone.trim() || undefined,
+            company: draftCompany.trim() || undefined,
+          }
+        : null;
+    await update.mutateAsync({ id: asset.id, patch: { vendor_contact: next } });
+    setEditing(false);
+  }
+
+  if (editing) {
+    return (
+      <div className="space-y-2 rounded-md border border-waymarks-gold/40 bg-waymarks-gold-soft p-3">
+        <p className="text-[11px] font-medium uppercase tracking-[0.18em] text-waymarks-gold">Vendor info</p>
+        <input
+          value={draftName}
+          onChange={(e) => setDraftName(e.target.value)}
+          placeholder="Vendor name (e.g. Acme Sign Co.)"
+          maxLength={120}
+          className="h-9 w-full rounded-md border border-black/10 bg-surface px-3 text-sm outline-none focus:border-waymarks-gold focus:ring-1 focus:ring-waymarks-gold"
+        />
+        <input
+          value={draftCompany}
+          onChange={(e) => setDraftCompany(e.target.value)}
+          placeholder="Company (if different)"
+          maxLength={120}
+          className="h-9 w-full rounded-md border border-black/10 bg-surface px-3 text-sm outline-none focus:border-waymarks-gold focus:ring-1 focus:ring-waymarks-gold"
+        />
+        <input
+          type="email"
+          value={draftEmail}
+          onChange={(e) => setDraftEmail(e.target.value)}
+          placeholder="Email"
+          maxLength={120}
+          className="h-9 w-full rounded-md border border-black/10 bg-surface px-3 text-sm outline-none focus:border-waymarks-gold focus:ring-1 focus:ring-waymarks-gold"
+        />
+        <input
+          type="tel"
+          value={draftPhone}
+          onChange={(e) => setDraftPhone(e.target.value)}
+          placeholder="Phone"
+          maxLength={60}
+          className="h-9 w-full rounded-md border border-black/10 bg-surface px-3 text-sm outline-none focus:border-waymarks-gold focus:ring-1 focus:ring-waymarks-gold"
+        />
+        <div className="flex justify-end gap-2 pt-1">
+          <button
+            type="button"
+            onClick={() => setEditing(false)}
+            disabled={update.isPending}
+            className="inline-flex h-8 items-center rounded-md border border-black/15 bg-surface px-3 text-xs font-medium hover:bg-black/5"
+          >
+            Cancel
+          </button>
+          <button
+            type="button"
+            onClick={() => void save()}
+            disabled={update.isPending}
+            className="inline-flex h-8 items-center rounded-md bg-waymarks-gold px-3 text-xs font-medium text-white hover:bg-waymarks-gold-deep disabled:opacity-60"
+          >
+            {update.isPending ? 'Saving…' : 'Save'}
+          </button>
         </div>
-      )}
+      </div>
+    );
+  }
+
+  if (!hasVendor) {
+    return (
+      <button
+        type="button"
+        onClick={startEdit}
+        className="inline-flex h-8 items-center gap-1.5 rounded-md border border-dashed border-black/15 bg-bg px-3 text-xs font-medium text-text-muted transition-colors hover:border-waymarks-gold hover:text-waymarks-gold dark:border-white/15"
+      >
+        <Plus size={12} aria-hidden />
+        Add vendor info
+      </button>
+    );
+  }
+
+  return (
+    <div className="flex items-start justify-between gap-3 rounded-md border border-black/10 bg-bg p-2.5 dark:border-white/10">
+      <div className="min-w-0 flex-1">
+        <p className="mb-1 font-medium uppercase tracking-[0.14em] text-[10px] text-text-faint">Vendor</p>
+        {vendor!.name && <p className="text-sm font-medium text-text">{vendor!.name}</p>}
+        {vendor!.company && vendor!.company !== vendor!.name && (
+          <p className="text-xs text-text-muted">{vendor!.company}</p>
+        )}
+        {vendor!.email && (
+          <a href={`mailto:${vendor!.email}`} className="block text-sm text-waymarks-gold hover:underline">{vendor!.email}</a>
+        )}
+        {vendor!.phone && (
+          <a href={`tel:${vendor!.phone}`} className="block text-sm text-text-muted hover:text-text">{vendor!.phone}</a>
+        )}
+      </div>
+      <button
+        type="button"
+        onClick={startEdit}
+        aria-label="Edit vendor info"
+        className="shrink-0 rounded p-1 text-text-muted hover:bg-black/5 hover:text-text"
+      >
+        <Pencil size={12} aria-hidden />
+      </button>
     </div>
   );
 }

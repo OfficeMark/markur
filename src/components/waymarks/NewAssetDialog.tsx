@@ -3,12 +3,12 @@ import * as Dialog from '@radix-ui/react-dialog';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
-import { Camera, FileImage, X, AlertCircle, Trash2 } from 'lucide-react';
+import { Camera, FileImage, X, AlertCircle, Trash2, Plus, Check } from 'lucide-react';
 import { Button } from '@/components/ui/Button';
 import { useCreateAsset } from '@/hooks/useAssets';
 import { type AssetCategory } from '@/lib/queries/assets';
 import { addAssetPhoto, validateAssetPhotoFile } from '@/lib/queries/asset-photos';
-import { useAssetTypes } from '@/hooks/useAssetTypes';
+import { useAssetTypes, useCreateAssetType } from '@/hooks/useAssetTypes';
 import { cn } from '@/lib/utils';
 import type { Asset } from '@/types/database';
 
@@ -17,18 +17,16 @@ import type { Asset } from '@/types/database';
 // is provided by lib/pin-types.ts; the hook overlays org-specific
 // entries on top.
 
-// M18: only `type` is required (the pin needs a category to render).
-// Everything else is optional. Name defaults to a placeholder server-side
-// if blank.
+// M17b: every form field is optional. Type falls back to 'other' (a
+// seeded global) so the pin still renders with a category at the DB.
+// Vendor info is no longer in this dialog — added later in the drawer
+// when the user has the info to fill in.
 const schema = z.object({
-  type: z.string().min(1, 'Pick a type'),
+  type: z.string().max(60).optional(),
   name: z.string().max(80, 'Up to 80 characters').optional(),
   location_notes: z.string().max(280, 'Up to 280 characters').optional(),
   room_number: z.string().max(80, 'Up to 80 characters').optional(),
   notes: z.string().max(4000, 'Up to 4000 characters').optional(),
-  vendor_name: z.string().max(120).optional(),
-  vendor_email: z.string().max(120).optional(),
-  vendor_phone: z.string().max(60).optional(),
 });
 
 type FormValues = z.infer<typeof schema>;
@@ -49,7 +47,11 @@ export function NewAssetDialog({
   onCreated,
 }: NewAssetDialogProps) {
   const create = useCreateAsset();
-  const { signage: signageTypes, facility: facilityTypes, list: allTypes } = useAssetTypes();
+  const { signage: signageTypes, facility: facilityTypes, list: allTypes, orgId } = useAssetTypes();
+  const createAssetType = useCreateAssetType();
+  const [customTypeMode, setCustomTypeMode] = useState(false);
+  const [customTypeLabel, setCustomTypeLabel] = useState('');
+  const [customTypeError, setCustomTypeError] = useState<string | null>(null);
   const [photos, setPhotos] = useState<File[]>([]);
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [photoErrors, setPhotoErrors] = useState<string[]>([]);
@@ -59,6 +61,7 @@ export function NewAssetDialog({
     handleSubmit,
     formState: { errors, isSubmitting },
     reset,
+    setValue,
     watch,
   } = useForm<FormValues>({
     resolver: zodResolver(schema),
@@ -69,15 +72,54 @@ export function NewAssetDialog({
       location_notes: '',
       room_number: '',
       notes: '',
-      vendor_name: '',
-      vendor_email: '',
-      vendor_phone: '',
     },
   });
 
   const selectedType = watch('type');
   const category: AssetCategory =
     (allTypes.find((t) => t.key === selectedType)?.category as AssetCategory) ?? 'signage';
+
+  function slugify(label: string): string {
+    return label
+      .toLowerCase()
+      .trim()
+      .replace(/[^a-z0-9]+/g, '_')
+      .replace(/^_+|_+$/g, '')
+      .replace(/^([0-9])/, '_$1');
+  }
+
+  async function saveCustomType() {
+    setCustomTypeError(null);
+    const trimmed = customTypeLabel.trim();
+    if (trimmed.length < 2) {
+      setCustomTypeError('Label must be at least 2 characters.');
+      return;
+    }
+    if (!orgId) {
+      setCustomTypeError('Create a building first - custom types attach to your organization.');
+      return;
+    }
+    const key = slugify(trimmed);
+    if (!key) {
+      setCustomTypeError('Use letters and numbers in the label.');
+      return;
+    }
+    try {
+      await createAssetType.mutateAsync({
+        org_id: orgId,
+        key,
+        label: trimmed,
+        color: '#475569', // neutral slate; admin can change later
+        category: 'signage',
+      });
+      // Auto-select the new type and exit custom mode.
+      setValue('type', key, { shouldValidate: true });
+      setCustomTypeMode(false);
+      setCustomTypeLabel('');
+    } catch (err) {
+      setCustomTypeError(err instanceof Error ? err.message : 'Could not save the custom type.');
+    }
+  }
 
   function appendFiles(list: FileList | null) {
     if (!list || list.length === 0) return;
@@ -100,25 +142,21 @@ export function NewAssetDialog({
     }
     setSubmitError(null);
     try {
-      // M18: assemble vendor_contact JSON from flat form fields.
-      const vendorContact =
-        values.vendor_name?.trim() || values.vendor_email?.trim() || values.vendor_phone?.trim()
-          ? {
-              name: values.vendor_name?.trim() || undefined,
-              email: values.vendor_email?.trim() || undefined,
-              phone: values.vendor_phone?.trim() || undefined,
-            }
-          : null;
+      // M17b: type optional, fallback to seeded 'other' so the pin still
+      // has a renderable category. Vendor info is now added later from
+      // the asset drawer.
+      const finalType = (values.type ?? '').trim() || 'other';
+      const finalCategory: AssetCategory =
+        (allTypes.find((t) => t.key === finalType)?.category as AssetCategory) ?? 'signage';
 
       const asset = await create.mutateAsync({
         floor_id: floorId,
-        type: values.type,
-        category,
+        type: finalType,
+        category: finalCategory,
         name: values.name?.trim() || null,
         location_notes: values.location_notes?.trim() || null,
         room_number: values.room_number?.trim() || null,
         notes: values.notes?.trim() || null,
-        vendor_contact: vendorContact,
         x: position.x,
         y: position.y,
       });
@@ -182,13 +220,27 @@ export function NewAssetDialog({
               </div>
             )}
 
-            <Field label="Type" htmlFor="asset-type" error={errors.type?.message}>
+            <Field
+              label="Type"
+              htmlFor="asset-type"
+              error={errors.type?.message}
+              hint="Optional. Pick from the list, add a custom one, or skip."
+            >
               <select
                 id="asset-type"
                 {...register('type')}
+                onChange={(e) => {
+                  if (e.target.value === '__custom__') {
+                    e.preventDefault();
+                    setValue('type', '');
+                    setCustomTypeMode(true);
+                    return;
+                  }
+                  setValue('type', e.target.value);
+                }}
                 className="h-11 w-full rounded-md border border-black/10 bg-surface px-3 text-sm text-text outline-none focus:border-waymarks-gold focus:ring-2 focus:ring-waymarks-gold dark:border-white/10"
               >
-                <option value="">Choose a type…</option>
+                <option value="">Choose a type… (optional)</option>
                 <optgroup label="Signage">
                   {signageTypes.map((t) => (
                     <option key={t.id} value={t.key}>
@@ -203,7 +255,53 @@ export function NewAssetDialog({
                     </option>
                   ))}
                 </optgroup>
+                <option value="__custom__">+ Add custom type…</option>
               </select>
+              {customTypeMode && (
+                <div className="mt-2 space-y-1.5 rounded-md border border-waymarks-gold/40 bg-waymarks-gold-soft p-3">
+                  <label htmlFor="custom-type-label" className="block text-[11px] font-medium uppercase tracking-[0.18em] text-waymarks-gold">
+                    New custom type
+                  </label>
+                  <div className="flex gap-2">
+                    <input
+                      id="custom-type-label"
+                      value={customTypeLabel}
+                      onChange={(e) => setCustomTypeLabel(e.target.value)}
+                      maxLength={60}
+                      autoFocus
+                      placeholder="e.g. Memorial bench"
+                      className="h-9 flex-1 rounded-md border border-black/10 bg-surface px-3 text-sm text-text outline-none focus:border-waymarks-gold focus:ring-1 focus:ring-waymarks-gold"
+                    />
+                    <Button
+                      size="sm"
+                      variant="gold"
+                      loading={createAssetType.isPending}
+                      onClick={() => void saveCustomType()}
+                      iconLeft={<Check size={12} aria-hidden />}
+                    >
+                      Save
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="secondary"
+                      onClick={() => {
+                        setCustomTypeMode(false);
+                        setCustomTypeLabel('');
+                        setCustomTypeError(null);
+                      }}
+                    >
+                      Cancel
+                    </Button>
+                  </div>
+                  {customTypeError && (
+                    <p className="text-xs text-danger">{customTypeError}</p>
+                  )}
+                  <p className="text-[11px] text-text-muted">
+                    Saved to your org's catalog and reusable for future assets.
+                    Color and category can be tuned in admin later.
+                  </p>
+                </div>
+              )}
             </Field>
 
             <Field label="Name" htmlFor="asset-name" error={errors.name?.message}>
@@ -230,64 +328,21 @@ export function NewAssetDialog({
               />
             </Field>
 
-            {/* M18 — extra metadata fields. All optional; can be filled
-                during the audit walk or later from the asset drawer. */}
-            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-              <Field
-                label="Room number"
-                htmlFor="asset-room"
-                error={errors.room_number?.message}
-                hint="Optional."
-              >
-                <input
-                  id="asset-room"
-                  {...register('room_number')}
-                  placeholder='e.g. "301"'
-                  className="h-11 w-full rounded-md border border-black/10 bg-surface px-3 text-sm text-text outline-none focus:border-waymarks-gold focus:ring-2 focus:ring-waymarks-gold dark:border-white/10"
-                />
-              </Field>
-              <Field
-                label="Vendor name"
-                htmlFor="asset-vendor-name"
-                error={errors.vendor_name?.message}
-                hint="Optional."
-              >
-                <input
-                  id="asset-vendor-name"
-                  {...register('vendor_name')}
-                  placeholder='e.g. "Acme Sign Co."'
-                  className="h-11 w-full rounded-md border border-black/10 bg-surface px-3 text-sm text-text outline-none focus:border-waymarks-gold focus:ring-2 focus:ring-waymarks-gold dark:border-white/10"
-                />
-              </Field>
-              <Field
-                label="Vendor email"
-                htmlFor="asset-vendor-email"
-                error={errors.vendor_email?.message}
-                hint="Optional."
-              >
-                <input
-                  id="asset-vendor-email"
-                  type="email"
-                  {...register('vendor_email')}
-                  placeholder="vendor@example.com"
-                  className="h-11 w-full rounded-md border border-black/10 bg-surface px-3 text-sm text-text outline-none focus:border-waymarks-gold focus:ring-2 focus:ring-waymarks-gold dark:border-white/10"
-                />
-              </Field>
-              <Field
-                label="Vendor phone"
-                htmlFor="asset-vendor-phone"
-                error={errors.vendor_phone?.message}
-                hint="Optional."
-              >
-                <input
-                  id="asset-vendor-phone"
-                  type="tel"
-                  {...register('vendor_phone')}
-                  placeholder="(416) 555-0123"
-                  className="h-11 w-full rounded-md border border-black/10 bg-surface px-3 text-sm text-text outline-none focus:border-waymarks-gold focus:ring-2 focus:ring-waymarks-gold dark:border-white/10"
-                />
-              </Field>
-            </div>
+            {/* M17b — single Room number field. Vendor info moved to the
+                drawer (added later in audit / from desk). */}
+            <Field
+              label="Room number"
+              htmlFor="asset-room"
+              error={errors.room_number?.message}
+              hint="Optional."
+            >
+              <input
+                id="asset-room"
+                {...register('room_number')}
+                placeholder='e.g. "301"'
+                className="h-11 w-full rounded-md border border-black/10 bg-surface px-3 text-sm text-text outline-none focus:border-waymarks-gold focus:ring-2 focus:ring-waymarks-gold dark:border-white/10"
+              />
+            </Field>
 
             <Field
               label="Notes"
