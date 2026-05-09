@@ -783,17 +783,45 @@ function ThumbButton({
 }
 
 function DetailsSection({ asset }: { asset: Asset }) {
+  // M18: vendor_contact is JSONB on the row — TS sees it as Json|null. Cast
+  // through a narrow type to read the structured fields safely.
+  const vendor = (asset.vendor_contact ?? null) as
+    | { name?: string; email?: string; phone?: string; company?: string }
+    | null;
+  const hasVendor = !!(vendor && (vendor.name || vendor.email || vendor.phone || vendor.company));
+
   return (
-    <div className="space-y-2">
+    <div className="space-y-2.5">
       <div className="flex flex-wrap items-center gap-1">
         <Chip variant="gold">{prettyType(asset.type)}</Chip>
         <Chip variant="default">{asset.category}</Chip>
+        {asset.room_number && (
+          <Chip variant="default" title="Room number">Rm {asset.room_number}</Chip>
+        )}
       </div>
       {asset.location_notes && (
         <p className="flex items-start gap-1.5 text-sm text-text-muted">
           <MapPin size={12} aria-hidden className="mt-1 shrink-0" />
           <span>{asset.location_notes}</span>
         </p>
+      )}
+      {asset.notes && (
+        <div className="rounded-md border border-black/10 bg-bg p-2.5 text-xs text-text-muted dark:border-white/10">
+          <p className="mb-1 font-medium uppercase tracking-[0.14em] text-[10px] text-text-faint">Notes</p>
+          <p className="whitespace-pre-wrap text-sm text-text">{asset.notes}</p>
+        </div>
+      )}
+      {hasVendor && (
+        <div className="rounded-md border border-black/10 bg-bg p-2.5 text-xs dark:border-white/10">
+          <p className="mb-1 font-medium uppercase tracking-[0.14em] text-[10px] text-text-faint">Vendor</p>
+          {vendor!.name && <p className="text-sm font-medium text-text">{vendor!.name}</p>}
+          {vendor!.email && (
+            <a href={`mailto:${vendor!.email}`} className="block text-sm text-waymarks-gold hover:underline">{vendor!.email}</a>
+          )}
+          {vendor!.phone && (
+            <a href={`tel:${vendor!.phone}`} className="block text-sm text-text-muted hover:text-text">{vendor!.phone}</a>
+          )}
+        </div>
       )}
     </div>
   );

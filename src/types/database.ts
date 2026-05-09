@@ -47,6 +47,47 @@ export type Database = {
         }
         Relationships: []
       }
+      asset_attachments: {
+        Row: {
+          asset_id: string
+          created_at: string
+          filename: string
+          id: string
+          mime_type: string
+          path: string
+          size_bytes: number
+          uploaded_by: string | null
+        }
+        Insert: {
+          asset_id: string
+          created_at?: string
+          filename: string
+          id?: string
+          mime_type: string
+          path: string
+          size_bytes: number
+          uploaded_by?: string | null
+        }
+        Update: {
+          asset_id?: string
+          created_at?: string
+          filename?: string
+          id?: string
+          mime_type?: string
+          path?: string
+          size_bytes?: number
+          uploaded_by?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "asset_attachments_asset_id_fkey"
+            columns: ["asset_id"]
+            isOneToOne: false
+            referencedRelation: "assets"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       asset_photos: {
         Row: {
           asset_id: string
@@ -96,10 +137,13 @@ export type Database = {
           location_notes: string | null
           manufacturer: string | null
           name: string
+          notes: string | null
+          room_number: string | null
           status: string
           tenant_scope_id: string | null
           type: string
           updated_at: string
+          vendor_contact: Json | null
           x: number
           y: number
         }
@@ -116,10 +160,13 @@ export type Database = {
           location_notes?: string | null
           manufacturer?: string | null
           name: string
+          notes?: string | null
+          room_number?: string | null
           status?: string
           tenant_scope_id?: string | null
           type: string
           updated_at?: string
+          vendor_contact?: Json | null
           x: number
           y: number
         }
@@ -136,10 +183,13 @@ export type Database = {
           location_notes?: string | null
           manufacturer?: string | null
           name?: string
+          notes?: string | null
+          room_number?: string | null
           status?: string
           tenant_scope_id?: string | null
           type?: string
           updated_at?: string
+          vendor_contact?: Json | null
           x?: number
           y?: number
         }
@@ -747,3 +797,4 @@ export type PendingInvitation = Tbl['pending_invitations']['Row'];
 export type OrgAssetType = Tbl['org_asset_types']['Row'];
 export type OrgAssetTypeOverrideRow = Tbl['org_asset_type_overrides']['Row'];
 export type OrgBrandingRow = Tbl['org_branding']['Row'];
+export type AssetAttachmentRow = Tbl['asset_attachments']['Row'];

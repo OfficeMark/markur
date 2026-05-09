@@ -17,10 +17,18 @@ import type { Asset } from '@/types/database';
 // is provided by lib/pin-types.ts; the hook overlays org-specific
 // entries on top.
 
+// M18: only `type` is required (the pin needs a category to render).
+// Everything else is optional. Name defaults to a placeholder server-side
+// if blank.
 const schema = z.object({
   type: z.string().min(1, 'Pick a type'),
-  name: z.string().min(1, 'Name is required').max(80, 'Up to 80 characters'),
+  name: z.string().max(80, 'Up to 80 characters').optional(),
   location_notes: z.string().max(280, 'Up to 280 characters').optional(),
+  room_number: z.string().max(80, 'Up to 80 characters').optional(),
+  notes: z.string().max(4000, 'Up to 4000 characters').optional(),
+  vendor_name: z.string().max(120).optional(),
+  vendor_email: z.string().max(120).optional(),
+  vendor_phone: z.string().max(60).optional(),
 });
 
 type FormValues = z.infer<typeof schema>;
@@ -55,7 +63,16 @@ export function NewAssetDialog({
   } = useForm<FormValues>({
     resolver: zodResolver(schema),
     mode: 'onTouched',
-    defaultValues: { type: '', name: '', location_notes: '' },
+    defaultValues: {
+      type: '',
+      name: '',
+      location_notes: '',
+      room_number: '',
+      notes: '',
+      vendor_name: '',
+      vendor_email: '',
+      vendor_phone: '',
+    },
   });
 
   const selectedType = watch('type');
@@ -83,12 +100,25 @@ export function NewAssetDialog({
     }
     setSubmitError(null);
     try {
+      // M18: assemble vendor_contact JSON from flat form fields.
+      const vendorContact =
+        values.vendor_name?.trim() || values.vendor_email?.trim() || values.vendor_phone?.trim()
+          ? {
+              name: values.vendor_name?.trim() || undefined,
+              email: values.vendor_email?.trim() || undefined,
+              phone: values.vendor_phone?.trim() || undefined,
+            }
+          : null;
+
       const asset = await create.mutateAsync({
         floor_id: floorId,
         type: values.type,
         category,
-        name: values.name,
-        location_notes: values.location_notes || null,
+        name: values.name?.trim() || null,
+        location_notes: values.location_notes?.trim() || null,
+        room_number: values.room_number?.trim() || null,
+        notes: values.notes?.trim() || null,
+        vendor_contact: vendorContact,
         x: position.x,
         y: position.y,
       });
@@ -196,6 +226,80 @@ export function NewAssetDialog({
                 rows={2}
                 {...register('location_notes')}
                 placeholder='e.g. "East elevator lobby, mounted at 5′"'
+                className="w-full rounded-md border border-black/10 bg-surface p-3 text-sm text-text outline-none focus:border-waymarks-gold focus:ring-2 focus:ring-waymarks-gold dark:border-white/10"
+              />
+            </Field>
+
+            {/* M18 — extra metadata fields. All optional; can be filled
+                during the audit walk or later from the asset drawer. */}
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+              <Field
+                label="Room number"
+                htmlFor="asset-room"
+                error={errors.room_number?.message}
+                hint="Optional."
+              >
+                <input
+                  id="asset-room"
+                  {...register('room_number')}
+                  placeholder='e.g. "301"'
+                  className="h-11 w-full rounded-md border border-black/10 bg-surface px-3 text-sm text-text outline-none focus:border-waymarks-gold focus:ring-2 focus:ring-waymarks-gold dark:border-white/10"
+                />
+              </Field>
+              <Field
+                label="Vendor name"
+                htmlFor="asset-vendor-name"
+                error={errors.vendor_name?.message}
+                hint="Optional."
+              >
+                <input
+                  id="asset-vendor-name"
+                  {...register('vendor_name')}
+                  placeholder='e.g. "Acme Sign Co."'
+                  className="h-11 w-full rounded-md border border-black/10 bg-surface px-3 text-sm text-text outline-none focus:border-waymarks-gold focus:ring-2 focus:ring-waymarks-gold dark:border-white/10"
+                />
+              </Field>
+              <Field
+                label="Vendor email"
+                htmlFor="asset-vendor-email"
+                error={errors.vendor_email?.message}
+                hint="Optional."
+              >
+                <input
+                  id="asset-vendor-email"
+                  type="email"
+                  {...register('vendor_email')}
+                  placeholder="vendor@example.com"
+                  className="h-11 w-full rounded-md border border-black/10 bg-surface px-3 text-sm text-text outline-none focus:border-waymarks-gold focus:ring-2 focus:ring-waymarks-gold dark:border-white/10"
+                />
+              </Field>
+              <Field
+                label="Vendor phone"
+                htmlFor="asset-vendor-phone"
+                error={errors.vendor_phone?.message}
+                hint="Optional."
+              >
+                <input
+                  id="asset-vendor-phone"
+                  type="tel"
+                  {...register('vendor_phone')}
+                  placeholder="(416) 555-0123"
+                  className="h-11 w-full rounded-md border border-black/10 bg-surface px-3 text-sm text-text outline-none focus:border-waymarks-gold focus:ring-2 focus:ring-waymarks-gold dark:border-white/10"
+                />
+              </Field>
+            </div>
+
+            <Field
+              label="Notes"
+              htmlFor="asset-notes"
+              error={errors.notes?.message}
+              hint="Optional. Any additional context, install notes, history."
+            >
+              <textarea
+                id="asset-notes"
+                rows={3}
+                {...register('notes')}
+                placeholder='e.g. "Replaced 2024-03. Brushed aluminum, custom font."'
                 className="w-full rounded-md border border-black/10 bg-surface p-3 text-sm text-text outline-none focus:border-waymarks-gold focus:ring-2 focus:ring-waymarks-gold dark:border-white/10"
               />
             </Field>
