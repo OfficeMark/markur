@@ -3,7 +3,7 @@ import * as Dialog from '@radix-ui/react-dialog';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
-import { Camera, FileImage, X, AlertCircle, Trash2, Plus, Check } from 'lucide-react';
+import { Camera, FileImage, X, AlertCircle, Trash2, Check } from 'lucide-react';
 import { Button } from '@/components/ui/Button';
 import { useCreateAsset } from '@/hooks/useAssets';
 import { type AssetCategory } from '@/lib/queries/assets';
@@ -74,10 +74,6 @@ export function NewAssetDialog({
       notes: '',
     },
   });
-
-  const selectedType = watch('type');
-  const category: AssetCategory =
-    (allTypes.find((t) => t.key === selectedType)?.category as AssetCategory) ?? 'signage';
 
   function slugify(label: string): string {
     return label
