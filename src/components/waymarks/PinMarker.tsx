@@ -4,21 +4,25 @@ import { cn } from '@/lib/utils';
 import type { AssetStatus } from '@/lib/asset-status';
 import { statusLabel } from '@/lib/asset-status';
 import { colorForType, labelForType } from '@/lib/pin-types';
+import {
+  DEFAULT_PIN_SHAPE,
+  DEFAULT_PIN_SIZE,
+  type PinShape,
+  type PinSize,
+} from '@/lib/queries/branding';
 
 /**
- * Single asset pin (M10b, sized in M10e+, resized in M12).
+ * Single asset pin (M10b, sized in M10e+, resized in M12, configurable in M26).
  *
  * Default pin color comes from the asset's TYPE (Directory blue, Egress
  * green, etc. - see lib/pin-types). Status (good/attention/flagged) is
- * conveyed by the icon shape inside the dot AND a thin ring overlay when
- * the pin needs attention or is flagged.
+ * conveyed by the icon inside the dot AND a thin ring overlay when the
+ * pin needs attention or is flagged.
  *
- * Sizing comes from the --pin-size-mobile / --pin-size-desktop CSS
- * variables in globals.css (currently 22px touch / 21px desktop). The
- * visual dot is intentionally smaller than the touch target - a
- * before: pseudo-element extends the tap area so small pins stay
- * easy to hit on phones. Real fix for dense floors is the clustering
- * work still scheduled for a later slice.
+ * Shape + size come from org_branding (M26): admins pick circle/square/
+ * diamond and small/medium/large from /admin/branding. Drop-pin/teardrop
+ * is intentionally absent — its tip-anchor positioning would require
+ * changing the drag math and overlay placement; deferred to a follow-up.
  */
 
 export type PinMarkerProps = {
@@ -26,6 +30,8 @@ export type PinMarkerProps = {
   name: string;
   type: string;
   status: AssetStatus;
+  shape?: PinShape;
+  size?: PinSize;
   selected?: boolean;
   pendingSync?: boolean;
   unlocked?: boolean;
@@ -42,12 +48,26 @@ const ICON_BY_STATUS = {
   flagged: Square,
 } as const;
 
+const PIN_SIZE_PX: Record<PinSize, number> = {
+  small: 18,
+  medium: 22,
+  large: 30,
+};
+
+const PIN_ICON_PX: Record<PinSize, number> = {
+  small: 7,
+  medium: 9,
+  large: 13,
+};
+
 export const PinMarker = forwardRef<HTMLButtonElement, PinMarkerProps>(function PinMarker(
   {
     assetId,
     name,
     type,
     status,
+    shape = DEFAULT_PIN_SHAPE,
+    size = DEFAULT_PIN_SIZE,
     selected,
     pendingSync,
     unlocked,
@@ -74,6 +94,15 @@ export const PinMarker = forwardRef<HTMLButtonElement, PinMarkerProps>(function 
         ? 'ring-1 ring-warning'
         : '';
   const typeName = labelForType(type);
+
+  const px = PIN_SIZE_PX[size];
+  const iconPx = PIN_ICON_PX[size];
+  // circle: full radius. square: gentle rounding so it isn't harsh at small sizes.
+  // diamond: rotate the body 45deg and counter-rotate the inner icon so status stays upright.
+  const shapeClass =
+    shape === 'circle' ? 'rounded-full' : shape === 'square' ? 'rounded-md' : 'rounded-sm rotate-45';
+  const iconCounterRotate = shape === 'diamond';
+
   return (
     <button
       ref={ref}
@@ -88,11 +117,12 @@ export const PinMarker = forwardRef<HTMLButtonElement, PinMarkerProps>(function 
         onClick?.();
       }}
       aria-label={`${name} (${typeName}, ${statusLabel(status)}${lockSuffix})`}
-      style={{ backgroundColor: resolvedFill }}
+      style={{ backgroundColor: resolvedFill, width: px, height: px }}
       className={cn(
-        'group relative inline-flex h-[var(--pin-size-mobile)] w-[var(--pin-size-mobile)] -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-full lg:h-[var(--pin-size-desktop)] lg:w-[var(--pin-size-desktop)]',
-        // Hit-area extender (M12): visible dot is small (22px touch) but the tap target
-        // is enlarged by ~12px via a before-pseudo so phones stay easy to hit.
+        'group relative inline-flex -translate-x-1/2 -translate-y-1/2 items-center justify-center',
+        shapeClass,
+        // Hit-area extender (M12): visible body may be small (down to 18px) but the
+        // tap target is enlarged by ~6px via a before-pseudo so phones stay easy to hit.
         'before:absolute before:-inset-1.5 before:rounded-full before:content-[""]',
         'border border-white shadow-sm transition-transform',
         'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-waymarks-gold focus-visible:ring-offset-1',
@@ -110,7 +140,11 @@ export const PinMarker = forwardRef<HTMLButtonElement, PinMarkerProps>(function 
         faded && 'opacity-40'
       )}
     >
-      <Icon size={9} className="fill-white text-white" aria-hidden />
+      <Icon
+        size={iconPx}
+        className={cn('fill-white text-white', iconCounterRotate && '-rotate-45')}
+        aria-hidden
+      />
     </button>
   );
 });

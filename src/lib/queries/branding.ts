@@ -11,11 +11,29 @@ import { supabase } from '@/lib/supabase';
  * later milestone.
  */
 
+export const PIN_SHAPES = ['circle', 'square', 'diamond'] as const;
+export type PinShape = typeof PIN_SHAPES[number];
+
+export const PIN_SIZES = ['small', 'medium', 'large'] as const;
+export type PinSize = typeof PIN_SIZES[number];
+
+export const DEFAULT_PIN_SHAPE: PinShape = 'circle';
+export const DEFAULT_PIN_SIZE: PinSize = 'medium';
+
+export function isPinShape(v: unknown): v is PinShape {
+  return typeof v === 'string' && (PIN_SHAPES as readonly string[]).includes(v);
+}
+export function isPinSize(v: unknown): v is PinSize {
+  return typeof v === 'string' && (PIN_SIZES as readonly string[]).includes(v);
+}
+
 export type OrgBranding = {
   org_id: string;
   logo_path: string | null;
   accent_color: string | null;
   display_name_override: string | null;
+  pin_shape: PinShape;
+  pin_size: PinSize;
   created_at: string;
   updated_at: string;
 };
@@ -30,7 +48,7 @@ export async function getOrgBranding(orgId: string): Promise<OrgBranding | null>
     .eq('org_id', orgId)
     .maybeSingle();
   if (error) throw error;
-  return (data as OrgBranding | null) ?? null;
+  return data ? normalizeBranding(data) : null;
 }
 
 export type SaveOrgBrandingInput = {
@@ -38,6 +56,8 @@ export type SaveOrgBrandingInput = {
   logo_path?: string | null;
   accent_color?: string | null;
   display_name_override?: string | null;
+  pin_shape?: PinShape;
+  pin_size?: PinSize;
 };
 
 export async function saveOrgBranding(input: SaveOrgBrandingInput): Promise<OrgBranding> {
@@ -49,13 +69,32 @@ export async function saveOrgBranding(input: SaveOrgBrandingInput): Promise<OrgB
         logo_path: input.logo_path ?? null,
         accent_color: input.accent_color ?? null,
         display_name_override: input.display_name_override ?? null,
+        pin_shape: input.pin_shape ?? DEFAULT_PIN_SHAPE,
+        pin_size: input.pin_size ?? DEFAULT_PIN_SIZE,
       },
       { onConflict: 'org_id' }
     )
     .select('*')
     .single();
   if (error) throw error;
-  return data as OrgBranding;
+  return normalizeBranding(data);
+}
+
+// DB columns are plain text; clamp to the known enum sets at the boundary
+// so anything unexpected falls back to defaults instead of leaking into UI.
+function normalizeBranding(row: Record<string, unknown>): OrgBranding {
+  const shape = row.pin_shape;
+  const size = row.pin_size;
+  return {
+    org_id: row.org_id as string,
+    logo_path: (row.logo_path as string | null) ?? null,
+    accent_color: (row.accent_color as string | null) ?? null,
+    display_name_override: (row.display_name_override as string | null) ?? null,
+    pin_shape: isPinShape(shape) ? shape : DEFAULT_PIN_SHAPE,
+    pin_size: isPinSize(size) ? size : DEFAULT_PIN_SIZE,
+    created_at: row.created_at as string,
+    updated_at: row.updated_at as string,
+  };
 }
 
 /**

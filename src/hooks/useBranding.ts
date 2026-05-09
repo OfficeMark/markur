@@ -1,12 +1,16 @@
 import { useMemo } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
+  DEFAULT_PIN_SHAPE,
+  DEFAULT_PIN_SIZE,
   deleteOrgLogo,
   getOrgBranding,
   logoPublicUrl,
   saveOrgBranding,
   uploadOrgLogo,
   type OrgBranding,
+  type PinShape,
+  type PinSize,
   type SaveOrgBrandingInput,
 } from '@/lib/queries/branding';
 import { useBuildings } from '@/hooks/useBuildings';
@@ -36,7 +40,10 @@ export function useOrgBranding() {
     [query.data?.logo_path]
   );
 
-  return { ...query, orgId, branding: query.data ?? null, logoUrl };
+  const pinShape: PinShape = query.data?.pin_shape ?? DEFAULT_PIN_SHAPE;
+  const pinSize: PinSize = query.data?.pin_size ?? DEFAULT_PIN_SIZE;
+
+  return { ...query, orgId, branding: query.data ?? null, logoUrl, pinShape, pinSize };
 }
 
 export function useSaveBranding() {

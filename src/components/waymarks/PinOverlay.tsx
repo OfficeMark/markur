@@ -2,6 +2,7 @@ import { useRef, useState } from 'react';
 import type { Asset } from '@/types/database';
 import { PinMarker } from './PinMarker';
 import { computeStatus, type AssetStatus } from '@/lib/asset-status';
+import { useOrgBranding } from '@/hooks/useBranding';
 
 export type PinOverlayProps = {
   assets: Asset[];
@@ -94,6 +95,7 @@ export function PinOverlay({
   onLongPress,
 }: PinOverlayProps) {
   const layerRef = useRef<HTMLDivElement | null>(null);
+  const { pinShape, pinSize } = useOrgBranding();
   // dragRef is always-current; the React state below is for visualization only.
   const dragRef = useRef<DragState | null>(null);
   // Used to suppress click-after-drag.
@@ -234,6 +236,8 @@ export function PinOverlay({
               name={asset.name}
               type={asset.type}
               status={status}
+              shape={pinShape}
+              size={pinSize}
               fillColor={statusOverride ? statusFillColor(status) : undefined}
               selected={asset.id === selectedAssetId}
               unlocked={draggable && !isRepositionTarget}

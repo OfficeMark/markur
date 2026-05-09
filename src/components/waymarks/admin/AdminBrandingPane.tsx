@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
-import { AlertCircle, Check, Image as ImageIcon, Save, Trash2, Upload } from 'lucide-react';
+import { AlertCircle, Check, Image as ImageIcon, MapPin, Save, Trash2, Upload } from 'lucide-react';
 import { Button } from '@/components/ui/Button';
+import { PinMarker } from '@/components/waymarks/PinMarker';
 import {
   useDeleteLogo,
   useOrgBranding,
@@ -9,7 +10,13 @@ import {
 } from '@/hooks/useBranding';
 import {
   ACCENT_COLOR_PALETTE,
+  DEFAULT_PIN_SHAPE,
+  DEFAULT_PIN_SIZE,
+  PIN_SHAPES,
+  PIN_SIZES,
   validateLogoFile,
+  type PinShape,
+  type PinSize,
 } from '@/lib/queries/branding';
 
 /**
@@ -31,6 +38,8 @@ export function AdminBrandingPane() {
   const [displayName, setDisplayName] = useState('');
   const [accentColor, setAccentColor] = useState<string>(ACCENT_COLOR_PALETTE[0]!.value);
   const [logoPath, setLogoPath] = useState<string | null>(null);
+  const [pinShape, setPinShape] = useState<PinShape>(DEFAULT_PIN_SHAPE);
+  const [pinSize, setPinSize] = useState<PinSize>(DEFAULT_PIN_SIZE);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [savedAt, setSavedAt] = useState<number | null>(null);
@@ -40,6 +49,8 @@ export function AdminBrandingPane() {
       setDisplayName(branding.branding.display_name_override ?? '');
       setAccentColor(branding.branding.accent_color ?? ACCENT_COLOR_PALETTE[0]!.value);
       setLogoPath(branding.branding.logo_path ?? null);
+      setPinShape(branding.branding.pin_shape);
+      setPinSize(branding.branding.pin_size);
     }
   }, [branding.branding]);
 
@@ -96,6 +107,8 @@ export function AdminBrandingPane() {
         logo_path: logoPath,
         accent_color: accentColor,
         display_name_override: displayName.trim() || null,
+        pin_shape: pinShape,
+        pin_size: pinSize,
       });
       setSavedAt(Date.now());
       window.setTimeout(() => setSavedAt(null), 2400);
@@ -108,7 +121,9 @@ export function AdminBrandingPane() {
     branding.branding === null ||
     branding.branding.display_name_override !== (displayName.trim() || null) ||
     branding.branding.accent_color !== accentColor ||
-    branding.branding.logo_path !== logoPath;
+    branding.branding.logo_path !== logoPath ||
+    branding.branding.pin_shape !== pinShape ||
+    branding.branding.pin_size !== pinSize;
 
   return (
     <div className="space-y-5">
@@ -256,6 +271,74 @@ export function AdminBrandingPane() {
         </div>
       </section>
 
+      <section className="rounded-lg border border-black/10 bg-surface p-5">
+        <header className="mb-3">
+          <p className="text-[11px] font-medium uppercase tracking-[0.18em] text-text-faint">
+            Pin appearance
+          </p>
+          <h3 className="mt-1 font-semibold text-base">How your asset pins look</h3>
+          <p className="mt-1 text-xs text-text-muted">
+            Pick the shape and size used on every floor plan. Status colors,
+            type colors, and the audit ring stay the same regardless.
+          </p>
+        </header>
+
+        <div className="grid gap-4 sm:grid-cols-[1fr_auto] sm:items-start">
+          <div className="space-y-3">
+            <div>
+              <p className="mb-1.5 text-[11px] font-medium uppercase tracking-[0.18em] text-text-faint">
+                Shape
+              </p>
+              <div className="flex flex-wrap gap-2">
+                {PIN_SHAPES.map((s) => (
+                  <button
+                    key={s}
+                    type="button"
+                    onClick={() => setPinShape(s)}
+                    aria-pressed={pinShape === s}
+                    className={
+                      'inline-flex items-center gap-2 rounded-md border px-3 py-1.5 text-xs capitalize ' +
+                      (pinShape === s
+                        ? 'border-waymarks-ink bg-waymarks-ink/5 dark:border-white dark:bg-white/10'
+                        : 'border-black/10 hover:bg-black/5 dark:border-white/15 dark:hover:bg-white/5')
+                    }
+                  >
+                    <PinShapeSwatch shape={s} />
+                    {s}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            <div>
+              <p className="mb-1.5 text-[11px] font-medium uppercase tracking-[0.18em] text-text-faint">
+                Size
+              </p>
+              <div className="flex flex-wrap gap-2">
+                {PIN_SIZES.map((s) => (
+                  <button
+                    key={s}
+                    type="button"
+                    onClick={() => setPinSize(s)}
+                    aria-pressed={pinSize === s}
+                    className={
+                      'inline-flex items-center gap-2 rounded-md border px-3 py-1.5 text-xs capitalize ' +
+                      (pinSize === s
+                        ? 'border-waymarks-ink bg-waymarks-ink/5 dark:border-white dark:bg-white/10'
+                        : 'border-black/10 hover:bg-black/5 dark:border-white/15 dark:hover:bg-white/5')
+                    }
+                  >
+                    {s}
+                  </button>
+                ))}
+              </div>
+            </div>
+          </div>
+
+          <PinAppearancePreview shape={pinShape} size={pinSize} />
+        </div>
+      </section>
+
       <section className="rounded-lg border border-waymarks-gold/30 bg-waymarks-gold-soft p-5">
         <header className="mb-3">
           <p className="text-[11px] font-medium uppercase tracking-[0.18em] text-waymarks-gold">
@@ -306,6 +389,62 @@ export function AdminBrandingPane() {
         >
           Save branding
         </Button>
+      </div>
+    </div>
+  );
+}
+
+// =============================================================================
+// Helper components for the Pin appearance section
+// =============================================================================
+
+function PinShapeSwatch({ shape }: { shape: PinShape }) {
+  const cls =
+    shape === 'circle'
+      ? 'rounded-full'
+      : shape === 'square'
+        ? 'rounded-sm'
+        : 'rounded-[2px] rotate-45';
+  return (
+    <span
+      aria-hidden
+      className={'inline-block h-3.5 w-3.5 border border-white shadow-sm ' + cls}
+      style={{ backgroundColor: '#B8965A' }}
+    />
+  );
+}
+
+function PinAppearancePreview({ shape, size }: { shape: PinShape; size: PinSize }) {
+  // Three sample pins in the three statuses, rendered with the chosen
+  // shape/size against a tile-textured backdrop reminiscent of a floor plan.
+  const samples: Array<{ id: string; status: 'good' | 'attention' | 'flagged'; label: string }> = [
+    { id: 'preview-good', status: 'good', label: 'Good' },
+    { id: 'preview-attention', status: 'attention', label: 'Audit due' },
+    { id: 'preview-flagged', status: 'flagged', label: 'Flagged' },
+  ];
+  return (
+    <div className="rounded-md border border-black/10 bg-bg p-4 dark:border-white/10">
+      <p className="mb-3 flex items-center gap-1.5 text-[11px] font-medium uppercase tracking-[0.18em] text-text-faint">
+        <MapPin size={11} aria-hidden /> Preview
+      </p>
+      <div className="flex items-center justify-around gap-6 px-4 py-6">
+        {samples.map((s) => (
+          <div key={s.id} className="flex flex-col items-center gap-3">
+            <div className="relative h-10 w-10">
+              <div className="absolute left-1/2 top-1/2">
+                <PinMarker
+                  assetId={s.id}
+                  name={s.label}
+                  type="directory"
+                  status={s.status}
+                  shape={shape}
+                  size={size}
+                />
+              </div>
+            </div>
+            <span className="text-[11px] text-text-muted">{s.label}</span>
+          </div>
+        ))}
       </div>
     </div>
   );

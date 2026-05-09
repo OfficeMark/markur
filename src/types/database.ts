@@ -539,6 +539,8 @@ export type Database = {
           display_name_override: string | null
           logo_path: string | null
           org_id: string
+          pin_shape: string
+          pin_size: string
           updated_at: string
         }
         Insert: {
@@ -547,6 +549,8 @@ export type Database = {
           display_name_override?: string | null
           logo_path?: string | null
           org_id: string
+          pin_shape?: string
+          pin_size?: string
           updated_at?: string
         }
         Update: {
@@ -555,6 +559,8 @@ export type Database = {
           display_name_override?: string | null
           logo_path?: string | null
           org_id?: string
+          pin_shape?: string
+          pin_size?: string
           updated_at?: string
         }
         Relationships: [
