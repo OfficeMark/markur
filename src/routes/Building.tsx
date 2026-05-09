@@ -1,8 +1,10 @@
 import { Link, useParams } from 'react-router-dom';
-import { ArrowLeft, MapPin, Layers, ImageOff, Trash2 } from 'lucide-react';
+import { useState } from 'react';
+import { ArrowLeft, MapPin, Layers, ImageOff, Trash2, Plus } from 'lucide-react';
 import { AppShell } from '@/components/waymarks/AppShell';
 import { AccessManagementCard } from '@/components/waymarks/AccessManagementCard';
 import { BuildingPhotoUpload } from '@/components/waymarks/BuildingPhotoUpload';
+import { NewFloorDialog } from '@/components/waymarks/NewFloorDialog';
 import { ResumeAuditBanner } from '@/components/waymarks/ResumeAuditBanner';
 import { useBuilding } from '@/hooks/useBuildings';
 import { useFloors } from '@/hooks/useFloors';
@@ -13,9 +15,11 @@ export function Building() {
   const { id } = useParams<{ id: string }>();
   const { data: building, isLoading: bLoading, error: bError } = useBuilding(id);
   const { data: floors = [], isLoading: fLoading } = useFloors(id);
+  const [newFloorOpen, setNewFloorOpen] = useState(false);
   const isSuperAdmin = useIsSuperAdmin();
   const canManageAccess = useCan('manage_access', { type: 'building', id: id ?? '' });
   const canConfigure = useCan('configure', { type: 'building', id: id ?? '' });
+  const canEdit = useCan('edit', { type: 'building', id: id ?? '' });
 
   if (bLoading) return <Skeleton />;
 
@@ -84,15 +88,37 @@ export function Building() {
         )}
 
         <section className="space-y-3">
-          <h2 className="text-[11px] font-medium uppercase tracking-[0.22em] text-text-faint">
-            Floors
-          </h2>
+          <div className="flex items-center justify-between">
+            <h2 className="text-[11px] font-medium uppercase tracking-[0.22em] text-text-faint">
+              Floors
+            </h2>
+            {canEdit && (
+              <button
+                type="button"
+                onClick={() => setNewFloorOpen(true)}
+                className="inline-flex h-7 items-center gap-1 rounded-md border border-black/15 bg-surface px-2.5 text-[11px] font-medium text-text hover:bg-black/5 dark:border-white/15 dark:hover:bg-white/5"
+              >
+                <Plus size={11} aria-hidden />
+                Add floor
+              </button>
+            )}
+          </div>
           {fLoading ? (
             <FloorListSkeleton />
           ) : floors.length === 0 ? (
-            <p className="rounded-lg border border-black/10 bg-surface p-4 text-sm text-text-muted dark:border-white/10">
-              No floors set up yet.
-            </p>
+            <div className="rounded-lg border border-black/10 bg-surface p-4 dark:border-white/10">
+              <p className="text-sm text-text-muted">No floors set up yet.</p>
+              {canEdit && (
+                <button
+                  type="button"
+                  onClick={() => setNewFloorOpen(true)}
+                  className="mt-3 inline-flex h-8 items-center gap-1 rounded-md bg-waymarks-gold px-3 text-xs font-medium text-white hover:bg-waymarks-gold-deep"
+                >
+                  <Plus size={12} aria-hidden />
+                  Add the first floor
+                </button>
+              )}
+            </div>
           ) : (
             <ul className="grid grid-cols-1 gap-2 sm:grid-cols-2">
               {floors.map((f) => (
@@ -108,6 +134,14 @@ export function Building() {
           </section>
         )}
       </div>
+      {building && (
+        <NewFloorDialog
+          open={newFloorOpen}
+          onOpenChange={setNewFloorOpen}
+          buildingId={building.id}
+          buildingName={building.name}
+        />
+      )}
     </AppShell>
   );
 }

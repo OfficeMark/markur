@@ -1,5 +1,11 @@
-import { useQuery } from '@tanstack/react-query';
-import { getFloor, listFloorsByBuilding } from '@/lib/queries/floors';
+import {
+  createFloor,
+  getFloor,
+  listFloorsByBuilding,
+  nextFloorSortOrder,
+  type NewFloorInput,
+} from '@/lib/queries/floors';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 
 export const floorKeys = {
   all: ['floors'] as const,
@@ -22,3 +28,21 @@ export function useFloor(id: string | undefined) {
     enabled: !!id,
   });
 }
+
+export function useCreateFloor(buildingId: string | undefined) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (input: { label: string; sort_order?: number }) => {
+      if (!buildingId) throw new Error('Building id required');
+      let sort = input.sort_order;
+      if (sort === undefined) sort = await nextFloorSortOrder(buildingId);
+      return createFloor({ building_id: buildingId, label: input.label, sort_order: sort });
+    },
+    onSuccess: () => {
+      if (buildingId) qc.invalidateQueries({ queryKey: floorKeys.byBuilding(buildingId) });
+      qc.invalidateQueries({ queryKey: floorKeys.all });
+    },
+  });
+}
+
+export type { NewFloorInput };

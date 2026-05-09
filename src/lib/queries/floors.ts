@@ -26,3 +26,47 @@ export async function getFloor(id: string): Promise<Floor | null> {
   if (error) throw error;
   return data;
 }
+
+export type NewFloorInput = {
+  building_id: string;
+  label: string;
+  sort_order?: number;
+};
+
+/**
+ * Create a new floor under a building. RLS policy `floors_admin_create`
+ * gates this — must have edit rights on the parent building. The form
+ * validates the label client-side; sort_order defaults to a reasonable
+ * value if not specified (highest existing + 10).
+ */
+export async function createFloor(input: NewFloorInput): Promise<Floor> {
+  const { data, error } = await supabase
+    .from('floors')
+    .insert({
+      building_id: input.building_id,
+      label: input.label,
+      sort_order: input.sort_order ?? 100,
+    })
+    .select('*')
+    .single();
+  if (error) throw error;
+  return data;
+}
+
+/**
+ * Suggest the next sort_order for a new floor in a building. Caller can
+ * use this to default the form value so manually-added floors land at
+ * the bottom of the existing list.
+ */
+export async function nextFloorSortOrder(buildingId: string): Promise<number> {
+  const { data, error } = await supabase
+    .from('floors')
+    .select('sort_order')
+    .eq('building_id', buildingId)
+    .is('deleted_at', null)
+    .order('sort_order', { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  if (error) throw error;
+  return ((data?.sort_order ?? 0) + 10);
+}
