@@ -300,6 +300,7 @@ export function AssetTypesCard() {
               iconLeft={<Plus size={12} aria-hidden />}
               onClick={() => setAdding(true)}
               disabled={!orgId}
+              className="whitespace-nowrap"
             >
               Add type
             </Button>
