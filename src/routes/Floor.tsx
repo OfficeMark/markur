@@ -14,6 +14,7 @@ import { StepUpDialog } from '@/components/waymarks/StepUpDialog';
 import { AuditModeShell } from '@/components/waymarks/AuditModeShell';
 import { AssetGridView } from '@/components/waymarks/AssetGridView';
 import { FilterByTypePopover } from '@/components/waymarks/FilterByTypePopover';
+import { FilterByTextInput } from '@/components/waymarks/FilterByTextInput';
 import { useFloor } from '@/hooks/useFloors';
 import { useBuilding } from '@/hooks/useBuildings';
 import { useAssets, useSoftDeleteAsset, useUpdateAsset } from '@/hooks/useAssets';
@@ -62,9 +63,11 @@ export function Floor() {
   const [selectedAssetId, setSelectedAssetId] = useState<string | null>(null);
 
 
-  // M10c — view mode (Map / Grid) + filter-by-type set
+  // M10c — view mode (Map / Grid) + filter-by-type set.
+  // M22 (#6) — additional free-text filter that ANDs with the type filter.
   const [viewMode, setViewMode] = useState<'map' | 'grid'>('map');
   const [filterTypes, setFilterTypes] = useState<Set<string>>(new Set());
+  const [filterText, setFilterText] = useState('');
 
   // M9 — take this floor offline (pre-cache for the audit walkaround).
   const [cacheState, setCacheState] = useState<'idle' | 'caching' | 'cached' | 'error'>(
@@ -222,8 +225,15 @@ export function Floor() {
   const planKind = useMemo(() => planKindForPath(floor?.plan_url), [floor?.plan_url]);
 
   const baseSet = assets;
-  const visibleAssets =
-    filterTypes.size === 0 ? baseSet : baseSet.filter((a) => filterTypes.has(a.type));
+  const trimmedFilterText = filterText.trim().toLowerCase();
+  const visibleAssets = useMemo(() => {
+    return baseSet.filter((a) => {
+      if (filterTypes.size > 0 && !filterTypes.has(a.type)) return false;
+      if (trimmedFilterText && !matchesAssetText(a, trimmedFilterText)) return false;
+      return true;
+    });
+  }, [baseSet, filterTypes, trimmedFilterText]);
+  const filtersActive = filterTypes.size > 0 || trimmedFilterText.length > 0;
 
   if (fLoading) {
     return (
@@ -328,9 +338,19 @@ export function Floor() {
                 </button>
               </div>
             )}
+            {/* Free-text filter (M22 #6) */}
+            {floor.plan_url && assets.length > 0 && (
+              <FilterByTextInput value={filterText} onChange={setFilterText} />
+            )}
             {/* Filter by type */}
             {floor.plan_url && assets.length > 0 && (
               <FilterByTypePopover selectedTypes={filterTypes} onChange={setFilterTypes} />
+            )}
+            {/* "X of Y visible" indicator when any filter is active */}
+            {floor.plan_url && filtersActive && assets.length > 0 && (
+              <span className="inline-flex h-7 items-center rounded-md bg-waymarks-gold-soft px-2 text-[11px] font-medium text-waymarks-ink">
+                {visibleAssets.length} of {assets.length} visible
+              </span>
             )}
           </div>
         </div>
@@ -562,4 +582,36 @@ export function Floor() {
       )}
     </AppShell>
   );
+}
+
+// =============================================================================
+// Filter helpers (M22 #6)
+// =============================================================================
+
+/**
+ * Case-insensitive substring match against the user-visible text fields
+ * we care about: name, location notes, room number, notes, and the two
+ * vendor-contact strings. `q` is expected to already be trimmed and
+ * lower-cased by the caller.
+ */
+function matchesAssetText(a: Asset, q: string): boolean {
+  if (!q) return true;
+  const haystacks: Array<string | null | undefined> = [
+    a.name,
+    a.location_notes,
+    a.room_number,
+    a.notes,
+  ];
+  const v = a.vendor_contact as
+    | { name?: string | null; company?: string | null }
+    | null
+    | undefined;
+  if (v) {
+    haystacks.push(v.name);
+    haystacks.push(v.company);
+  }
+  for (const h of haystacks) {
+    if (h && h.toLowerCase().includes(q)) return true;
+  }
+  return false;
 }
