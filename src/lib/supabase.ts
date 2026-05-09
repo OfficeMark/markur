@@ -16,14 +16,19 @@ if (!url || !anonKey) {
  * only place `createClient` should be called.
  *
  * - `auth.persistSession` keeps the user signed in across reloads (M1 acceptance).
- * - `auth.detectSessionInUrl` handles email-link callbacks once we wire those up
- *   in M7 (invitation acceptance).
+ * - `auth.detectSessionInUrl` handles email-link callbacks (M7 invitation accept).
+ * - `auth.flowType: 'pkce'` is the default in supabase-js 2.43+, pinned here so
+ *   future supabase-js upgrades can't silently regress to implicit flow. Note
+ *   PKCE alone does NOT defeat Safari ITP (the code verifier sits in localStorage
+ *   alongside the access token, so both vanish together) — graceful auth-error
+ *   recovery in queryErrorHandler.ts is what catches that case.
  */
 export const supabase: SupabaseClient<Database> = createClient<Database>(url, anonKey, {
   auth: {
     persistSession: true,
     autoRefreshToken: true,
     detectSessionInUrl: true,
+    flowType: 'pkce',
     storageKey: 'waymarks-auth',
   },
 });

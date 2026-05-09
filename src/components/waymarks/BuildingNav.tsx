@@ -21,7 +21,7 @@ export function BuildingNav() {
       aria-label="Buildings and floors"
       className="hidden w-60 shrink-0 border-r border-black/30 bg-waymarks-ink text-white/90 lg:block"
     >
-      <div className="sticky top-14 max-h-[calc(100vh-3.5rem)] overflow-y-auto p-3">
+      <div className="sticky top-14 max-h-[calc(100vh-3.5rem)] max-h-[calc(100dvh-3.5rem)] overflow-y-auto p-3">
         <NavList />
       </div>
     </aside>

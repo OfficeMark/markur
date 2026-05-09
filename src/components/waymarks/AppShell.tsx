@@ -19,7 +19,7 @@ type AppShellProps = {
 export function AppShell({ children, withSidebar = true }: AppShellProps) {
   const navigate = useNavigate();
   return (
-    <div className="flex min-h-screen flex-col bg-waymarks-cream text-text">
+    <div className="flex min-h-screen min-h-dvh flex-col bg-waymarks-cream text-text">
       <a
         href="#main-content"
         className="sr-only focus:not-sr-only focus:fixed focus:left-3 focus:top-3 focus:z-50 focus:rounded-md focus:bg-waymarks-ink focus:px-3 focus:py-2 focus:text-sm focus:text-white focus:shadow-sheet"

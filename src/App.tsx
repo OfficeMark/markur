@@ -1,7 +1,7 @@
-import { lazy, Suspense } from 'react';
-import { Navigate, Route, Routes } from 'react-router-dom';
-import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { Loader2 } from 'lucide-react';
+import { lazy, Suspense, useEffect, useState } from 'react';
+import { Navigate, Route, Routes, useLocation, useNavigate } from 'react-router-dom';
+import { MutationCache, QueryCache, QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { AlertCircle, Loader2 } from 'lucide-react';
 import { ThemeProvider } from '@/components/waymarks/ThemeProvider';
 import { AuthProvider } from '@/lib/AuthProvider';
 import { PermissionsProvider } from '@/lib/PermissionsProvider';
@@ -10,6 +10,7 @@ import { ProtectedRoute } from '@/routes/ProtectedRoute';
 import { OfflineSync } from '@/components/waymarks/OfflineSync';
 import { ErrorBoundary } from '@/components/waymarks/ErrorBoundary';
 import { CookieConsent } from '@/components/waymarks/CookieConsent';
+import { handleQueryError, onSessionLost } from '@/lib/queryErrorHandler';
 
 // Code-splitting (M12): non-critical routes are lazy-loaded so the initial
 // bundle stays lean. Floor in particular pulls pdfjs-dist (~1.4 MB raw),
@@ -47,7 +48,21 @@ function RouteFallback() {
   );
 }
 
+// Global error caches catch the Safari/iOS ITP failure mode (M23): when the
+// browser quietly wipes localStorage between requests, the next mutation 401s
+// because the JWT is gone. handleQueryError classifies that and triggers
+// SessionLostHandler below, which surfaces a banner and redirects to /login.
 const queryClient = new QueryClient({
+  queryCache: new QueryCache({
+    onError: (err) => {
+      handleQueryError(err);
+    },
+  }),
+  mutationCache: new MutationCache({
+    onError: (err) => {
+      handleQueryError(err);
+    },
+  }),
   defaultOptions: {
     queries: {
       // Stale-while-revalidate is the read pattern (per CLAUDE.md). Defaults
@@ -59,6 +74,44 @@ const queryClient = new QueryClient({
   },
 });
 
+function SessionLostHandler() {
+  const navigate = useNavigate();
+  const location = useLocation();
+  const [visible, setVisible] = useState(false);
+
+  useEffect(() => {
+    return onSessionLost(() => {
+      // Already on /login — nothing to redirect to. The user is mid-sign-in
+      // and will see their own form-level error.
+      if (location.pathname.startsWith('/login')) return;
+
+      setVisible(true);
+      const next = location.pathname + location.search;
+      const target = `/login?next=${encodeURIComponent(next)}&reason=session-expired`;
+      // Brief banner, then redirect — gives the user context for the bounce
+      // instead of a silent kick to login.
+      window.setTimeout(() => {
+        setVisible(false);
+        navigate(target, { replace: true });
+      }, 1500);
+    });
+  }, [location.pathname, location.search, navigate]);
+
+  if (!visible) return null;
+  return (
+    <div
+      role="alert"
+      aria-live="polite"
+      className="fixed inset-x-0 top-0 z-[60] flex justify-center px-4 py-3"
+    >
+      <div className="flex items-start gap-2 rounded-md border border-warning/40 bg-warning-bg px-4 py-3 text-sm text-warning shadow-md">
+        <AlertCircle size={16} aria-hidden className="mt-0.5 shrink-0" />
+        <span>Your session expired. Redirecting to sign in…</span>
+      </div>
+    </div>
+  );
+}
+
 export default function App() {
   return (
     <ErrorBoundary>
@@ -67,6 +120,7 @@ export default function App() {
           <AuthProvider>
             <PermissionsProvider>
               <OfflineSync />
+              <SessionLostHandler />
               <Suspense fallback={<RouteFallback />}>
                 <Routes>
                   <Route path="/login" element={<Login />} />
