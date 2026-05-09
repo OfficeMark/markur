@@ -98,10 +98,19 @@ export const PinMarker = forwardRef<HTMLButtonElement, PinMarkerProps>(function 
   const px = PIN_SIZE_PX[size];
   const iconPx = PIN_ICON_PX[size];
   // circle: full radius. square: gentle rounding so it isn't harsh at small sizes.
-  // diamond: rotate the body 45deg and counter-rotate the inner icon so status stays upright.
+  // diamond: 45deg body rotation absorbed into the inline transform; inner icon counter-rotates.
   const shapeClass =
-    shape === 'circle' ? 'rounded-full' : shape === 'square' ? 'rounded-md' : 'rounded-sm rotate-45';
+    shape === 'circle' ? 'rounded-full' : shape === 'square' ? 'rounded-md' : 'rounded-sm';
+  const rotationDeg = shape === 'diamond' ? 45 : 0;
   const iconCounterRotate = shape === 'diamond';
+
+  // State emphasis scales (M5 selection, M5 reposition) folded into the inline
+  // transform so a single transform property carries everything that has to
+  // compose: anchor centering, shape rotation, state scale, and the M22 #4
+  // inverse-zoom scale (so pins stay roughly constant viewport size).
+  const stateScale = repositioning ? 1.25 : selected ? 1.1 : 1;
+  const transform =
+    `translate(-50%, -50%) rotate(${rotationDeg}deg) scale(calc(${stateScale} / var(--zoom, 1)))`;
 
   return (
     <button
@@ -117,9 +126,15 @@ export const PinMarker = forwardRef<HTMLButtonElement, PinMarkerProps>(function 
         onClick?.();
       }}
       aria-label={`${name} (${typeName}, ${statusLabel(status)}${lockSuffix})`}
-      style={{ backgroundColor: resolvedFill, width: px, height: px }}
+      style={{
+        backgroundColor: resolvedFill,
+        width: px,
+        height: px,
+        transform,
+        transformOrigin: 'center center',
+      }}
       className={cn(
-        'group relative inline-flex -translate-x-1/2 -translate-y-1/2 items-center justify-center',
+        'group relative inline-flex items-center justify-center',
         shapeClass,
         // Hit-area extender (M12): visible body may be small (down to 18px) but the
         // tap target is enlarged by ~6px via a before-pseudo so phones stay easy to hit.
@@ -127,8 +142,7 @@ export const PinMarker = forwardRef<HTMLButtonElement, PinMarkerProps>(function 
         'border border-white shadow-sm transition-transform',
         'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-waymarks-gold focus-visible:ring-offset-1',
         !repositioning && !unlocked && !selected && statusRingClass,
-        selected && 'scale-110',
-        repositioning && 'scale-125 cursor-grab touch-none ring-4 ring-waymarks-gold ring-offset-2',
+        repositioning && 'cursor-grab touch-none ring-4 ring-waymarks-gold ring-offset-2',
         repositioning &&
           'after:pointer-events-none after:absolute after:-inset-2 after:animate-pulse after:rounded-full after:border-[3px] after:border-dashed after:border-waymarks-gold',
         unlocked && !repositioning &&

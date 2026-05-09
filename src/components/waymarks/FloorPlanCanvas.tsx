@@ -4,6 +4,7 @@ import {
   useMemo,
   useRef,
   useState,
+  type CSSProperties,
   type PointerEvent as RPointerEvent,
   type ReactNode,
   type WheelEvent as RWheelEvent,
@@ -274,11 +275,15 @@ export function FloorPlanCanvas({
       )}
       <div
         className="absolute inset-0 flex items-center justify-center"
+        // M22 #4: PinMarker reads --zoom via CSS to apply an inverse-scale so
+        // pins stay roughly constant viewport size at high zoom (zooming in
+        // should reveal architecture detail, not blow up the pins).
         style={{
           transform,
           transformOrigin: 'center center',
           transition: isDragging ? 'none' : 'transform 80ms ease-out',
-        }}
+          ['--zoom' as string]: String(zoom),
+        } as CSSProperties}
       >
         <div className="relative">
           <canvas
