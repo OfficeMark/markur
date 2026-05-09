@@ -13,7 +13,7 @@ export function ProtectedRoute({ children }: { children: ReactNode }) {
 
   if (loading) {
     return (
-      <div className="flex min-h-screen items-center justify-center bg-waymarks-cream">
+      <div className="flex min-h-screen min-h-dvh items-center justify-center bg-waymarks-cream">
         <div className="h-8 w-8 animate-spin rounded-full border-2 border-waymarks-gold/40 border-t-waymarks-gold" />
         <span className="sr-only">Loading…</span>
       </div>

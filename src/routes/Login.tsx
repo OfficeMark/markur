@@ -25,7 +25,7 @@ type SignUpValues = z.infer<typeof signUpSchema>;
 export function Login() {
   const [mode, setMode] = useState<Mode>('sign-in');
   return (
-    <div className="flex min-h-screen items-center justify-center bg-waymarks-cream px-4 py-12 text-text">
+    <div className="flex min-h-screen min-h-dvh items-center justify-center bg-waymarks-cream px-4 py-12 text-text">
       <div className="w-full max-w-md space-y-6">
         <header className="space-y-3 text-center">
           <Link
