@@ -36,6 +36,7 @@ import {
 } from '@/lib/queries/asset-photos';
 import { computeStatus, statusLabel, type AssetStatus } from '@/lib/asset-status';
 import { useAssetTypes } from '@/hooks/useAssetTypes';
+import { AssetAttachmentsPanel } from './AssetAttachmentsPanel';
 import { useCan } from '@/lib/permissions-context';
 import { cn } from '@/lib/utils';
 import type { Asset, AssetPhoto, AuditLogEntry } from '@/types/database';
@@ -181,6 +182,7 @@ export function AssetDrawer({
                 />
                 <DetailsSection asset={asset} />
                 <StatusRow asset={asset} flagCount={asset.status === 'flagged' ? 1 : 0} />
+                <AssetAttachmentsPanel assetId={asset.id} canEdit={canEdit} />
                 <AttributesSection asset={asset} />
                 <ActivitySection items={activity} />
                 <PermissionsFooter />

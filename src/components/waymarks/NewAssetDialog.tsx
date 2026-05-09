@@ -52,6 +52,17 @@ export function NewAssetDialog({
   const [customTypeMode, setCustomTypeMode] = useState(false);
   const [customTypeLabel, setCustomTypeLabel] = useState('');
   const [customTypeError, setCustomTypeError] = useState<string | null>(null);
+  const [typeQuery, setTypeQuery] = useState('');
+
+  // M18b: filter the dropdown groups by the query string. Case-insensitive
+  // substring match on the label. Keeps the catalog discoverable when there
+  // are 30+ types.
+  const filteredSignage = typeQuery
+    ? signageTypes.filter((t) => t.label.toLowerCase().includes(typeQuery.toLowerCase()))
+    : signageTypes;
+  const filteredFacility = typeQuery
+    ? facilityTypes.filter((t) => t.label.toLowerCase().includes(typeQuery.toLowerCase()))
+    : facilityTypes;
   const [photos, setPhotos] = useState<File[]>([]);
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [photoErrors, setPhotoErrors] = useState<string[]>([]);
@@ -62,7 +73,6 @@ export function NewAssetDialog({
     formState: { errors, isSubmitting },
     reset,
     setValue,
-    watch,
   } = useForm<FormValues>({
     resolver: zodResolver(schema),
     mode: 'onTouched',
@@ -222,6 +232,13 @@ export function NewAssetDialog({
               error={errors.type?.message}
               hint="Optional. Pick from the list, add a custom one, or skip."
             >
+              <input
+                type="text"
+                value={typeQuery}
+                onChange={(e) => setTypeQuery(e.target.value)}
+                placeholder="Search types (e.g. emerg, donor, way…)"
+                className="mb-1.5 h-9 w-full rounded-md border border-black/10 bg-surface px-3 text-sm text-text outline-none focus:border-waymarks-gold focus:ring-2 focus:ring-waymarks-gold dark:border-white/10"
+              />
               <select
                 id="asset-type"
                 {...register('type')}
@@ -237,20 +254,24 @@ export function NewAssetDialog({
                 className="h-11 w-full rounded-md border border-black/10 bg-surface px-3 text-sm text-text outline-none focus:border-waymarks-gold focus:ring-2 focus:ring-waymarks-gold dark:border-white/10"
               >
                 <option value="">Choose a type… (optional)</option>
-                <optgroup label="Signage">
-                  {signageTypes.map((t) => (
-                    <option key={t.id} value={t.key}>
-                      {t.label}
-                    </option>
-                  ))}
-                </optgroup>
-                <optgroup label="Facility">
-                  {facilityTypes.map((t) => (
-                    <option key={t.id} value={t.key}>
-                      {t.label}
-                    </option>
-                  ))}
-                </optgroup>
+                {filteredSignage.length > 0 && (
+                  <optgroup label="Signage">
+                    {filteredSignage.map((t) => (
+                      <option key={t.id} value={t.key}>
+                        {t.label}
+                      </option>
+                    ))}
+                  </optgroup>
+                )}
+                {filteredFacility.length > 0 && (
+                  <optgroup label="Facility">
+                    {filteredFacility.map((t) => (
+                      <option key={t.id} value={t.key}>
+                        {t.label}
+                      </option>
+                    ))}
+                  </optgroup>
+                )}
                 <option value="__custom__">+ Add custom type…</option>
               </select>
               {customTypeMode && (
