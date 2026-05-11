@@ -27,6 +27,9 @@ export type NewBuildingInput = {
   address: string;
   city: string;
   region?: string | null;
+  /** M24: form picker sends this; the BEFORE-INSERT trigger raises if it's
+   *  null and no inference works (no more silent org auto-creation). */
+  owner_org_id?: string | null;
 };
 
 export async function createBuilding(input: NewBuildingInput): Promise<Building> {
@@ -38,6 +41,7 @@ export async function createBuilding(input: NewBuildingInput): Promise<Building>
       city: input.city,
       region: input.region ?? null,
       total_floors: 0,
+      owner_org_id: input.owner_org_id ?? null,
     })
     .select('*')
     .single();

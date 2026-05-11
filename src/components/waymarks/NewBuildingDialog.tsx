@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import * as Dialog from '@radix-ui/react-dialog';
 import { useForm } from 'react-hook-form';
@@ -8,6 +8,7 @@ import { AlertCircle, Building2, X } from 'lucide-react';
 import { Button } from '@/components/ui/Button';
 import { useCreateBuilding } from '@/hooks/useBuildings';
 import { usePermissions } from '@/lib/permissions-context';
+import { useOrgPickerOptions } from '@/hooks/useOrgPickerOptions';
 
 /**
  * Add a building (M10h). Used from the BuildingNav sidebar's "New building"
@@ -16,10 +17,18 @@ import { usePermissions } from '@/lib/permissions-context';
  * AccessManagementCard / canEdit checks immediately reflect the new
  * permission. We then navigate to the new /buildings/:id route.
  *
+ * M24: explicit org picker. The form sends owner_org_id, and the
+ * BEFORE-INSERT trigger no longer silently mints a new org as a fallback.
+ * If the user has more than one qualifying org, a dropdown is rendered;
+ * if exactly one, the picker is hidden and that org is sent silently; if
+ * zero, the form blocks with a clear "create or join an org first" error.
+ *
  * Optional photo upload is deferred to M10h-photo (post-launch polish) -
  * users can add the hero photo from the Building view's existing
  * BuildingPhotoUpload component once they're inside.
  */
+
+const LAST_ORG_KEY = 'markur:lastOrgIdForNewBuilding';
 
 const schema = z.object({
   name: z
@@ -35,6 +44,7 @@ const schema = z.object({
     .min(1, 'City is required')
     .max(80, 'Up to 80 characters'),
   region: z.string().max(80, 'Up to 80 characters').optional(),
+  owner_org_id: z.string().min(1, 'Pick an organization').optional(),
 });
 
 type FormValues = z.infer<typeof schema>;
@@ -49,35 +59,75 @@ export function NewBuildingDialog({ open, onOpenChange }: NewBuildingDialogProps
   const { refreshGrants } = usePermissions();
   const navigate = useNavigate();
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const { options: orgOptions, loading: orgLoading } = useOrgPickerOptions();
+
+  const defaultOrgId = useMemo(() => {
+    if (orgOptions.length === 0) return '';
+    const stored =
+      typeof window !== 'undefined' ? window.localStorage.getItem(LAST_ORG_KEY) : null;
+    if (stored && orgOptions.some((o) => o.id === stored)) return stored;
+    return orgOptions[0]?.id ?? '';
+  }, [orgOptions]);
 
   const {
     register,
     handleSubmit,
     formState: { errors, isSubmitting },
     reset,
+    setValue,
   } = useForm<FormValues>({
     resolver: zodResolver(schema),
-    defaultValues: { name: '', address: '', city: '', region: '' },
+    defaultValues: { name: '', address: '', city: '', region: '', owner_org_id: '' },
   });
 
   // Reset the form whenever the dialog opens so a previous attempt's values
-  // do not leak in.
+  // do not leak in. The default org is recomputed from current options.
   useEffect(() => {
     if (open) {
-      reset({ name: '', address: '', city: '', region: '' });
+      reset({
+        name: '',
+        address: '',
+        city: '',
+        region: '',
+        owner_org_id: defaultOrgId,
+      });
       setErrorMessage(null);
     }
-  }, [open, reset]);
+  }, [open, reset, defaultOrgId]);
+
+  // Once orgs finish loading after the dialog is open, push the default in
+  // (React Hook Form was already initialised with an empty value).
+  useEffect(() => {
+    if (open && defaultOrgId) {
+      setValue('owner_org_id', defaultOrgId);
+    }
+  }, [open, defaultOrgId, setValue]);
 
   async function onSubmit(values: FormValues) {
     setErrorMessage(null);
+
+    const chosenOrgId = (values.owner_org_id ?? '').trim();
+    if (!chosenOrgId) {
+      setErrorMessage(
+        orgOptions.length === 0
+          ? 'No organization available. Create or join an organization first.'
+          : 'Pick an organization for this building.'
+      );
+      return;
+    }
+
     try {
       const b = await create.mutateAsync({
         name: values.name.trim(),
         address: values.address.trim(),
         city: values.city.trim(),
         region: values.region?.trim() || null,
+        owner_org_id: chosenOrgId,
       });
+      // Remember the chosen org for next time.
+      if (typeof window !== 'undefined') {
+        window.localStorage.setItem(LAST_ORG_KEY, chosenOrgId);
+      }
       // The trigger minted a building_admin grant for this user. Pull the
       // fresh grants into the in-memory context so subsequent useCan checks
       // return true without a page reload.
@@ -92,6 +142,9 @@ export function NewBuildingDialog({ open, onOpenChange }: NewBuildingDialogProps
       );
     }
   }
+
+  const showPicker = orgOptions.length > 1;
+  const noOrgs = !orgLoading && orgOptions.length === 0;
 
   return (
     <Dialog.Root open={open} onOpenChange={onOpenChange}>
@@ -127,76 +180,113 @@ export function NewBuildingDialog({ open, onOpenChange }: NewBuildingDialogProps
             </Dialog.Close>
           </div>
 
-          <form
-            onSubmit={(e) => {
-              void handleSubmit(onSubmit)(e);
-            }}
-            className="space-y-3"
-          >
-            <Field
-              label="Name"
-              hint="What you call this building - e.g. 161 Bay St., Royal Bank Plaza, North Tower."
-              error={errors.name?.message}
+          {noOrgs ? (
+            <div className="rounded-md border border-danger/30 bg-danger-bg p-4 text-sm text-danger">
+              <p className="flex items-start gap-2 font-medium">
+                <AlertCircle size={14} aria-hidden className="mt-0.5 shrink-0" />
+                <span>No organization available</span>
+              </p>
+              <p className="mt-1 pl-6 text-xs text-danger/90">
+                You need to be a member of an organization before you can add a
+                building. Create or join one first, then come back here.
+              </p>
+              <div className="mt-3 flex justify-end">
+                <Dialog.Close asChild>
+                  <Button variant="secondary">Close</Button>
+                </Dialog.Close>
+              </div>
+            </div>
+          ) : (
+            <form
+              onSubmit={(e) => {
+                void handleSubmit(onSubmit)(e);
+              }}
+              className="space-y-3"
             >
-              <input
-                {...register('name')}
-                type="text"
-                autoFocus
-                autoComplete="organization"
-                className="h-10 w-full rounded-md border border-black/10 bg-surface px-3 text-sm text-text outline-none focus:border-waymarks-gold focus:ring-2 focus:ring-waymarks-gold"
-              />
-            </Field>
-
-            <Field label="Street address" error={errors.address?.message}>
-              <input
-                {...register('address')}
-                type="text"
-                autoComplete="street-address"
-                className="h-10 w-full rounded-md border border-black/10 bg-surface px-3 text-sm text-text outline-none focus:border-waymarks-gold focus:ring-2 focus:ring-waymarks-gold"
-              />
-            </Field>
-
-            <div className="grid gap-3 sm:grid-cols-2">
-              <Field label="City" error={errors.city?.message}>
-                <input
-                  {...register('city')}
-                  type="text"
-                  autoComplete="address-level2"
-                  className="h-10 w-full rounded-md border border-black/10 bg-surface px-3 text-sm text-text outline-none focus:border-waymarks-gold focus:ring-2 focus:ring-waymarks-gold"
-                />
-              </Field>
               <Field
-                label="Province / state"
-                hint="Optional"
-                error={errors.region?.message}
+                label="Name"
+                hint="What you call this building - e.g. 161 Bay St., Royal Bank Plaza, North Tower."
+                error={errors.name?.message}
               >
                 <input
-                  {...register('region')}
+                  {...register('name')}
                   type="text"
-                  autoComplete="address-level1"
+                  autoFocus
+                  autoComplete="organization"
                   className="h-10 w-full rounded-md border border-black/10 bg-surface px-3 text-sm text-text outline-none focus:border-waymarks-gold focus:ring-2 focus:ring-waymarks-gold"
                 />
               </Field>
-            </div>
 
-            {errorMessage && (
-              <p className="flex items-start gap-2 rounded-md border border-danger/30 bg-danger-bg px-3 py-2 text-xs text-danger">
-                <AlertCircle size={12} aria-hidden className="mt-0.5 shrink-0" />
-                <span>{errorMessage}</span>
-              </p>
-            )}
+              {showPicker && (
+                <Field
+                  label="Organization"
+                  hint="Which organization owns this building."
+                  error={errors.owner_org_id?.message}
+                >
+                  <select
+                    {...register('owner_org_id')}
+                    className="h-10 w-full rounded-md border border-black/10 bg-surface px-3 text-sm text-text outline-none focus:border-waymarks-gold focus:ring-2 focus:ring-waymarks-gold"
+                  >
+                    {orgOptions.map((o) => (
+                      <option key={o.id} value={o.id}>
+                        {o.name}
+                      </option>
+                    ))}
+                  </select>
+                </Field>
+              )}
 
-            <div className="flex justify-end gap-2 pt-1">
-              <Dialog.Close asChild>
-                <Button variant="secondary" disabled={isSubmitting}>
-                  Cancel
+              <Field label="Street address" error={errors.address?.message}>
+                <input
+                  {...register('address')}
+                  type="text"
+                  autoComplete="street-address"
+                  className="h-10 w-full rounded-md border border-black/10 bg-surface px-3 text-sm text-text outline-none focus:border-waymarks-gold focus:ring-2 focus:ring-waymarks-gold"
+                />
+              </Field>
+
+              <div className="grid gap-3 sm:grid-cols-2">
+                <Field label="City" error={errors.city?.message}>
+                  <input
+                    {...register('city')}
+                    type="text"
+                    autoComplete="address-level2"
+                    className="h-10 w-full rounded-md border border-black/10 bg-surface px-3 text-sm text-text outline-none focus:border-waymarks-gold focus:ring-2 focus:ring-waymarks-gold"
+                  />
+                </Field>
+                <Field
+                  label="Province / state"
+                  hint="Optional"
+                  error={errors.region?.message}
+                >
+                  <input
+                    {...register('region')}
+                    type="text"
+                    autoComplete="address-level1"
+                    className="h-10 w-full rounded-md border border-black/10 bg-surface px-3 text-sm text-text outline-none focus:border-waymarks-gold focus:ring-2 focus:ring-waymarks-gold"
+                  />
+                </Field>
+              </div>
+
+              {errorMessage && (
+                <p className="flex items-start gap-2 rounded-md border border-danger/30 bg-danger-bg px-3 py-2 text-xs text-danger">
+                  <AlertCircle size={12} aria-hidden className="mt-0.5 shrink-0" />
+                  <span>{errorMessage}</span>
+                </p>
+              )}
+
+              <div className="flex justify-end gap-2 pt-1">
+                <Dialog.Close asChild>
+                  <Button variant="secondary" disabled={isSubmitting}>
+                    Cancel
+                  </Button>
+                </Dialog.Close>
+                <Button variant="gold" type="submit" loading={isSubmitting}>
+                  Create building
                 </Button>
-              </Dialog.Close>
-              <Button variant="gold" type="submit" loading={isSubmitting}>
-                Create building
-              </Button>
-            </div>
-          </form>
+              </div>
+            </form>
+          )}
         </Dialog.Content>
       </Dialog.Portal>
     </Dialog.Root>
