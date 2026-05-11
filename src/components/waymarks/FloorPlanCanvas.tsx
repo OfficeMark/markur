@@ -65,6 +65,14 @@ export function FloorPlanCanvas({
     moved: boolean;
   } | null>(null);
   const [isDragging, setIsDragging] = useState(false);
+  // M22c: multi-touch pinch-zoom. Without this, mobile pinch is handled by the
+  // browser (page-level visual zoom) and our --zoom CSS var never updates, so
+  // PinMarker's inverse-scale never fires and pins balloon on top of each
+  // other. Track every active pointer; once two are down, derive the zoom
+  // ratio from their changing distance and feed setZoom — same path the
+  // wheel handler uses, so the existing inverse-scale logic just works.
+  const activePointersRef = useRef<Map<number, { x: number; y: number }>>(new Map());
+  const pinchRef = useRef<{ startDist: number; startZoom: number } | null>(null);
 
   // Render whenever src or kind changes.
   useEffect(() => {
@@ -149,6 +157,25 @@ export function FloorPlanCanvas({
     (e: RPointerEvent<HTMLDivElement>) => {
       if (e.button !== 0) return;
       e.currentTarget.setPointerCapture(e.pointerId);
+      activePointersRef.current.set(e.pointerId, { x: e.clientX, y: e.clientY });
+
+      // Second finger down → switch to pinch mode and abandon any
+      // in-progress single-finger pan.
+      if (activePointersRef.current.size >= 2) {
+        dragRef.current = null;
+        setIsDragging(false);
+        const pts = Array.from(activePointersRef.current.values());
+        const a = pts[0];
+        const b = pts[1];
+        if (a && b) {
+          pinchRef.current = {
+            startDist: Math.hypot(b.x - a.x, b.y - a.y) || 1,
+            startZoom: zoom,
+          };
+        }
+        return;
+      }
+
       dragRef.current = {
         startClientX: e.clientX,
         startClientY: e.clientY,
@@ -157,10 +184,28 @@ export function FloorPlanCanvas({
         moved: false,
       };
     },
-    [pan.x, pan.y]
+    [pan.x, pan.y, zoom]
   );
 
   const onPointerMove = useCallback((e: RPointerEvent<HTMLDivElement>) => {
+    if (activePointersRef.current.has(e.pointerId)) {
+      activePointersRef.current.set(e.pointerId, { x: e.clientX, y: e.clientY });
+    }
+
+    // Pinch path: drive the same zoom state the wheel handler uses, so
+    // PinMarker's --zoom inverse-scale fires identically on mobile.
+    if (pinchRef.current && activePointersRef.current.size >= 2) {
+      const pts = Array.from(activePointersRef.current.values());
+      const a = pts[0];
+      const b = pts[1];
+      if (a && b) {
+        const dist = Math.hypot(b.x - a.x, b.y - a.y);
+        const ratio = dist / pinchRef.current.startDist;
+        setZoom(clamp(pinchRef.current.startZoom * ratio, 0.3, 6));
+      }
+      return;
+    }
+
     const drag = dragRef.current;
     if (!drag) return;
     const dx = e.clientX - drag.startClientX;
@@ -176,6 +221,11 @@ export function FloorPlanCanvas({
 
   const onPointerUp = useCallback(
     (e: RPointerEvent<HTMLDivElement>) => {
+      activePointersRef.current.delete(e.pointerId);
+      if (activePointersRef.current.size < 2) {
+        pinchRef.current = null;
+      }
+
       const drag = dragRef.current;
       dragRef.current = null;
       if (e.currentTarget.hasPointerCapture(e.pointerId)) {
@@ -254,6 +304,10 @@ export function FloorPlanCanvas({
       onPointerMove={onPointerMove}
       onPointerUp={onPointerUp}
       onPointerCancel={onPointerUp}
+      // M22c: the app owns all gestures inside the canvas — without this the
+      // browser eats two-finger pinches as page-level visual zoom, which
+      // bypasses --zoom and balloons the pins.
+      style={{ touchAction: 'none' }}
       className={cn(
         'relative h-[70vh] w-full overflow-hidden rounded-xl border border-black/10 bg-surface outline-none focus-visible:ring-2 focus-visible:ring-waymarks-gold dark:border-white/10 dark:bg-white/5',
         cursor,
