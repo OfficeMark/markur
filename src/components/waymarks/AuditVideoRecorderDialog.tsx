@@ -1,24 +1,30 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import * as Dialog from '@radix-ui/react-dialog';
-import { AlertCircle, Circle, RotateCcw, Upload, Video, X } from 'lucide-react';
+import { AlertCircle, Circle, FileVideo, RotateCcw, Upload, Video, X } from 'lucide-react';
 import { Button } from '@/components/ui/Button';
 import { useAddAuditVideo } from '@/hooks/useAuditVideos';
 import {
   AUDIT_VIDEO_BITRATE,
+  AUDIT_VIDEO_MAX_BYTES,
   AUDIT_VIDEO_MAX_DURATION_SECONDS,
+  AUDIT_VIDEO_MIMES,
 } from '@/lib/queries/audit-videos';
 
 /**
- * In-app field recording for audit videos (M27). Uses MediaRecorder against
- * the device camera + mic. Caps at 3 min / 1.5 Mbps per the briefing —
- * those numbers are owner-set, not adjustable here.
+ * In-app audit-video capture (M27) + camera-roll upload (M31). One dialog,
+ * two entry paths:
+ *   * Record — getUserMedia + MediaRecorder, 1.5 Mbps, 3-min cap, then preview.
+ *   * Upload — pick an existing video file (mp4 / mov / webm), validate size +
+ *     duration, then preview.
+ * Both paths converge on the same preview → optional notes → upload tail and
+ * the same addAuditVideo storage/DB path.
  *
- * Flow: idle → recording → preview → uploading → done. Cancel from any
- * stage tears down the MediaStream and discards the blob.
+ * The recorder path needs a secure context (https or localhost). The upload
+ * path works over plain HTTP/LAN — handy for mobile testing without a cert.
  *
- * Stays a separate component so the dialog can be reused by the asset
- * drawer (assetId set) and the building/floor view (assetId null) without
- * duplicating recorder state.
+ * Stages: idle (chooser) → requesting/recording (record path) → preview →
+ * uploading. Cancel from any stage tears down the MediaStream and discards
+ * the blob.
  */
 
 type Stage = 'idle' | 'requesting' | 'recording' | 'preview' | 'uploading';
@@ -71,6 +77,7 @@ export function AuditVideoRecorderDialog({
   const chunksRef = useRef<Blob[]>([]);
   const startedAtRef = useRef<number>(0);
   const timerRef = useRef<number | null>(null);
+  const uploadInputRef = useRef<HTMLInputElement | null>(null);
 
   const [stage, setStage] = useState<Stage>('idle');
   const [elapsed, setElapsed] = useState(0);
@@ -78,6 +85,9 @@ export function AuditVideoRecorderDialog({
   const [notes, setNotes] = useState('');
   const [blob, setBlob] = useState<Blob | null>(null);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
+  // M31: which path produced the current preview, so the UI can say
+  // "Re-record" vs "Pick another file" instead of one generic label.
+  const [source, setSource] = useState<'record' | 'upload'>('record');
 
   const finalDuration = useMemo(() => {
     // If the recorder fired stop because the cap hit, elapsed already
@@ -116,6 +126,7 @@ export function AuditVideoRecorderDialog({
     setElapsed(0);
     setNotes('');
     setError(null);
+    setSource('record');
     setStage('idle');
   }, [previewUrl, teardownStream]);
 
@@ -135,6 +146,7 @@ export function AuditVideoRecorderDialog({
 
   const beginRecording = useCallback(async () => {
     setError(null);
+    setSource('record');
     setStage('requesting');
     try {
       const stream = await navigator.mediaDevices.getUserMedia({
@@ -213,12 +225,77 @@ export function AuditVideoRecorderDialog({
     }
   }, []);
 
+  const probeDurationSeconds = useCallback(
+    (objectUrl: string): Promise<number> =>
+      new Promise((resolve) => {
+        // A throwaway <video> reads metadata without rendering. Some
+        // containers report duration === Infinity until seek; cap at the
+        // briefing's 3-min limit so the bad-metadata case can't write a
+        // bogus duration to the DB.
+        const probe = document.createElement('video');
+        probe.preload = 'metadata';
+        probe.src = objectUrl;
+        const settle = (secs: number) => resolve(Math.max(0, Math.min(secs, AUDIT_VIDEO_MAX_DURATION_SECONDS)));
+        probe.addEventListener(
+          'loadedmetadata',
+          () => {
+            const d = probe.duration;
+            settle(Number.isFinite(d) ? Math.floor(d) : 0);
+          },
+          { once: true }
+        );
+        probe.addEventListener('error', () => settle(0), { once: true });
+        // Hard safety net — never block the UI for more than a couple seconds.
+        window.setTimeout(() => settle(0), 2000);
+      }),
+    []
+  );
+
+  const handleUploadFile = useCallback(
+    async (file: File) => {
+      setError(null);
+      // Size cap mirrors the bucket. Most camera-roll clips at 1080p are
+      // well under 100 MB for a 3-min duration; longer clips will trip
+      // this, which is also our soft duration enforcement.
+      if (file.size > AUDIT_VIDEO_MAX_BYTES) {
+        setError(`That file is too large. Limit is ${Math.round(AUDIT_VIDEO_MAX_BYTES / 1048576)} MB.`);
+        return;
+      }
+      const mimeOk =
+        (AUDIT_VIDEO_MIMES as readonly string[]).includes(file.type) ||
+        // Some Android browsers omit the MIME on camera-roll files — fall
+        // back to the file extension so the picker isn't unusable.
+        /\.(mp4|mov|m4v|webm)$/i.test(file.name);
+      if (!mimeOk) {
+        setError('Unsupported video format. Use MP4, MOV, or WebM.');
+        return;
+      }
+
+      setSource('upload');
+      setBlob(file);
+      const url = URL.createObjectURL(file);
+      // Replace any prior preview URL so we don't leak.
+      if (previewUrl) URL.revokeObjectURL(previewUrl);
+      setPreviewUrl(url);
+      const seconds = await probeDurationSeconds(url);
+      setElapsed(seconds);
+      setStage('preview');
+    },
+    [previewUrl, probeDurationSeconds]
+  );
+
+  const openFilePicker = useCallback(() => {
+    setError(null);
+    uploadInputRef.current?.click();
+  }, []);
+
   const discardAndRetry = useCallback(() => {
     if (previewUrl) URL.revokeObjectURL(previewUrl);
     setPreviewUrl(null);
     setBlob(null);
     setElapsed(0);
     setError(null);
+    if (uploadInputRef.current) uploadInputRef.current.value = '';
     setStage('idle');
   }, [previewUrl]);
 
@@ -254,11 +331,11 @@ export function AuditVideoRecorderDialog({
             <div>
               <Dialog.Title className="flex items-center gap-2 text-xl font-semibold">
                 <Video size={18} aria-hidden className="text-waymarks-gold" />
-                Record audit video
+                Add audit video
               </Dialog.Title>
               <Dialog.Description className="mt-1 text-sm text-text-muted">
                 Attaches to <span className="font-medium text-text">{scopeLabel}</span>.
-                Max 3 minutes.
+                Record live or upload from your camera roll. Max 3 minutes.
               </Dialog.Description>
             </div>
             <Dialog.Close asChild>
@@ -277,9 +354,24 @@ export function AuditVideoRecorderDialog({
               className="mt-4 flex items-start gap-2 rounded-md border border-warning/30 bg-warning-bg px-3 py-2 text-sm text-warning"
             >
               <AlertCircle size={14} aria-hidden className="mt-0.5 shrink-0" />
-              <span>This browser doesn't support in-app recording. Try Chrome or Safari on your phone.</span>
+              <span>This browser doesn't support in-app recording. You can still upload a video file.</span>
             </div>
           )}
+
+          {/* Hidden file input shared by the Upload buttons. accept="video/*"
+              (no `capture` attribute) so iOS / Android surface the camera
+              roll instead of the live camera. */}
+          <input
+            ref={uploadInputRef}
+            type="file"
+            accept="video/mp4,video/quicktime,video/webm,video/*"
+            className="sr-only"
+            onChange={(e) => {
+              const f = e.target.files?.[0];
+              if (f) void handleUploadFile(f);
+              e.target.value = '';
+            }}
+          />
 
           {error && (
             <div
@@ -350,12 +442,19 @@ export function AuditVideoRecorderDialog({
                   Cancel
                 </Button>
                 <Button
+                  variant="secondary"
+                  onClick={openFilePicker}
+                  iconLeft={<FileVideo size={14} aria-hidden />}
+                >
+                  Upload video
+                </Button>
+                <Button
                   variant="gold"
                   onClick={() => void beginRecording()}
                   disabled={recorderUnsupported}
                   iconLeft={<Video size={14} aria-hidden />}
                 >
-                  Start recording
+                  Record
                 </Button>
               </>
             )}
@@ -383,14 +482,14 @@ export function AuditVideoRecorderDialog({
                   onClick={discardAndRetry}
                   iconLeft={<RotateCcw size={14} aria-hidden />}
                 >
-                  Re-record
+                  {source === 'upload' ? 'Pick another' : 'Re-record'}
                 </Button>
                 <Button
                   variant="gold"
                   onClick={() => void upload()}
                   iconLeft={<Upload size={14} aria-hidden />}
                 >
-                  Upload
+                  {source === 'upload' ? 'Use this' : 'Upload'}
                 </Button>
               </>
             )}
