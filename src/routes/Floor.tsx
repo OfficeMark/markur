@@ -555,8 +555,10 @@ export function Floor() {
           }}
           floorId={floor.id}
           position={placePos}
-          onCreated={(asset) => {
-            setSelectedAssetId(asset.id);
+          // M28: after creation, return the user to the map view without
+          // popping the edit drawer. They can tap the new pin to edit it.
+          onCreated={() => {
+            setSelectedAssetId(null);
           }}
         />
       )}
