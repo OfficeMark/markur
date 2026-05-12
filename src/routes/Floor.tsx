@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
-import { ArrowLeft, Check, ChevronRight, ClipboardList, Download, Eye, ImageOff, LayoutGrid, Map as MapIcon, Plus, RefreshCw, Trash2 } from 'lucide-react';
+import { ArrowLeft, Check, ChevronRight, ClipboardList, Download, Eye, ImageOff, LayoutGrid, Map as MapIcon, Plus, RefreshCw, Trash2, Video } from 'lucide-react';
 import { AppShell } from '@/components/waymarks/AppShell';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { Button } from '@/components/ui/Button';
@@ -15,6 +15,8 @@ import { AuditModeShell } from '@/components/waymarks/AuditModeShell';
 import { AssetGridView } from '@/components/waymarks/AssetGridView';
 import { FilterByTypePopover } from '@/components/waymarks/FilterByTypePopover';
 import { FilterByTextInput } from '@/components/waymarks/FilterByTextInput';
+import { AuditVideoRecorderDialog } from '@/components/waymarks/AuditVideoRecorderDialog';
+import { useAssetsWithVideos } from '@/hooks/useAuditVideos';
 import { useFloor } from '@/hooks/useFloors';
 import { useBuilding } from '@/hooks/useBuildings';
 import { useAssets, useSoftDeleteAsset, useUpdateAsset } from '@/hooks/useAssets';
@@ -83,6 +85,11 @@ export function Floor() {
 
   // Soft-delete confirmation state (M5).
   const [deleteAssetId, setDeleteAssetId] = useState<string | null>(null);
+
+  // M27 — building-level video recording (no asset selected).
+  const [videoRecorderOpen, setVideoRecorderOpen] = useState(false);
+  const assetIds = useMemo(() => assets.map((a) => a.id), [assets]);
+  const { data: assetsWithVideos } = useAssetsWithVideos(floor?.building_id, assetIds);
 
   // Resolve a signed URL whenever the plan_url changes.
   useEffect(() => {
@@ -369,6 +376,16 @@ export function Floor() {
               {activeSession ? 'Resume audit' : 'Audit'}
             </button>
           )}
+          {canEdit && (
+            <button
+              type="button"
+              onClick={() => setVideoRecorderOpen(true)}
+              className="inline-flex h-7 items-center gap-1 rounded-md border border-black/15 bg-surface px-2.5 text-[11px] font-medium text-text hover:bg-black/5 dark:border-white/15 dark:hover:bg-white/5"
+            >
+              <Video size={11} aria-hidden />
+              Record
+            </button>
+          )}
           {floor.plan_url && canCreate && (
             <button
               type="button"
@@ -460,6 +477,7 @@ export function Floor() {
               selectedAssetId={selectedAssetId}
               onSelectAsset={(a: Asset) => setSelectedAssetId(a.id)}
               lastAuditByAsset={lastAuditByAsset ?? null}
+              assetsWithVideos={assetsWithVideos ?? null}
             />
           ) : (
             <div className="relative">
@@ -578,6 +596,16 @@ export function Floor() {
           planUrl={signedUrl}
           planKind={planKind}
           onClose={() => setInAudit(false)}
+        />
+      )}
+
+      {canEdit && floor.building_id && (
+        <AuditVideoRecorderDialog
+          open={videoRecorderOpen}
+          onOpenChange={setVideoRecorderOpen}
+          buildingId={floor.building_id}
+          assetId={null}
+          scopeLabel={`${building?.name ?? 'Building'} · Floor ${floor.label}`}
         />
       )}
     </AppShell>

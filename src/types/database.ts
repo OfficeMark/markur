@@ -338,6 +338,57 @@ export type Database = {
           },
         ]
       }
+      audit_videos: {
+        Row: {
+          asset_id: string | null
+          building_id: string
+          created_at: string
+          created_by: string | null
+          duration_seconds: number | null
+          id: string
+          notes: string | null
+          recorded_at: string
+          storage_path: string
+        }
+        Insert: {
+          asset_id?: string | null
+          building_id: string
+          created_at?: string
+          created_by?: string | null
+          duration_seconds?: number | null
+          id?: string
+          notes?: string | null
+          recorded_at?: string
+          storage_path: string
+        }
+        Update: {
+          asset_id?: string | null
+          building_id?: string
+          created_at?: string
+          created_by?: string | null
+          duration_seconds?: number | null
+          id?: string
+          notes?: string | null
+          recorded_at?: string
+          storage_path?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "audit_videos_asset_id_fkey"
+            columns: ["asset_id"]
+            isOneToOne: false
+            referencedRelation: "assets"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "audit_videos_building_id_fkey"
+            columns: ["building_id"]
+            isOneToOne: false
+            referencedRelation: "buildings"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       buildings: {
         Row: {
           address: string
@@ -804,3 +855,4 @@ export type OrgAssetType = Tbl['org_asset_types']['Row'];
 export type OrgAssetTypeOverrideRow = Tbl['org_asset_type_overrides']['Row'];
 export type OrgBrandingRow = Tbl['org_branding']['Row'];
 export type AssetAttachmentRow = Tbl['asset_attachments']['Row'];
+export type AuditVideoRow = Tbl['audit_videos']['Row'];

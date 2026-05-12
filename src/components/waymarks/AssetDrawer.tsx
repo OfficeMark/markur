@@ -37,6 +37,8 @@ import {
 import { computeStatus, statusLabel, type AssetStatus } from '@/lib/asset-status';
 import { useAssetTypes } from '@/hooks/useAssetTypes';
 import { AssetAttachmentsPanel } from './AssetAttachmentsPanel';
+import { AuditVideosPanel } from './AuditVideosPanel';
+import { AuditVideoRecorderDialog } from './AuditVideoRecorderDialog';
 import { useCan } from '@/lib/permissions-context';
 import { cn } from '@/lib/utils';
 import type { Asset, AssetPhoto, AuditLogEntry } from '@/types/database';
@@ -86,10 +88,12 @@ export function AssetDrawer({
   const { data: building } = useBuilding(buildingId);
   const update = useUpdateAsset(floorId);
   const [editing, setEditing] = useState(false);
+  const [recordOpen, setRecordOpen] = useState(false);
 
   // Reset edit mode whenever the selected asset changes.
   useEffect(() => {
     setEditing(false);
+    setRecordOpen(false);
   }, [assetId]);
 
   return (
@@ -183,6 +187,11 @@ export function AssetDrawer({
                 <DetailsSection asset={asset} />
                 <StatusRow asset={asset} flagCount={asset.status === 'flagged' ? 1 : 0} />
                 <AssetAttachmentsPanel assetId={asset.id} canEdit={canEdit} />
+                <AuditVideosPanel
+                  buildingId={buildingId}
+                  assetId={asset.id}
+                  onRecordClick={canEdit ? () => setRecordOpen(true) : undefined}
+                />
                 <AttributesSection asset={asset} />
                 <ActivitySection items={activity} />
                 <PermissionsFooter />
@@ -191,6 +200,15 @@ export function AssetDrawer({
           </div>
         </Dialog.Content>
       </Dialog.Portal>
+      {asset && (
+        <AuditVideoRecorderDialog
+          open={recordOpen}
+          onOpenChange={setRecordOpen}
+          buildingId={buildingId}
+          assetId={asset.id}
+          scopeLabel={asset.name?.trim() || 'this asset'}
+        />
+      )}
     </Dialog.Root>
   );
 }

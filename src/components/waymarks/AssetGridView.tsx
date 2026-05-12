@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { ArrowDown, ArrowUp, ArrowUpDown, ImageOff } from 'lucide-react';
+import { ArrowDown, ArrowUp, ArrowUpDown, ImageOff, Video } from 'lucide-react';
 import { format, formatDistanceToNow } from 'date-fns';
 import { useAssetPhotos } from '@/hooks/useAssetPhotos';
 import { signedAssetPhotoUrl } from '@/lib/queries/asset-photos';
@@ -23,6 +23,8 @@ export type AssetGridViewProps = {
   onSelectAsset: (asset: Asset) => void;
   /** Map<assetId, ISO timestamp> of latest CONFIRMED audit (drives status). */
   lastAuditByAsset?: ReadonlyMap<string, string> | null;
+  /** Set of asset ids known to have at least one audit video — drives the M27 Gold badge. */
+  assetsWithVideos?: ReadonlySet<string> | null;
 };
 
 type SortKey = 'name' | 'type' | 'status' | 'last_audit';
@@ -34,6 +36,7 @@ export function AssetGridView({
   selectedAssetId,
   onSelectAsset,
   lastAuditByAsset,
+  assetsWithVideos,
 }: AssetGridViewProps) {
   const [sort, setSort] = useState<SortState>({ key: 'name', dir: 'asc' });
 
@@ -105,6 +108,7 @@ export function AssetGridView({
                 lastAudit={lastAudit}
                 status={status}
                 selected={asset.id === selectedAssetId}
+                hasVideo={!!assetsWithVideos?.has(asset.id)}
                 onClick={() => onSelectAsset(asset)}
               />
             ))}
@@ -150,12 +154,14 @@ function Row({
   lastAudit,
   status,
   selected,
+  hasVideo,
   onClick,
 }: {
   asset: Asset;
   lastAudit: string | null;
   status: AssetStatus;
   selected: boolean;
+  hasVideo: boolean;
   onClick: () => void;
 }) {
   const typeColor = TYPE_COLORS[asset.type]?.fill ?? '#475569';
@@ -192,9 +198,20 @@ function Row({
         <PhotoThumb assetId={asset.id} />
       </td>
       <td className="py-2 pr-3">
-        <p className={cn('font-medium', isUntitled ? 'italic text-text-muted' : 'text-text')}>
-          {displayName}
-        </p>
+        <div className="flex items-center gap-1.5">
+          <p className={cn('font-medium', isUntitled ? 'italic text-text-muted' : 'text-text')}>
+            {displayName}
+          </p>
+          {hasVideo && (
+            <span
+              aria-label="Has audit video"
+              title="Has audit video"
+              className="inline-flex h-5 w-5 items-center justify-center rounded-full bg-waymarks-gold text-white"
+            >
+              <Video size={11} aria-hidden />
+            </span>
+          )}
+        </div>
         {metaParts.length > 0 && (
           <p className="mt-0.5 truncate text-xs text-text-faint">
             {metaParts.join(' · ')}
