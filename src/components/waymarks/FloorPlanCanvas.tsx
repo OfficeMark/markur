@@ -65,14 +65,36 @@ export function FloorPlanCanvas({
     moved: boolean;
   } | null>(null);
   const [isDragging, setIsDragging] = useState(false);
+  // M29: disable the transform transition while a pinch is in flight so
+  // pointer-move-driven scale/pan land on the GPU on the very next paint
+  // instead of being eased between intermediate values — the easing made
+  // the gesture read as jittery on phones.
+  const [isPinching, setIsPinching] = useState(false);
   // M22c: multi-touch pinch-zoom. Without this, mobile pinch is handled by the
   // browser (page-level visual zoom) and our --zoom CSS var never updates, so
   // PinMarker's inverse-scale never fires and pins balloon on top of each
   // other. Track every active pointer; once two are down, derive the zoom
   // ratio from their changing distance and feed setZoom — same path the
   // wheel handler uses, so the existing inverse-scale logic just works.
+  //
+  // M29: anchor the gesture at the pinch focal point so content stays under
+  // the user's fingers as they spread/pinch. Without anchoring, scaling
+  // happens around the container's geometric centre and the content slides
+  // out from under the fingers — that's what was being read as "jitter."
+  // We snapshot startFocal/startPan/startZoom/containerCenter when the
+  // second finger lands and recompute pan from the closed-form solution
+  // each frame (see formula in the move handler).
   const activePointersRef = useRef<Map<number, { x: number; y: number }>>(new Map());
-  const pinchRef = useRef<{ startDist: number; startZoom: number } | null>(null);
+  const pinchRef = useRef<
+    | {
+        startDist: number;
+        startZoom: number;
+        startFocal: { x: number; y: number };
+        startPan: { x: number; y: number };
+        centre: { x: number; y: number };
+      }
+    | null
+  >(null);
 
   // Render whenever src or kind changes.
   useEffect(() => {
@@ -160,18 +182,25 @@ export function FloorPlanCanvas({
       activePointersRef.current.set(e.pointerId, { x: e.clientX, y: e.clientY });
 
       // Second finger down → switch to pinch mode and abandon any
-      // in-progress single-finger pan.
+      // in-progress single-finger pan. Snapshot enough state to anchor
+      // the scale at the focal point (M29). Container centre is in
+      // viewport coords because that's the space pointer events live in.
       if (activePointersRef.current.size >= 2) {
         dragRef.current = null;
         setIsDragging(false);
         const pts = Array.from(activePointersRef.current.values());
         const a = pts[0];
         const b = pts[1];
-        if (a && b) {
+        const rect = containerRef.current?.getBoundingClientRect();
+        if (a && b && rect) {
           pinchRef.current = {
             startDist: Math.hypot(b.x - a.x, b.y - a.y) || 1,
             startZoom: zoom,
+            startFocal: { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 },
+            startPan: { x: pan.x, y: pan.y },
+            centre: { x: rect.left + rect.width / 2, y: rect.top + rect.height / 2 },
           };
+          setIsPinching(true);
         }
         return;
       }
@@ -194,14 +223,32 @@ export function FloorPlanCanvas({
 
     // Pinch path: drive the same zoom state the wheel handler uses, so
     // PinMarker's --zoom inverse-scale fires identically on mobile.
+    // M29: also recompute pan so the content point under the pinch
+    // midpoint stays under the user's fingers across the gesture.
+    //
+    //   transform applies as: screen = centre + pan + (world - centre) * zoom
+    //   so for the world point fixed under the focal point:
+    //     newPan = (currentFocal - startFocal)              ← fingers slide
+    //              + (1 - ratio) * (startFocal - centre)    ← scale anchor
+    //              + ratio * startPan                       ← scaled starting pan
     if (pinchRef.current && activePointersRef.current.size >= 2) {
       const pts = Array.from(activePointersRef.current.values());
       const a = pts[0];
       const b = pts[1];
       if (a && b) {
         const dist = Math.hypot(b.x - a.x, b.y - a.y);
-        const ratio = dist / pinchRef.current.startDist;
-        setZoom(clamp(pinchRef.current.startZoom * ratio, 0.3, 6));
+        const rawRatio = dist / pinchRef.current.startDist;
+        const targetZoom = clamp(pinchRef.current.startZoom * rawRatio, 0.3, 6);
+        // Use the clamped ratio so the anchor stays consistent when zoom hits a bound.
+        const ratio = targetZoom / pinchRef.current.startZoom;
+        const focal = { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 };
+        const { startFocal, startPan, centre } = pinchRef.current;
+        const newPanX =
+          (focal.x - startFocal.x) + (1 - ratio) * (startFocal.x - centre.x) + ratio * startPan.x;
+        const newPanY =
+          (focal.y - startFocal.y) + (1 - ratio) * (startFocal.y - centre.y) + ratio * startPan.y;
+        setZoom(targetZoom);
+        setPan({ x: newPanX, y: newPanY });
       }
       return;
     }
@@ -224,6 +271,7 @@ export function FloorPlanCanvas({
       activePointersRef.current.delete(e.pointerId);
       if (activePointersRef.current.size < 2) {
         pinchRef.current = null;
+        setIsPinching(false);
       }
 
       const drag = dragRef.current;
@@ -335,7 +383,7 @@ export function FloorPlanCanvas({
         style={{
           transform,
           transformOrigin: 'center center',
-          transition: isDragging ? 'none' : 'transform 80ms ease-out',
+          transition: isDragging || isPinching ? 'none' : 'transform 80ms ease-out',
           ['--zoom' as string]: String(zoom),
         } as CSSProperties}
       >
