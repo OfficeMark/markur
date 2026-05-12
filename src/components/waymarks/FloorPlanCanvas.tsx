@@ -387,12 +387,20 @@ export function FloorPlanCanvas({
           ['--zoom' as string]: String(zoom),
         } as CSSProperties}
       >
-        <div className="relative">
+        {/* M30: the inner wrapper must inherit a max width/height that's
+            relative to the flex container (not the canvas's intrinsic
+            size), otherwise on mobile the canvas renders at its full
+            PDF.js pixel dimensions and overflows the viewport — which
+            reads as "the working area opens already zoomed in." Putting
+            max-h-full / max-w-full here (and matching styles on the
+            canvas) lets the centered flex container do the fit-to-screen
+            work. */}
+        <div className="relative min-h-0 min-w-0 max-h-full max-w-full">
           <canvas
             ref={canvasRef}
             aria-hidden
             className={cn(
-              'block max-h-[70vh] max-w-full select-none shadow-sm',
+              'block h-auto w-auto max-h-[70vh] max-w-full select-none shadow-sm',
               status === 'ready' ? 'opacity-100' : 'opacity-0'
             )}
           />
