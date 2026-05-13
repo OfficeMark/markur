@@ -1,6 +1,6 @@
 # Markur — Building Signage Passport (formerly Waymarks)
 
-> Live build (current): https://waymarks-rebuild.netlify.app  ← Netlify site rename to `markur` is owner-pending
+> Live build (current): https://markur.netlify.app  (Netlify site renamed from `waymarks-rebuild` to `markur` on 2026-05-13)
 > Production domain target: https://markur.ca (already owned by Randy; DNS pointing to Netlify is M10 work)
 > Brand: **Markur, by Officemark.** Final name as of 2026-04-30 (history: PlaqueMark → MarkView → Markur → Markur). Trademark cleared in CIPO Canada; clean NUANS June 2023.
 > Owner: Randy (rancherdesign.ca / officemark.ca) — non-developer; you (Claude Code) are the implementing developer
