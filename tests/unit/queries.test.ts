@@ -99,4 +99,31 @@ describe('queries/floors', () => {
     const out = await getFloor('missing');
     expect(out).toBeNull();
   });
+
+  it('softDeleteFloor stamps deleted_at on the row', async () => {
+    const eqMock = vi.fn((_col: string, _val: string) => Promise.resolve({ error: null }));
+    const updateMock = vi.fn((_payload: { deleted_at: string }) => ({ eq: eqMock }));
+    fromMock.mockReturnValue({ update: updateMock });
+    const { softDeleteFloor } = await import('@/lib/queries/floors');
+
+    await softDeleteFloor('f-1');
+
+    expect(fromMock).toHaveBeenCalledWith('floors');
+    expect(updateMock).toHaveBeenCalledTimes(1);
+    const payload = updateMock.mock.calls[0]![0];
+    expect(payload.deleted_at).toEqual(expect.any(String));
+    expect(new Date(payload.deleted_at).toString()).not.toBe('Invalid Date');
+    expect(eqMock).toHaveBeenCalledWith('id', 'f-1');
+  });
+
+  it('softDeleteFloor throws when supabase returns an error', async () => {
+    const eqMock = vi.fn((_col: string, _val: string) =>
+      Promise.resolve({ error: { message: 'rls denied' } })
+    );
+    const updateMock = vi.fn((_payload: { deleted_at: string }) => ({ eq: eqMock }));
+    fromMock.mockReturnValue({ update: updateMock });
+    const { softDeleteFloor } = await import('@/lib/queries/floors');
+
+    await expect(softDeleteFloor('f-1')).rejects.toMatchObject({ message: 'rls denied' });
+  });
 });

@@ -3,6 +3,7 @@ import {
   getFloor,
   listFloorsByBuilding,
   nextFloorSortOrder,
+  softDeleteFloor,
   type NewFloorInput,
 } from '@/lib/queries/floors';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
@@ -39,6 +40,18 @@ export function useCreateFloor(buildingId: string | undefined) {
       return createFloor({ building_id: buildingId, label: input.label, sort_order: sort });
     },
     onSuccess: () => {
+      if (buildingId) qc.invalidateQueries({ queryKey: floorKeys.byBuilding(buildingId) });
+      qc.invalidateQueries({ queryKey: floorKeys.all });
+    },
+  });
+}
+
+export function useSoftDeleteFloor(buildingId: string | undefined) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) => softDeleteFloor(id),
+    onSuccess: (_data, id) => {
+      qc.invalidateQueries({ queryKey: floorKeys.detail(id) });
       if (buildingId) qc.invalidateQueries({ queryKey: floorKeys.byBuilding(buildingId) });
       qc.invalidateQueries({ queryKey: floorKeys.all });
     },

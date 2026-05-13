@@ -54,6 +54,23 @@ export async function createFloor(input: NewFloorInput): Promise<Floor> {
 }
 
 /**
+ * Soft-delete a floor by stamping deleted_at. RLS policy `floors_admin_write`
+ * gates this — must have edit rights on the parent building, which only
+ * building_admin and super_admin hold. Cascades visually: every read in this
+ * module already filters `.is('deleted_at', null)`, and assets/audit_sessions
+ * are reachable only through the floor row, so they disappear from the UI
+ * the moment the floor is soft-deleted. Restoration is schema-supported (set
+ * deleted_at back to null) but there is no UI for it yet.
+ */
+export async function softDeleteFloor(id: string): Promise<void> {
+  const { error } = await supabase
+    .from('floors')
+    .update({ deleted_at: new Date().toISOString() })
+    .eq('id', id);
+  if (error) throw error;
+}
+
+/**
  * Suggest the next sort_order for a new floor in a building. Caller can
  * use this to default the form value so manually-added floors land at
  * the bottom of the existing list.
