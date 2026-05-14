@@ -6,7 +6,7 @@ import { useFloors } from '@/hooks/useFloors';
 import { useCreateInvitation } from '@/hooks/useAccess';
 import { supabase } from '@/lib/supabase';
 import { useQuery } from '@tanstack/react-query';
-import { inviteUrlFor } from '@/components/waymarks/AccessManagementCard';
+import { inviteUrlFor } from '@/lib/utils';
 import type { Tenant } from '@/types/database';
 
 /**
@@ -243,6 +243,7 @@ export function NewInvitationDialog({
                 <Field label="Email">
                   <input
                     type="email"
+                    // eslint-disable-next-line jsx-a11y/no-autofocus -- intentional: focuses the first field when this focus-trapped dialog opens
                     autoFocus
                     value={email}
                     onChange={(e) => setEmail(e.target.value)}
@@ -254,6 +255,7 @@ export function NewInvitationDialog({
                 <Field label="Role">
                   <div className="space-y-1.5">
                     {ROLE_OPTIONS.map((opt) => (
+                      // eslint-disable-next-line jsx-a11y/label-has-associated-control -- the label wraps its radio input and its visible text (opt.label, in the <p> below); the text is just deeper than the rule's static search depth
                       <label
                         key={opt.value}
                         className={

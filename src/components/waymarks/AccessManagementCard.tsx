@@ -24,6 +24,7 @@ import {
 import { format, formatDistanceToNow } from 'date-fns';
 import type { GrantWithProfile } from '@/lib/queries/access';
 import type { PendingInvitation } from '@/types/database';
+import { inviteUrlFor } from '@/lib/utils';
 
 export type AccessManagementCardProps = {
   buildingId: string;
@@ -283,9 +284,4 @@ function ListSkeleton() {
       ))}
     </ul>
   );
-}
-
-export function inviteUrlFor(token: string): string {
-  if (typeof window === 'undefined') return `/accept/${token}`;
-  return `${window.location.origin}/accept/${token}`;
 }

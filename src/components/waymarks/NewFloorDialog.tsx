@@ -167,6 +167,7 @@ export function NewFloorDialog({
               <input
                 type="text"
                 {...register('label')}
+                // eslint-disable-next-line jsx-a11y/no-autofocus -- intentional: focuses the first field when this focus-trapped dialog opens
                 autoFocus
                 maxLength={40}
                 placeholder="e.g. B2, Ground, Floor 14"

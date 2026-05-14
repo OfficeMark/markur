@@ -37,7 +37,6 @@ export function useOnline(): OnlineState {
 
     // Slow ping fallback. Avoids the captive-portal false positive.
     const supabaseUrl = (import.meta.env.VITE_SUPABASE_URL ?? '').replace(/\/$/, '');
-    let timer: number | undefined;
     async function ping() {
       if (document.hidden) return; // don't ping in background tabs
       if (!supabaseUrl) return;
@@ -59,11 +58,11 @@ export function useOnline(): OnlineState {
         setState((prev) => ({ online: false, lastSeen: prev.lastSeen }));
       }
     }
-    timer = window.setInterval(ping, PING_INTERVAL_MS);
+    const timer = window.setInterval(ping, PING_INTERVAL_MS);
     return () => {
       window.removeEventListener('online', setOnline);
       window.removeEventListener('offline', setOffline);
-      if (timer) window.clearInterval(timer);
+      window.clearInterval(timer);
     };
   }, []);
 

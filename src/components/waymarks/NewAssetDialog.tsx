@@ -285,6 +285,7 @@ export function NewAssetDialog({
                       value={customTypeLabel}
                       onChange={(e) => setCustomTypeLabel(e.target.value)}
                       maxLength={60}
+                      // eslint-disable-next-line jsx-a11y/no-autofocus -- intentional: focuses the field when this inline editor opens
                       autoFocus
                       placeholder="e.g. Memorial bench"
                       className="h-9 flex-1 rounded-md border border-black/10 bg-surface px-3 text-sm text-text outline-none focus:border-waymarks-gold focus:ring-1 focus:ring-waymarks-gold"

@@ -417,6 +417,7 @@ function AddTypeForm(props: {
         <input
           value={label}
           onChange={(e) => setLabel(e.target.value)}
+          // eslint-disable-next-line jsx-a11y/no-autofocus -- intentional: focuses the field when this inline editor opens
           autoFocus
           maxLength={60}
           placeholder="e.g. Memorial bench"
@@ -619,6 +620,7 @@ function TypeRow(props: {
       {/* label / inline edit */}
       {editing === 'label' ? (
         <input
+          // eslint-disable-next-line jsx-a11y/no-autofocus -- intentional: focuses the field when this inline editor opens
           autoFocus
           value={draftLabel}
           onChange={(e) => setDraftLabel(e.target.value)}

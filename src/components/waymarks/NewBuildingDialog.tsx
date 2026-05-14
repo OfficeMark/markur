@@ -211,6 +211,7 @@ export function NewBuildingDialog({ open, onOpenChange }: NewBuildingDialogProps
                 <input
                   {...register('name')}
                   type="text"
+                  // eslint-disable-next-line jsx-a11y/no-autofocus -- intentional: focuses the first field when this focus-trapped dialog opens
                   autoFocus
                   autoComplete="organization"
                   className="h-10 w-full rounded-md border border-black/10 bg-surface px-3 text-sm text-text outline-none focus:border-waymarks-gold focus:ring-2 focus:ring-waymarks-gold"

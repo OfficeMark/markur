@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   Check,
   ChevronRight,
@@ -83,6 +83,27 @@ export function AuditModeShell({
     setCurrentId(remaining[0]?.id ?? null);
   }
 
+  /**
+   * Discard the audit entirely without writing a summary or completing the
+   * session — the auditor opened audit mode by mistake or wants to bail.
+   * Sets completed_at so the partial session doesn't haunt the resume banner;
+   * any events already recorded are preserved (they're still part of the
+   * audit trail), just the session counter doesn't get final totals.
+   */
+  const handleDiscardAudit = useCallback(async () => {
+    try {
+      await endAudit.mutateAsync({
+        id: session.id,
+        assets_audited: 0,
+        assets_missed: total,
+        notes: 'Audit cancelled before completion.',
+      });
+      onClose();
+    } catch {
+      // Non-fatal — surface in the existing endError region if it ever fails.
+    }
+  }, [endAudit, session.id, total, onClose]);
+
   // Esc closes the audit shell — but only if no event has been recorded yet.
   // After the first event, Esc is a no-op so the user has to End Audit
   // deliberately (which writes the completion timestamp).
@@ -98,7 +119,7 @@ export function AuditModeShell({
     }
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [events.length, onClose]);
+  }, [events.length, handleDiscardAudit]);
 
   function handleOutcome(outcome: AuditOutcome) {
     if (!current) return;
@@ -118,26 +139,6 @@ export function AuditModeShell({
     setShowSummary(true);
   }
 
-  /**
-   * Discard the audit entirely without writing a summary or completing the
-   * session — the auditor opened audit mode by mistake or wants to bail.
-   * Sets completed_at so the partial session doesn't haunt the resume banner;
-   * any events already recorded are preserved (they're still part of the
-   * audit trail), just the session counter doesn't get final totals.
-   */
-  async function handleDiscardAudit() {
-    try {
-      await endAudit.mutateAsync({
-        id: session.id,
-        assets_audited: 0,
-        assets_missed: total,
-        notes: 'Audit cancelled before completion.',
-      });
-      onClose();
-    } catch {
-      // Non-fatal — surface in the existing endError region if it ever fails.
-    }
-  }
 
   async function confirmEnd() {
     try {

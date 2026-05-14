@@ -83,6 +83,7 @@ export function StepUpDialog({
               to confirm
             </span>
             <input
+              // eslint-disable-next-line jsx-a11y/no-autofocus -- intentional: focuses the field when this focus-trapped dialog opens
               autoFocus
               value={typed}
               onChange={(e) => setTyped(e.target.value)}
