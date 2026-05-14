@@ -20,12 +20,15 @@ describe('validatePlanFile', () => {
     expect(validatePlanFile(fakeFile('p.png', 100_000, 'image/png'))).toBeNull();
     expect(validatePlanFile(fakeFile('p.jpg', 100_000, 'image/jpeg'))).toBeNull();
   });
+  it('accepts an SVG', () => {
+    expect(validatePlanFile(fakeFile('p.svg', 100_000, 'image/svg+xml'))).toBeNull();
+  });
   it('rejects oversize files', () => {
     const f = fakeFile('big.pdf', PLAN_MAX_BYTES + 1, 'application/pdf');
     expect(validatePlanFile(f)?.code).toBe('too_large');
   });
   it('rejects wrong mime', () => {
-    const f = fakeFile('weird.svg', 100, 'image/svg+xml');
+    const f = fakeFile('weird.gif', 100, 'image/gif');
     expect(validatePlanFile(f)?.code).toBe('wrong_type');
   });
 });
@@ -40,17 +43,21 @@ describe('objectNameForFloor', () => {
   it('uses jpg for image/jpeg', () => {
     expect(objectNameForFloor('floor-1', 'image/jpeg')).toBe('floor-1.jpg');
   });
+  it('uses svg for image/svg+xml', () => {
+    expect(objectNameForFloor('floor-1', 'image/svg+xml')).toBe('floor-1.svg');
+  });
 });
 
 describe('planKindForPath', () => {
   it('returns pdf for .pdf', () => expect(planKindForPath('a.pdf')).toBe('pdf'));
-  it('returns image for .png/.jpg/.jpeg', () => {
+  it('returns image for .png/.jpg/.jpeg/.svg', () => {
     expect(planKindForPath('a.png')).toBe('image');
     expect(planKindForPath('a.jpg')).toBe('image');
     expect(planKindForPath('a.jpeg')).toBe('image');
+    expect(planKindForPath('a.svg')).toBe('image');
   });
   it('returns null for unknown', () => {
-    expect(planKindForPath('a.svg')).toBeNull();
+    expect(planKindForPath('a.gif')).toBeNull();
     expect(planKindForPath(null)).toBeNull();
     expect(planKindForPath(undefined)).toBeNull();
   });

@@ -138,6 +138,7 @@ export type Database = {
           manufacturer: string | null
           name: string
           notes: string | null
+          pin_number: number | null
           room_number: string | null
           status: string
           tenant_scope_id: string | null
@@ -184,6 +185,7 @@ export type Database = {
           manufacturer?: string | null
           name?: string
           notes?: string | null
+          pin_number?: number | null
           room_number?: string | null
           status?: string
           tenant_scope_id?: string | null

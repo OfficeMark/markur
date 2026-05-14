@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
-import { ArrowLeft, Check, ChevronRight, ClipboardList, Download, Eye, ImageOff, LayoutGrid, Map as MapIcon, Plus, RefreshCw, Trash2, Video } from 'lucide-react';
+import { ArrowLeft, Check, ChevronRight, ClipboardList, Download, Eye, FileDown, ImageOff, LayoutGrid, Map as MapIcon, Plus, RefreshCw, Trash2, Video } from 'lucide-react';
 import { AppShell } from '@/components/waymarks/AppShell';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { Button } from '@/components/ui/Button';
@@ -28,6 +28,14 @@ import {
 import { useAuth } from '@/lib/auth-context';
 import { useCan } from '@/lib/permissions-context';
 import { planKindForPath, signedUrlForPlan } from '@/lib/upload';
+import { pinNumberMatchesQuery } from '@/lib/pin-types';
+import { listFirstPhotoPaths, signedAssetPhotoUrl } from '@/lib/queries/asset-photos';
+import {
+  buildCatalogueDoc,
+  catalogueFilename,
+  prepareCatalogueEntries,
+  type CatalogueEntry,
+} from '@/lib/floor-catalogue';
 import {
   putAssetsForFloor,
   putBuilding,
@@ -81,6 +89,10 @@ export function Floor() {
     'idle'
   );
   const [cacheError, setCacheError] = useState<string | null>(null);
+
+  // Floor photo catalogue export (markur-changes #4).
+  const [catalogueState, setCatalogueState] = useState<'idle' | 'building' | 'error'>('idle');
+  const [catalogueError, setCatalogueError] = useState<string | null>(null);
 
   // Deliberate-reposition state machine (M5).
   const [repositionAssetId, setRepositionAssetId] = useState<string | null>(null);
@@ -234,6 +246,47 @@ export function Floor() {
     }
   }
 
+  // Build + download a PDF catalogue of every asset on this floor. Photo
+  // failures degrade gracefully to a "No photo" box rather than aborting.
+  async function handleExportCatalogue() {
+    if (!floor || !building) return;
+    setCatalogueError(null);
+    setCatalogueState('building');
+    try {
+      const drafts = prepareCatalogueEntries(assets);
+      const photoPaths = await listFirstPhotoPaths(assets.map((a) => a.id));
+      const entries: CatalogueEntry[] = await Promise.all(
+        drafts.map(async (d) => {
+          let photoDataUrl: string | null = null;
+          const path = photoPaths.get(d.assetId);
+          if (path) {
+            try {
+              const signed = await signedAssetPhotoUrl(path);
+              photoDataUrl = await photoToJpegDataUrl(signed);
+            } catch {
+              photoDataUrl = null;
+            }
+          }
+          return { ...d, photoDataUrl };
+        })
+      );
+      const addressLine =
+        [building.address, building.city, building.region].filter(Boolean).join(', ') || null;
+      const doc = buildCatalogueDoc({
+        buildingName: building.name,
+        floorLabel: floor.label,
+        addressLine,
+        generatedOn: new Date(),
+        entries,
+      });
+      doc.save(catalogueFilename(building.name, floor.label));
+      setCatalogueState('idle');
+    } catch (e) {
+      setCatalogueError(e instanceof Error ? e.message : 'Could not build the catalogue.');
+      setCatalogueState('error');
+    }
+  }
+
   const planKind = useMemo(() => planKindForPath(floor?.plan_url), [floor?.plan_url]);
 
   const baseSet = assets;
@@ -380,6 +433,18 @@ export function Floor() {
               {activeSession ? 'Resume audit' : 'Audit'}
             </button>
           )}
+          {assets.length > 0 && (
+            <button
+              type="button"
+              onClick={() => void handleExportCatalogue()}
+              disabled={catalogueState === 'building'}
+              title="Download a PDF catalogue of every asset on this floor"
+              className="inline-flex h-7 items-center gap-1 rounded-md border border-black/15 bg-surface px-2.5 text-[11px] font-medium text-text hover:bg-black/5 disabled:opacity-60 dark:border-white/15 dark:hover:bg-white/5"
+            >
+              <FileDown size={11} aria-hidden />
+              {catalogueState === 'building' ? 'Building…' : 'Catalogue'}
+            </button>
+          )}
           {canEdit && (
             <button
               type="button"
@@ -457,6 +522,12 @@ export function Floor() {
         {cacheError && (
           <div className="mb-4 rounded-md border border-danger/30 bg-danger-bg p-3 text-xs text-danger">
             Could not cache this floor: {cacheError}
+          </div>
+        )}
+
+        {catalogueError && (
+          <div className="mb-4 rounded-md border border-danger/30 bg-danger-bg p-3 text-xs text-danger">
+            Could not build the catalogue: {catalogueError}
           </div>
         )}
 
@@ -672,13 +743,74 @@ export function Floor() {
 // =============================================================================
 
 /**
+ * Fetch an asset photo (via its signed URL) and re-encode it to a compact
+ * JPEG data URL for embedding in the catalogue PDF. Re-encoding through a
+ * canvas keeps the PDF small and guarantees a jsPDF-friendly format. Returns
+ * null on any failure so the catalogue falls back to a "No photo" box.
+ */
+async function photoToJpegDataUrl(signedUrl: string, maxPx = 700): Promise<string | null> {
+  try {
+    const res = await fetch(signedUrl);
+    if (!res.ok) return null;
+    const blob = await res.blob();
+    const objUrl = URL.createObjectURL(blob);
+    return await new Promise<string | null>((resolve) => {
+      const img = new Image();
+      img.onload = () => {
+        URL.revokeObjectURL(objUrl);
+        let w = img.naturalWidth;
+        let h = img.naturalHeight;
+        if (!w || !h) {
+          resolve(null);
+          return;
+        }
+        if (w > maxPx || h > maxPx) {
+          if (w >= h) {
+            h = Math.round((h * maxPx) / w);
+            w = maxPx;
+          } else {
+            w = Math.round((w * maxPx) / h);
+            h = maxPx;
+          }
+        }
+        const canvas = document.createElement('canvas');
+        canvas.width = w;
+        canvas.height = h;
+        const ctx = canvas.getContext('2d');
+        if (!ctx) {
+          resolve(null);
+          return;
+        }
+        ctx.fillStyle = '#ffffff';
+        ctx.fillRect(0, 0, w, h);
+        ctx.drawImage(img, 0, 0, w, h);
+        try {
+          resolve(canvas.toDataURL('image/jpeg', 0.82));
+        } catch {
+          resolve(null);
+        }
+      };
+      img.onerror = () => {
+        URL.revokeObjectURL(objUrl);
+        resolve(null);
+      };
+      img.src = objUrl;
+    });
+  } catch {
+    return null;
+  }
+}
+
+/**
  * Case-insensitive substring match against the user-visible text fields
- * we care about: name, location notes, room number, notes, and the two
- * vendor-contact strings. `q` is expected to already be trimmed and
- * lower-cased by the caller.
+ * we care about: pin ID number, name, location notes, room number, notes,
+ * and the two vendor-contact strings. `q` is expected to already be trimmed
+ * and lower-cased by the caller.
  */
 function matchesAssetText(a: Asset, q: string): boolean {
   if (!q) return true;
+  // Pin ID: typing "3", "003", or "#003" finds the asset by its floor number.
+  if (pinNumberMatchesQuery(a.pin_number, q)) return true;
   const haystacks: Array<string | null | undefined> = [
     a.name,
     a.location_notes,

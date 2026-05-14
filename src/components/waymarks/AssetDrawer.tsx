@@ -18,6 +18,7 @@ import {
   LockOpen,
   Move,
   Eye,
+  Download,
 } from 'lucide-react';
 import { Chip } from '@/components/ui/Chip';
 import { MetricCard } from '@/components/ui/MetricCard';
@@ -31,10 +32,13 @@ import {
   useDeleteAssetPhoto,
 } from '@/hooks/useAssetPhotos';
 import {
+  assetPhotoDownloadName,
+  signedAssetPhotoDownloadUrl,
   signedAssetPhotoUrl,
   validateAssetPhotoFile,
 } from '@/lib/queries/asset-photos';
 import { computeStatus, statusLabel, type AssetStatus } from '@/lib/asset-status';
+import { formatPinNumber } from '@/lib/pin-types';
 import { useAssetTypes } from '@/hooks/useAssetTypes';
 import { AssetAttachmentsPanel } from './AssetAttachmentsPanel';
 import { AuditVideosPanel } from './AuditVideosPanel';
@@ -152,7 +156,11 @@ export function AssetDrawer({
               />
             ) : (
               <>
-                <PhotoGallery assetId={asset.id} canEdit={canEdit} />
+                <PhotoGallery
+                  assetId={asset.id}
+                  assetName={asset.name ?? 'Asset'}
+                  canEdit={canEdit}
+                />
                 {canEdit && (
                   <>
                     <LockBar
@@ -602,7 +610,15 @@ function FieldLabel({ label, children }: { label: string; children: React.ReactN
   );
 }
 
-function PhotoGallery({ assetId, canEdit }: { assetId: string; canEdit: boolean }) {
+function PhotoGallery({
+  assetId,
+  assetName,
+  canEdit,
+}: {
+  assetId: string;
+  assetName: string;
+  canEdit: boolean;
+}) {
   const { data: photos = [], isLoading } = useAssetPhotos(assetId);
   const [active, setActive] = useState(0);
   const add = useAddAssetPhoto(assetId);
@@ -647,7 +663,13 @@ function PhotoGallery({ assetId, canEdit }: { assetId: string; canEdit: boolean 
             Loading photos…
           </div>
         ) : current ? (
-          <PhotoFrame photo={current} canDelete={canEdit} onDelete={() => onDelete(current)} />
+          <PhotoFrame
+            photo={current}
+            assetName={assetName}
+            index={safeActive}
+            canDelete={canEdit}
+            onDelete={() => onDelete(current)}
+          />
         ) : (
           <div className="flex h-32 flex-col items-center justify-center gap-1 text-text-faint">
             <ImageOff size={20} aria-hidden />
@@ -708,15 +730,20 @@ function PhotoGallery({ assetId, canEdit }: { assetId: string; canEdit: boolean 
 
 function PhotoFrame({
   photo,
+  assetName,
+  index,
   canDelete,
   onDelete,
 }: {
   photo: AssetPhoto;
+  assetName: string;
+  index: number;
   canDelete: boolean;
   onDelete: () => void;
 }) {
   const [url, setUrl] = useState<string | null>(null);
   const [errored, setErrored] = useState(false);
+  const [downloading, setDownloading] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -729,6 +756,29 @@ function PhotoFrame({
       cancelled = true;
     };
   }, [photo.path]);
+
+  async function handleDownload() {
+    setDownloading(true);
+    try {
+      const dlUrl = await signedAssetPhotoDownloadUrl(
+        photo.path,
+        assetPhotoDownloadName(assetName, index, photo.path)
+      );
+      // The signed URL carries Content-Disposition: attachment, so a plain
+      // anchor click saves the file — works cross-origin to Supabase Storage.
+      const a = document.createElement('a');
+      a.href = dlUrl;
+      a.rel = 'noopener';
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+    } catch {
+      // Fall back to opening the inline photo in a new tab.
+      if (url) window.open(url, '_blank', 'noopener');
+    } finally {
+      setDownloading(false);
+    }
+  }
 
   if (errored) {
     return (
@@ -747,6 +797,17 @@ function PhotoFrame({
   return (
     <div className="relative">
       <img src={url} alt="" className="block w-full object-cover" />
+      {/* Download is available to anyone who can view the asset. */}
+      <button
+        type="button"
+        onClick={handleDownload}
+        disabled={downloading}
+        aria-label="Download this photo"
+        className="absolute left-2 top-2 inline-flex h-7 items-center gap-1 rounded-md bg-waymarks-ink/80 px-2 text-[11px] font-medium text-white hover:bg-waymarks-ink disabled:opacity-60"
+      >
+        <Download size={12} aria-hidden />
+        {downloading ? 'Saving…' : 'Save'}
+      </button>
       {canDelete && (
         <button
           type="button"
@@ -803,9 +864,18 @@ function ThumbButton({
 }
 
 function DetailsSection({ asset }: { asset: Asset }) {
+  const pinLabel = formatPinNumber(asset.pin_number);
   return (
     <div className="space-y-2.5">
       <div className="flex flex-wrap items-center gap-1">
+        {pinLabel && (
+          <span
+            className="inline-flex items-center rounded-md bg-waymarks-ink px-2 py-0.5 font-mono text-xs font-semibold text-white"
+            title="Pin ID — this asset's reference number on the floor"
+          >
+            #{pinLabel}
+          </span>
+        )}
         <Chip variant="gold">{prettyType(asset.type)}</Chip>
         <Chip variant="default">{asset.category}</Chip>
         {asset.room_number && (

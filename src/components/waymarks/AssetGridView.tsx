@@ -3,7 +3,7 @@ import { ArrowDown, ArrowUp, ArrowUpDown, ImageOff, Video } from 'lucide-react';
 import { format, formatDistanceToNow } from 'date-fns';
 import { useAssetPhotos } from '@/hooks/useAssetPhotos';
 import { signedAssetPhotoUrl } from '@/lib/queries/asset-photos';
-import { TYPE_COLORS, labelForType } from '@/lib/pin-types';
+import { TYPE_COLORS, labelForType, formatPinNumber } from '@/lib/pin-types';
 import { computeStatus, statusLabel, type AssetStatus } from '@/lib/asset-status';
 import type { VendorContact } from '@/lib/queries/assets';
 import { cn } from '@/lib/utils';
@@ -168,6 +168,7 @@ function Row({
   const typeName = labelForType(asset.type);
   const displayName = asset.name?.trim() || 'Untitled';
   const isUntitled = displayName === 'Untitled';
+  const pinLabel = formatPinNumber(asset.pin_number);
 
   const vendor = (asset.vendor_contact ?? null) as VendorContact | null;
   const vendorLabel = vendor
@@ -199,6 +200,14 @@ function Row({
       </td>
       <td className="py-2 pr-3">
         <div className="flex items-center gap-1.5">
+          {pinLabel && (
+            <span
+              className="shrink-0 rounded bg-waymarks-ink/85 px-1 font-mono text-[10px] font-semibold leading-5 text-white"
+              title="Pin ID"
+            >
+              #{pinLabel}
+            </span>
+          )}
           <p className={cn('font-medium', isUntitled ? 'italic text-text-muted' : 'text-text')}>
             {displayName}
           </p>

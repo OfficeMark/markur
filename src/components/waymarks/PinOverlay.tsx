@@ -3,6 +3,7 @@ import type { Asset } from '@/types/database';
 import { PinMarker } from './PinMarker';
 import { computeStatus, type AssetStatus } from '@/lib/asset-status';
 import { useOrgBranding } from '@/hooks/useBranding';
+import { formatPinNumber } from '@/lib/pin-types';
 
 export type PinOverlayProps = {
   assets: Asset[];
@@ -225,12 +226,30 @@ export function PinOverlay({
           : !repositionAssetId && canMove && !asset.is_locked;
         const faded = !!repositionAssetId && !isRepositionTarget;
 
+        const pinLabel = formatPinNumber(asset.pin_number);
+
         return (
           <div
             key={asset.id}
             className="pointer-events-auto absolute"
             style={{ left: `${x * 100}%`, top: `${y * 100}%` }}
           >
+            {/* Floor-scoped pin ID, shown just below the pin. Inverse-scaled by
+                --zoom (same trick PinMarker uses) so it stays a constant
+                viewport size as the plan zooms. Hidden while fading other pins
+                during a reposition so it doesn't clutter the focus pin's area. */}
+            {pinLabel && !faded && (
+              <span
+                aria-hidden
+                className="pointer-events-none absolute left-1/2 top-1/2 select-none whitespace-nowrap rounded-[3px] bg-waymarks-ink/85 px-1 font-mono text-[9px] font-semibold leading-[1.45] text-white shadow-sm"
+                style={{
+                  transform: 'translate(-50%, 17px) scale(calc(1 / var(--zoom, 1)))',
+                  transformOrigin: 'center top',
+                }}
+              >
+                {pinLabel}
+              </span>
+            )}
             <PinMarker
               assetId={asset.id}
               name={asset.name}

@@ -129,7 +129,7 @@ export function FloorPlanUploadDialog({
   const title = isReplace ? `Replace floor plan for ${floorLabel}` : `Upload floor plan`;
   const description = isReplace
     ? 'Replacing a plan keeps existing pins on the floor. Pin coordinates are normalized — they\'ll appear in the same relative position on the new plan.'
-    : `Pick a PDF, PNG, or JPG of ${floorLabel}'s plan. Up to ${formatBytes(PLAN_MAX_BYTES)}.`;
+    : `Pick a PDF, PNG, JPG, or SVG of ${floorLabel}'s plan. Up to ${formatBytes(PLAN_MAX_BYTES)}.`;
 
   return (
     <Dialog.Root open={open} onOpenChange={onOpenChange}>
@@ -226,7 +226,7 @@ function PickArea(props: {
     >
       <Upload size={28} aria-hidden className="text-waymarks-gold" />
       <span className="font-medium">Drop a plan here, or click to choose</span>
-      <span className="text-xs text-text-faint">PDF · PNG · JPG · up to {formatBytes(PLAN_MAX_BYTES)}</span>
+      <span className="text-xs text-text-faint">PDF · PNG · JPG · SVG · up to {formatBytes(PLAN_MAX_BYTES)}</span>
     </button>
   );
 }
@@ -325,5 +325,6 @@ function ErrorPanel({ message, onRetry }: { message: string; onRetry: () => void
 function extFromMime(mime: string): string {
   if (mime === 'application/pdf') return 'pdf';
   if (mime === 'image/png') return 'png';
+  if (mime === 'image/svg+xml') return 'svg';
   return 'jpg';
 }

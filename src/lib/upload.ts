@@ -5,6 +5,7 @@ export const PLAN_MIME_TYPES = [
   'application/pdf',
   'image/png',
   'image/jpeg',
+  'image/svg+xml',
 ] as const;
 
 export type PlanMime = (typeof PLAN_MIME_TYPES)[number];
@@ -23,14 +24,21 @@ export function validatePlanFile(file: File): ValidationError | null {
   if (!(PLAN_MIME_TYPES as readonly string[]).includes(file.type)) {
     return {
       code: 'wrong_type',
-      message: `Unsupported file type "${file.type || 'unknown'}". Use PDF, PNG, or JPG.`,
+      message: `Unsupported file type "${file.type || 'unknown'}". Use PDF, PNG, JPG, or SVG.`,
     };
   }
   return null;
 }
 
 export function objectNameForFloor(floorId: string, mime: PlanMime): string {
-  const ext = mime === 'application/pdf' ? 'pdf' : mime === 'image/png' ? 'png' : 'jpg';
+  const ext =
+    mime === 'application/pdf'
+      ? 'pdf'
+      : mime === 'image/png'
+        ? 'png'
+        : mime === 'image/svg+xml'
+          ? 'svg'
+          : 'jpg';
   return `${floorId}.${ext}`;
 }
 
@@ -65,7 +73,16 @@ export async function signedUrlForPlan(path: string): Promise<string> {
 export function planKindForPath(path: string | null | undefined): 'pdf' | 'image' | null {
   if (!path) return null;
   if (path.endsWith('.pdf')) return 'pdf';
-  if (path.endsWith('.png') || path.endsWith('.jpg') || path.endsWith('.jpeg')) return 'image';
+  // SVG renders through the same image path as PNG/JPG (the browser rasterizes
+  // it onto the canvas in FloorPlanCanvas).
+  if (
+    path.endsWith('.png') ||
+    path.endsWith('.jpg') ||
+    path.endsWith('.jpeg') ||
+    path.endsWith('.svg')
+  ) {
+    return 'image';
+  }
   return null;
 }
 
