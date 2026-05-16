@@ -74,13 +74,21 @@ export async function softDeleteFloor(id: string): Promise<void> {
  * Suggest the next sort_order for a new floor in a building. Caller can
  * use this to default the form value so manually-added floors land at
  * the bottom of the existing list.
+ *
+ * Important: consider ALL rows (including soft-deleted) when picking the
+ * next slot. Migration 0028_m25_floor_fix made the
+ * (building_id, sort_order) unique index partial-on-live, but a
+ * live-rows-only MAX query would still pick a value that a recently-deleted
+ * floor sits at -- which has worked fine since the migration lifted the
+ * collision, but the historical bug (M25-floor-fix) was exactly "live MAX
+ * picked a slot a soft-deleted row held." Stay inclusive here so the next
+ * refactor doesn't reintroduce the same assumption under a different name.
  */
 export async function nextFloorSortOrder(buildingId: string): Promise<number> {
   const { data, error } = await supabase
     .from('floors')
     .select('sort_order')
     .eq('building_id', buildingId)
-    .is('deleted_at', null)
     .order('sort_order', { ascending: false })
     .limit(1)
     .maybeSingle();

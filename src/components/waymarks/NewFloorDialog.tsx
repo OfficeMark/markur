@@ -6,7 +6,7 @@ import { z } from 'zod';
 import { AlertCircle, Layers, Upload, X } from 'lucide-react';
 import { Button } from '@/components/ui/Button';
 import { useCreateFloor } from '@/hooks/useFloors';
-import { uploadFloorPlan, validatePlanFile } from '@/lib/upload';
+import { uploadFloorPlan, validatePlanFile, floorErrorMessage } from '@/lib/upload';
 import { supabase } from '@/lib/supabase';
 
 /**
@@ -17,7 +17,7 @@ import { supabase } from '@/lib/supabase';
  *
  * Behavior:
  *  - Required: label (e.g. "B2", "Ground", "Floor 14")
- *  - Optional: a floor-plan file (PDF / PNG / JPG). If included, we create
+ *  - Optional: a floor-plan file (PDF / PNG / JPG / WebP / HEIC / SVG). If included, we create
  *    the floor first, then upload the plan, then update the floor row's
  *    plan_url. If the upload fails, the floor still exists — the user can
  *    upload a plan later via the Replace plan button on the floor view.
@@ -97,7 +97,7 @@ export function NewFloorDialog({
     } catch (err) {
       setStage({
         kind: 'error',
-        message: err instanceof Error ? err.message : 'Could not create the floor.',
+        message: floorErrorMessage(err, 'create'),
       });
       return;
     }
@@ -110,10 +110,9 @@ export function NewFloorDialog({
     // Upload plan in a second step; failure here doesn't undo the floor.
     setStage({ kind: 'uploading', floorId });
     try {
-      await uploadFloorPlan(floorId, planFile);
-      // Persist the plan_url path on the floor row.
-      const ext = extFromMime(planFile.type);
-      const path = `${floorId}.${ext}`;
+      const { path } = await uploadFloorPlan(floorId, planFile);
+      // Persist the plan_url path on the floor row. Use the path the
+      // uploader returned so it always matches what landed in storage.
       const { error } = await supabase
         .from('floors')
         .update({ plan_url: path })
@@ -123,9 +122,7 @@ export function NewFloorDialog({
     } catch (err) {
       setStage({
         kind: 'error',
-        message:
-          (err instanceof Error ? err.message : 'Plan upload failed.') +
-          ' The floor was created — you can upload a plan from the floor view.',
+        message: floorErrorMessage(err, 'upload'),
       });
     }
   }
@@ -185,7 +182,7 @@ export function NewFloorDialog({
               <input
                 ref={fileInput}
                 type="file"
-                accept="application/pdf,image/png,image/jpeg"
+                accept="application/pdf,image/png,image/jpeg,image/svg+xml,image/webp,image/heic,image/heif,.heic,.heif"
                 className="hidden"
                 onChange={(e) => onPickFile(e.target.files?.[0] ?? null)}
               />
@@ -212,7 +209,7 @@ export function NewFloorDialog({
                   className="mt-1 flex h-20 w-full items-center justify-center gap-2 rounded-md border border-dashed border-black/15 bg-bg text-sm text-text-muted hover:border-waymarks-gold hover:text-waymarks-gold dark:border-white/15"
                 >
                   <Upload size={14} aria-hidden />
-                  Click to add PDF, PNG, or JPG
+                  Click to add PDF, PNG, JPG, WebP, HEIC, or SVG
                 </button>
               )}
               {fileError && (
@@ -256,9 +253,3 @@ export function NewFloorDialog({
   );
 }
 
-function extFromMime(mime: string): string {
-  if (mime === 'application/pdf') return 'pdf';
-  if (mime === 'image/png') return 'png';
-  if (mime === 'image/jpeg' || mime === 'image/jpg') return 'jpg';
-  return 'pdf';
-}
