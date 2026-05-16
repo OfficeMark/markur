@@ -291,7 +291,7 @@ function Field({
       </span>
       <span
         className={cn(
-          'flex h-11 items-center gap-2 rounded-md border bg-surface px-3 transition-colors focus-within:border-waymarks-gold focus-within:ring-2 focus-within:ring-waymarks-gold/40 dark:border-white/10',
+          'flex h-11 items-center gap-2 rounded-md border bg-surface px-3 transition-colors focus-within:border-waymarks-gold focus-within:ring-2 focus-within:ring-waymarks-gold dark:border-white/10',
           error ? 'border-danger' : 'border-black/10'
         )}
       >
