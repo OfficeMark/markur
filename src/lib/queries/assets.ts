@@ -160,3 +160,25 @@ export async function restoreAsset(id: string): Promise<void> {
     .eq('id', id);
   if (error) throw error;
 }
+
+/**
+ * Does this building have at least one live pin on any live floor?
+ *
+ * Used by WelcomeCard's "Place your first pin" completion check. The earlier
+ * implementation only inspected the first plan-bearing floor's pins, which
+ * gave a false negative for any building whose first plan-bearing floor was
+ * empty but a later floor had pins (e.g. Crescent School: 6 pins on Level
+ * 300, none on Dining Hall — the welcome banner refused to hide). Cross-
+ * table inner join via PostgREST keeps it to a single round trip.
+ */
+export async function buildingHasAnyAsset(buildingId: string): Promise<boolean> {
+  const { data, error } = await supabase
+    .from('assets')
+    .select('id, floor:floors!inner(building_id, deleted_at)')
+    .eq('floor.building_id', buildingId)
+    .is('floor.deleted_at', null)
+    .is('deleted_at', null)
+    .limit(1);
+  if (error) throw error;
+  return (data ?? []).length > 0;
+}

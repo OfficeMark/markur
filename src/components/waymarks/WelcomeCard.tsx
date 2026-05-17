@@ -2,7 +2,7 @@ import { Link } from 'react-router-dom';
 import { ArrowRight, Check, Image as ImageIcon, MapPin, Sparkles, Upload } from 'lucide-react';
 import { useBuildings } from '@/hooks/useBuildings';
 import { useFloors } from '@/hooks/useFloors';
-import { useAssets } from '@/hooks/useAssets';
+import { useBuildingHasAnyAsset } from '@/hooks/useAssets';
 import { useCan } from '@/lib/permissions-context';
 
 /**
@@ -24,17 +24,18 @@ export function WelcomeCard() {
   });
 
   const { data: floors = [] } = useFloors(firstBuilding?.id);
-  // Pull assets for the first floor that has a plan, so we can detect
-  // whether at least one pin has been placed anywhere.
   const firstFloorWithPlan = floors.find((f) => !!f.plan_url);
-  const { data: floorAssets = [] } = useAssets(firstFloorWithPlan?.id);
+  // Cross-floor pin check (single round trip via PostgREST inner join).
+  // Was: assets from the FIRST plan-bearing floor only -- which gave a false
+  // negative for buildings whose pins live on a later floor (Crescent School
+  // had 6 pins on Level 300; the banner never hid).
+  const { data: hasPin = false } = useBuildingHasAnyAsset(firstBuilding?.id);
 
   if (!firstBuilding) return null;
   if (!canEdit) return null;
 
   const hasPhoto = !!firstBuilding.photo_url;
   const hasPlan = !!firstFloorWithPlan;
-  const hasPin = floorAssets.length > 0;
 
   // Once every step is done, gracefully disappear.
   if (hasPhoto && hasPlan && hasPin) return null;
