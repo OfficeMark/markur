@@ -38,6 +38,12 @@ export type PinMarkerProps = {
   repositioning?: boolean;
   faded?: boolean;
   fillColor?: string;
+  /**
+   * Formatted pin label (e.g. "001"). When provided, it's prepended to the
+   * aria-label so SR users still hear the pin number even though the visual
+   * label is hidden by default (M32 Step 1 — hover/press to reveal).
+   */
+  pinLabel?: string | null;
   onPointerDownDrag?: (e: React.PointerEvent<HTMLButtonElement>) => void;
   onClick?: () => void;
 };
@@ -74,6 +80,7 @@ export const PinMarker = forwardRef<HTMLButtonElement, PinMarkerProps>(function 
     repositioning,
     faded,
     fillColor,
+    pinLabel,
     onPointerDownDrag,
     onClick,
   },
@@ -87,6 +94,7 @@ export const PinMarker = forwardRef<HTMLButtonElement, PinMarkerProps>(function 
       ? ', unlocked - drag to move'
       : '';
   const resolvedFill = fillColor ?? colorForType(type);
+  const ariaPrefix = pinLabel ? `Pin ${pinLabel}, ` : '';
   const statusRingClass =
     status === 'flagged'
       ? 'ring-1 ring-danger'
@@ -125,7 +133,7 @@ export const PinMarker = forwardRef<HTMLButtonElement, PinMarkerProps>(function 
         e.stopPropagation();
         onClick?.();
       }}
-      aria-label={`${name} (${typeName}, ${statusLabel(status)}${lockSuffix})`}
+      aria-label={`${ariaPrefix}${name} (${typeName}, ${statusLabel(status)}${lockSuffix})`}
       style={{
         backgroundColor: resolvedFill,
         width: px,

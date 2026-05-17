@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import * as Dialog from '@radix-ui/react-dialog';
 import { format } from 'date-fns';
+import { Tooltip } from '@/components/ui/Tooltip';
 import {
   X,
   MapPin,
@@ -106,7 +107,7 @@ export function AssetDrawer({
         <Dialog.Overlay className="fixed inset-0 z-50 bg-black/30 data-[state=open]:animate-in data-[state=open]:fade-in-0" />
         <Dialog.Content
           aria-describedby={undefined}
-          className="fixed inset-x-0 bottom-0 z-50 flex h-[88vh] flex-col rounded-t-2xl border-t border-black/10 bg-surface text-text shadow-sheet outline-none dark:border-white/10 sm:inset-x-auto sm:right-0 sm:top-0 sm:h-full sm:w-[min(96vw,440px)] sm:rounded-t-none sm:border-l sm:border-t-0"
+          className="fixed inset-x-0 bottom-0 z-50 flex h-[88vh] flex-col rounded-t-2xl border-t border-black/10 bg-surface text-waymarks-ink shadow-sheet outline-none dark:border-white/10 sm:inset-x-auto sm:right-0 sm:top-0 sm:h-full sm:w-[min(96vw,440px)] sm:rounded-t-none sm:border-l sm:border-t-0"
         >
           <header className="flex items-start justify-between gap-3 border-b border-black/10 p-4 dark:border-white/10">
             <Dialog.Title asChild>
@@ -359,24 +360,28 @@ function AdminActions({
   return (
     <div className="flex flex-wrap gap-1.5">
       {canReposition && (
-        <button
-          type="button"
-          onClick={onReposition}
-          className="inline-flex h-8 items-center gap-1.5 rounded-md border border-black/10 bg-surface px-3 text-xs font-medium text-text hover:bg-black/5 dark:border-white/10 dark:hover:bg-white/5"
-        >
-          <Move size={12} aria-hidden />
-          <span>Reposition pin</span>
-        </button>
+        <Tooltip text="Drag the pin to a new location on the floor plan">
+          <button
+            type="button"
+            onClick={onReposition}
+            className="inline-flex h-8 items-center gap-1.5 rounded-md border border-black/10 bg-surface px-3 text-xs font-medium text-waymarks-ink hover:bg-black/5 dark:border-white/10 dark:hover:bg-white/5"
+          >
+            <Move size={12} aria-hidden />
+            <span>Reposition pin</span>
+          </button>
+        </Tooltip>
       )}
       {canDelete && (
-        <button
-          type="button"
-          onClick={onDelete}
-          className="inline-flex h-8 items-center gap-1.5 rounded-md border border-danger/30 bg-surface px-3 text-xs font-medium text-danger hover:bg-danger-bg dark:border-danger/40"
-        >
-          <Trash2 size={12} aria-hidden />
-          <span>Delete asset</span>
-        </button>
+        <Tooltip text="Soft-delete this asset (recoverable)">
+          <button
+            type="button"
+            onClick={onDelete}
+            className="inline-flex h-8 items-center gap-1.5 rounded-md border border-danger/30 bg-surface px-3 text-xs font-medium text-danger hover:bg-danger-bg dark:border-danger/40"
+          >
+            <Trash2 size={12} aria-hidden />
+            <span>Delete asset</span>
+          </button>
+        </Tooltip>
       )}
     </div>
   );
@@ -388,7 +393,7 @@ function variantClasses(status: AssetStatus, state: 'active' | 'idle'): string {
     if (status === 'attention') return 'border-warning/30 bg-warning-bg text-warning';
     return 'border-danger/30 bg-danger-bg text-danger';
   }
-  return 'border-black/15 bg-surface text-text-muted hover:border-black/25 hover:text-text dark:border-white/15';
+  return 'border-black/15 bg-surface text-waymarks-ink-muted hover:border-black/25 hover:text-text dark:border-white/15';
 }
 
 function EditPanel({
@@ -539,12 +544,18 @@ function EditPanel({
         </select>
       </FieldLabel>
 
-      <FieldLabel label="Notes">
+      {/* M32 Step 3: this field maps to `location_notes` (the state variable
+          is misleadingly named `notes` — pre-existing). Renaming the label
+          to match the NewAssetDialog ("Where on the floor") so users see the
+          same wording everywhere. DB column unchanged. The dedicated
+          `notes` and `room_number` columns aren't editable here yet — flagged
+          as a follow-up for the drawer's edit view. */}
+      <FieldLabel label="Where on the floor">
         <textarea
           rows={3}
           value={notes}
           onChange={(e) => setNotes(e.target.value)}
-          placeholder='e.g. "East elevator lobby, mounted at 5′. Replaced in 2024."'
+          placeholder='e.g. "East elevator lobby, mounted at 5′"'
           className="w-full rounded-md border border-black/10 bg-surface p-3 text-sm text-text outline-none focus:border-waymarks-gold focus:ring-2 focus:ring-waymarks-gold dark:border-white/10"
         />
       </FieldLabel>
@@ -890,7 +901,7 @@ function DetailsSection({ asset }: { asset: Asset }) {
       )}
       {asset.notes && (
         <div className="rounded-md border border-black/10 bg-bg p-2.5 text-xs text-text-muted dark:border-white/10">
-          <p className="mb-1 font-medium uppercase tracking-[0.14em] text-[10px] text-text-faint">Notes</p>
+          <p className="mb-1 font-medium uppercase tracking-[0.14em] text-[10px] text-text-faint">Install & service notes</p>
           <p className="whitespace-pre-wrap text-sm text-text">{asset.notes}</p>
         </div>
       )}

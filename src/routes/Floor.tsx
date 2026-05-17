@@ -4,6 +4,7 @@ import { ArrowLeft, Check, ChevronRight, ClipboardList, Download, Eye, FileDown,
 import { AppShell } from '@/components/waymarks/AppShell';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { Button } from '@/components/ui/Button';
+import { Tooltip } from '@/components/ui/Tooltip';
 import { FloorPlanCanvas } from '@/components/waymarks/FloorPlanCanvas';
 import { FloorPlanUploadDialog } from '@/components/waymarks/FloorPlanUploadDialog';
 import { PinOverlay } from '@/components/waymarks/PinOverlay';
@@ -423,99 +424,112 @@ export function Floor() {
             No surrounding card; the actions sit naturally on the page. */}
         <div className="mb-3 flex flex-wrap items-center justify-end gap-1.5">
           {showAuditCta && (
-            <button
-              type="button"
-              onClick={() => void startOrResumeAudit()}
-              disabled={startAudit.isPending}
-              className="inline-flex h-7 items-center gap-1 rounded-md bg-waymarks-gold px-2.5 text-[11px] font-medium text-white hover:bg-waymarks-gold-deep disabled:opacity-60"
-            >
-              <ClipboardList size={11} aria-hidden />
-              {activeSession ? 'Resume audit' : 'Audit'}
-            </button>
+            <Tooltip text={activeSession ? 'Resume the audit walkaround you started' : 'Walk the floor and confirm every sign'}>
+              <button
+                type="button"
+                onClick={() => void startOrResumeAudit()}
+                disabled={startAudit.isPending}
+                className="inline-flex h-7 items-center gap-1 rounded-md bg-waymarks-gold px-2.5 text-[11px] font-medium text-white hover:bg-waymarks-gold-deep disabled:opacity-60"
+              >
+                <ClipboardList size={11} aria-hidden />
+                {activeSession ? 'Resume audit' : 'Audit'}
+              </button>
+            </Tooltip>
           )}
           {assets.length > 0 && (
-            <button
-              type="button"
-              onClick={() => void handleExportCatalogue()}
-              disabled={catalogueState === 'building'}
-              title="Download a PDF catalogue of every asset on this floor"
-              className="inline-flex h-7 items-center gap-1 rounded-md border border-black/15 bg-surface px-2.5 text-[11px] font-medium text-text hover:bg-black/5 disabled:opacity-60 dark:border-white/15 dark:hover:bg-white/5"
-            >
-              <FileDown size={11} aria-hidden />
-              {catalogueState === 'building' ? 'Building…' : 'Catalogue'}
-            </button>
+            <Tooltip text="Download a PDF catalogue of every asset on this floor">
+              <button
+                type="button"
+                onClick={() => void handleExportCatalogue()}
+                disabled={catalogueState === 'building'}
+                className="inline-flex h-7 items-center gap-1 rounded-md border border-black/15 bg-surface px-2.5 text-[11px] font-medium text-waymarks-ink hover:bg-black/5 disabled:opacity-60 dark:border-white/15 dark:hover:bg-white/5"
+              >
+                <FileDown size={11} aria-hidden />
+                {catalogueState === 'building' ? 'Building…' : 'Catalogue'}
+              </button>
+            </Tooltip>
           )}
           {canEdit && (
-            <button
-              type="button"
-              onClick={() => setVideoRecorderOpen(true)}
-              className="inline-flex h-7 items-center gap-1 rounded-md border border-black/15 bg-surface px-2.5 text-[11px] font-medium text-text hover:bg-black/5 dark:border-white/15 dark:hover:bg-white/5"
-            >
-              <Video size={11} aria-hidden />
-              Record
-            </button>
+            <Tooltip text="Record a video walkthrough of the building">
+              <button
+                type="button"
+                onClick={() => setVideoRecorderOpen(true)}
+                className="inline-flex h-7 items-center gap-1 rounded-md border border-black/15 bg-surface px-2.5 text-[11px] font-medium text-waymarks-ink hover:bg-black/5 dark:border-white/15 dark:hover:bg-white/5"
+              >
+                <Video size={11} aria-hidden />
+                Record
+              </button>
+            </Tooltip>
           )}
           {floor.plan_url && canCreate && (
-            <button
-              type="button"
-              onClick={() => setPlacing((p) => !p)}
-              className={
-                'inline-flex h-7 items-center gap-1 rounded-md px-2.5 text-[11px] font-medium ' +
-                (placing
-                  ? 'bg-waymarks-gold text-white hover:bg-waymarks-gold-deep'
-                  : 'border border-black/15 bg-surface text-text hover:bg-black/5 dark:border-white/15 dark:hover:bg-white/5')
-              }
-            >
-              <Plus size={11} aria-hidden />
-              {placing ? 'Cancel' : 'Add asset'}
-            </button>
+            <Tooltip text={placing ? 'Cancel placing a new asset' : 'Place a new asset by clicking on the floor plan'}>
+              <button
+                type="button"
+                onClick={() => setPlacing((p) => !p)}
+                className={
+                  'inline-flex h-7 items-center gap-1 rounded-md px-2.5 text-[11px] font-medium ' +
+                  (placing
+                    ? 'bg-waymarks-gold text-white hover:bg-waymarks-gold-deep'
+                    : 'border border-black/15 bg-surface text-waymarks-ink hover:bg-black/5 dark:border-white/15 dark:hover:bg-white/5')
+                }
+              >
+                <Plus size={11} aria-hidden />
+                {placing ? 'Cancel' : 'Add asset'}
+              </button>
+            </Tooltip>
           )}
           {floor.plan_url && (
-            <button
-              type="button"
-              onClick={() => void takeOffline()}
-              disabled={cacheState === 'caching'}
-              className="inline-flex h-7 items-center gap-1 rounded-md border border-black/15 bg-surface px-2.5 text-[11px] font-medium text-text hover:bg-black/5 disabled:opacity-60 dark:border-white/15 dark:hover:bg-white/5"
-            >
-              {cacheState === 'cached' ? <Check size={11} aria-hidden /> : <Download size={11} aria-hidden />}
-              {cacheState === 'cached' ? 'Cached' : 'Offline'}
-            </button>
+            <Tooltip text={cacheState === 'cached' ? 'This floor is saved for offline use — tap to refresh' : 'Save this floor and its plan for offline use'}>
+              <button
+                type="button"
+                onClick={() => void takeOffline()}
+                disabled={cacheState === 'caching'}
+                className="inline-flex h-7 items-center gap-1 rounded-md border border-black/15 bg-surface px-2.5 text-[11px] font-medium text-waymarks-ink hover:bg-black/5 disabled:opacity-60 dark:border-white/15 dark:hover:bg-white/5"
+              >
+                {cacheState === 'cached' ? <Check size={11} aria-hidden /> : <Download size={11} aria-hidden />}
+                {cacheState === 'cached' ? 'Cached' : 'Offline'}
+              </button>
+            </Tooltip>
           )}
           {floor.plan_url && canUploadPlan && (
-            <button
-              type="button"
-              onClick={() => setUploadOpen(true)}
-              className="inline-flex h-7 items-center gap-1 rounded-md border border-black/15 bg-surface px-2.5 text-[11px] font-medium text-text hover:bg-black/5 dark:border-white/15 dark:hover:bg-white/5"
-            >
-              <RefreshCw size={11} aria-hidden />
-              Replace
-            </button>
+            <Tooltip text="Replace the floor plan image">
+              <button
+                type="button"
+                onClick={() => setUploadOpen(true)}
+                className="inline-flex h-7 items-center gap-1 rounded-md border border-black/15 bg-surface px-2.5 text-[11px] font-medium text-waymarks-ink hover:bg-black/5 dark:border-white/15 dark:hover:bg-white/5"
+              >
+                <RefreshCw size={11} aria-hidden />
+                Replace
+              </button>
+            </Tooltip>
           )}
           {/* M14c - Visualize in ViewMark. Gold outline so it reads as a
               brand-aligned secondary, distinct from the gold-filled
               Audit primary. */}
-          <button
-            type="button"
-            onClick={() => window.open(viewmarkUrl, '_blank', 'noopener,noreferrer')}
-            title="Open ViewMark to mock up signage on a wall photo"
-            className="inline-flex h-7 items-center gap-1 rounded-md border border-waymarks-gold bg-surface px-2.5 text-[11px] font-medium text-waymarks-gold hover:bg-waymarks-gold-soft"
-          >
-            <Eye size={11} aria-hidden />
-            Visualize
-          </button>
-          {canDeleteFloor && (
+          <Tooltip text="Open ViewMark to mock up signage on a wall photo">
             <button
               type="button"
-              onClick={() => {
-                setDeleteFloorError(null);
-                setDeleteFloorOpen(true);
-              }}
-              title="Soft-delete this floor"
-              className="ml-1 inline-flex h-7 items-center gap-1 rounded-md border border-black/15 bg-surface px-2.5 text-[11px] font-medium text-text-muted hover:border-danger hover:bg-danger-bg hover:text-danger dark:border-white/15"
+              onClick={() => window.open(viewmarkUrl, '_blank', 'noopener,noreferrer')}
+              className="inline-flex h-7 items-center gap-1 rounded-md border border-waymarks-gold bg-surface px-2.5 text-[11px] font-medium text-waymarks-gold hover:bg-waymarks-gold-soft"
             >
-              <Trash2 size={11} aria-hidden />
-              Delete floor
+              <Eye size={11} aria-hidden />
+              Visualize
             </button>
+          </Tooltip>
+          {canDeleteFloor && (
+            <Tooltip text="Soft-delete this floor (recoverable)">
+              <button
+                type="button"
+                onClick={() => {
+                  setDeleteFloorError(null);
+                  setDeleteFloorOpen(true);
+                }}
+                className="ml-1 inline-flex h-7 items-center gap-1 rounded-md border border-black/15 bg-surface px-2.5 text-[11px] font-medium text-text-muted hover:border-danger hover:bg-danger-bg hover:text-danger dark:border-white/15"
+              >
+                <Trash2 size={11} aria-hidden />
+                Delete floor
+              </button>
+            </Tooltip>
           )}
         </div>
 
@@ -553,7 +567,7 @@ export function Floor() {
               Couldn't load plan: {signedUrlError}
             </div>
           ) : !signedUrl || !planKind ? (
-            <div className="flex h-[60vh] items-center justify-center rounded-xl border border-black/10 bg-surface text-text-faint dark:border-white/10 dark:bg-white/5">
+            <div className="flex h-[60vh] items-center justify-center rounded-xl border border-black/10 bg-surface text-waymarks-ink-faint dark:border-white/10 dark:bg-white/5">
               <div
                 className="h-6 w-6 animate-spin rounded-full border-2 border-waymarks-gold border-t-waymarks-gold"
                 aria-hidden

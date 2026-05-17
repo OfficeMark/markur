@@ -740,6 +740,7 @@ export type Database = {
           display_name: string
           email: string
           id: string
+          show_action_hints: boolean
           updated_at: string
         }
         Insert: {
@@ -748,6 +749,7 @@ export type Database = {
           display_name: string
           email: string
           id: string
+          show_action_hints?: boolean
           updated_at?: string
         }
         Update: {
@@ -756,6 +758,7 @@ export type Database = {
           display_name?: string
           email?: string
           id?: string
+          show_action_hints?: boolean
           updated_at?: string
         }
         Relationships: []

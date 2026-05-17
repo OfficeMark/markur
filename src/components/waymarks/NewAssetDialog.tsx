@@ -331,28 +331,17 @@ export function NewAssetDialog({
               />
             </Field>
 
-            <Field
-              label="Location notes"
-              htmlFor="asset-loc"
-              error={errors.location_notes?.message}
-              hint="Optional. Where on the floor?"
-            >
-              <textarea
-                id="asset-loc"
-                rows={2}
-                {...register('location_notes')}
-                placeholder='e.g. "East elevator lobby, mounted at 5′"'
-                className="w-full rounded-md border border-black/10 bg-surface p-3 text-sm text-text outline-none focus:border-waymarks-gold focus:ring-2 focus:ring-waymarks-gold dark:border-white/10"
-              />
-            </Field>
+            {/* M32 Step 3: section divider — visually separates "where on
+                the floor" from "everything else about the pin." Thin uppercase
+                label with a 1px rule above, not a chunky heading. DB columns
+                are unchanged (location_notes / room_number / notes). */}
+            <SectionDivider label="Where" />
 
-            {/* M17b — single Room number field. Vendor info moved to the
-                drawer (added later in audit / from desk). */}
             <Field
-              label="Room number"
+              label="Room"
               htmlFor="asset-room"
               error={errors.room_number?.message}
-              hint="Optional."
+              hint='Number, letter, or name — "301", "B12", "Boardroom A".'
             >
               <input
                 id="asset-room"
@@ -363,10 +352,27 @@ export function NewAssetDialog({
             </Field>
 
             <Field
-              label="Notes"
+              label="Where on the floor"
+              htmlFor="asset-loc"
+              error={errors.location_notes?.message}
+              hint="Spatial detail used to find this pin. Filterable."
+            >
+              <textarea
+                id="asset-loc"
+                rows={2}
+                {...register('location_notes')}
+                placeholder='e.g. "East elevator lobby, mounted at 5′"'
+                className="w-full rounded-md border border-black/10 bg-surface p-3 text-sm text-text outline-none focus:border-waymarks-gold focus:ring-2 focus:ring-waymarks-gold dark:border-white/10"
+              />
+            </Field>
+
+            <SectionDivider label="Notes" />
+
+            <Field
+              label="Install & service notes"
               htmlFor="asset-notes"
               error={errors.notes?.message}
-              hint="Optional. Any additional context, install notes, history."
+              hint="History, vendor info, install details. Anything not about where the pin is."
             >
               <textarea
                 id="asset-notes"
@@ -429,6 +435,23 @@ function Field({
       {children}
       {hint && !error && <p className="text-xs text-text-faint">{hint}</p>}
       {error && <p className="text-xs text-danger">{error}</p>}
+    </div>
+  );
+}
+
+/**
+ * M32 Step 3: thin section divider used inside the asset form to group
+ * "Where" (Room + Where on the floor) and "Notes" (Install & service notes).
+ * Tiny uppercase label with a hairline rule above — guidance for the eye,
+ * not navigation. Sits at the same vertical rhythm as a regular Field so
+ * the form's space-y-4 cadence stays clean.
+ */
+function SectionDivider({ label }: { label: string }) {
+  return (
+    <div className="border-t border-black/10 pt-3 dark:border-white/10">
+      <p className="text-[11px] font-medium uppercase tracking-[0.18em] text-text-faint">
+        {label}
+      </p>
     </div>
   );
 }

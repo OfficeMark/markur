@@ -10,7 +10,9 @@ import type { Profile } from '@/types/database';
  * managed by Supabase Auth and isn't editable here.
  */
 
-export type UpdateMyProfilePatch = Partial<Pick<Profile, 'display_name' | 'avatar_url'>>;
+export type UpdateMyProfilePatch = Partial<
+  Pick<Profile, 'display_name' | 'avatar_url' | 'show_action_hints'>
+>;
 
 export async function updateMyProfile(
   userId: string,
