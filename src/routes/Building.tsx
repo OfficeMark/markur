@@ -115,7 +115,7 @@ export function Building() {
                 <button
                   type="button"
                   onClick={() => setNewFloorOpen(true)}
-                  className="mt-3 inline-flex h-8 items-center gap-1 rounded-md bg-waymarks-gold px-3 text-xs font-medium text-white hover:bg-waymarks-gold-deep"
+                  className="mt-3 inline-flex h-8 items-center gap-1 rounded-md bg-waymarks-gold px-3 text-xs font-medium text-waymarks-ink hover:bg-waymarks-gold-deep"
                 >
                   <Plus size={12} aria-hidden />
                   Add the first floor

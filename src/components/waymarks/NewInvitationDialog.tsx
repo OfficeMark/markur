@@ -248,7 +248,7 @@ export function NewInvitationDialog({
                     value={email}
                     onChange={(e) => setEmail(e.target.value)}
                     placeholder="name@example.com"
-                    className="h-10 w-full rounded-md border border-black/10 bg-surface px-3 text-sm text-text outline-none focus:border-waymarks-gold focus:ring-2 focus:ring-waymarks-gold dark:border-white/10"
+                    className="h-10 w-full rounded-md border border-black/10 bg-surface px-3 text-sm text-waymarks-ink outline-none focus:border-waymarks-gold focus:ring-2 focus:ring-waymarks-gold dark:border-white/10"
                   />
                 </Field>
 
@@ -287,7 +287,7 @@ export function NewInvitationDialog({
                     <select
                       value={floorId}
                       onChange={(e) => setFloorId(e.target.value)}
-                      className="h-10 w-full rounded-md border border-black/10 bg-surface px-3 text-sm text-text outline-none focus:border-waymarks-gold focus:ring-2 focus:ring-waymarks-gold dark:border-white/10"
+                      className="h-10 w-full rounded-md border border-black/10 bg-surface px-3 text-sm text-waymarks-ink outline-none focus:border-waymarks-gold focus:ring-2 focus:ring-waymarks-gold dark:border-white/10"
                     >
                       <option value="">— Choose a floor —</option>
                       {(floors.data ?? []).map((f) => (
@@ -304,7 +304,7 @@ export function NewInvitationDialog({
                     <select
                       value={tenantId}
                       onChange={(e) => setTenantId(e.target.value)}
-                      className="h-10 w-full rounded-md border border-black/10 bg-surface px-3 text-sm text-text outline-none focus:border-waymarks-gold focus:ring-2 focus:ring-waymarks-gold dark:border-white/10"
+                      className="h-10 w-full rounded-md border border-black/10 bg-surface px-3 text-sm text-waymarks-ink outline-none focus:border-waymarks-gold focus:ring-2 focus:ring-waymarks-gold dark:border-white/10"
                     >
                       <option value="">— Choose a tenant —</option>
                       {(tenants.data ?? []).map((t) => (
@@ -330,7 +330,7 @@ export function NewInvitationDialog({
                     value={expiresInDays}
                     onChange={(e) => setExpiresInDays(e.target.value)}
                     placeholder={role === 'auditor' ? '30' : 'never'}
-                    className="h-10 w-full rounded-md border border-black/10 bg-surface px-3 text-sm text-text outline-none focus:border-waymarks-gold focus:ring-2 focus:ring-waymarks-gold dark:border-white/10"
+                    className="h-10 w-full rounded-md border border-black/10 bg-surface px-3 text-sm text-waymarks-ink outline-none focus:border-waymarks-gold focus:ring-2 focus:ring-waymarks-gold dark:border-white/10"
                   />
                 </Field>
               </form>

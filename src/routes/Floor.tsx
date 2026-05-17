@@ -429,7 +429,7 @@ export function Floor() {
                 type="button"
                 onClick={() => void startOrResumeAudit()}
                 disabled={startAudit.isPending}
-                className="inline-flex h-7 items-center gap-1 rounded-md bg-waymarks-gold px-2.5 text-[11px] font-medium text-white hover:bg-waymarks-gold-deep disabled:opacity-60"
+                className="inline-flex h-7 items-center gap-1 rounded-md bg-waymarks-gold px-2.5 text-[11px] font-medium text-waymarks-ink hover:bg-waymarks-gold-deep disabled:opacity-60"
               >
                 <ClipboardList size={11} aria-hidden />
                 {activeSession ? 'Resume audit' : 'Audit'}
@@ -469,7 +469,7 @@ export function Floor() {
                 className={
                   'inline-flex h-7 items-center gap-1 rounded-md px-2.5 text-[11px] font-medium ' +
                   (placing
-                    ? 'bg-waymarks-gold text-white hover:bg-waymarks-gold-deep'
+                    ? 'bg-waymarks-gold text-waymarks-ink hover:bg-waymarks-gold-deep'
                     : 'border border-black/15 bg-surface text-waymarks-ink hover:bg-black/5 dark:border-white/15 dark:hover:bg-white/5')
                 }
               >

@@ -421,7 +421,7 @@ function AddTypeForm(props: {
           autoFocus
           maxLength={60}
           placeholder="e.g. Memorial bench"
-          className="mt-1 h-9 w-full rounded-md border border-black/10 bg-surface px-3 text-sm text-text outline-none focus:border-waymarks-gold focus:ring-2 focus:ring-waymarks-gold"
+          className="mt-1 h-9 w-full rounded-md border border-black/10 bg-surface px-3 text-sm text-waymarks-ink outline-none focus:border-waymarks-gold focus:ring-2 focus:ring-waymarks-gold"
         />
         <span className="mt-1 block text-[11px] text-text-faint">
           Internal key: {label ? slugify(label) || '(needs letters)' : '(type a label)'}

@@ -237,7 +237,7 @@ export function NewAssetDialog({
                 value={typeQuery}
                 onChange={(e) => setTypeQuery(e.target.value)}
                 placeholder="Search types (e.g. emerg, donor, way…)"
-                className="mb-1.5 h-9 w-full rounded-md border border-black/10 bg-surface px-3 text-sm text-text outline-none focus:border-waymarks-gold focus:ring-2 focus:ring-waymarks-gold dark:border-white/10"
+                className="mb-1.5 h-9 w-full rounded-md border border-black/10 bg-surface px-3 text-sm text-waymarks-ink outline-none focus:border-waymarks-gold focus:ring-2 focus:ring-waymarks-gold dark:border-white/10"
               />
               <select
                 id="asset-type"
@@ -251,7 +251,7 @@ export function NewAssetDialog({
                   }
                   setValue('type', e.target.value);
                 }}
-                className="h-11 w-full rounded-md border border-black/10 bg-surface px-3 text-sm text-text outline-none focus:border-waymarks-gold focus:ring-2 focus:ring-waymarks-gold dark:border-white/10"
+                className="h-11 w-full rounded-md border border-black/10 bg-surface px-3 text-sm text-waymarks-ink outline-none focus:border-waymarks-gold focus:ring-2 focus:ring-waymarks-gold dark:border-white/10"
               >
                 <option value="">Choose a type… (optional)</option>
                 {filteredSignage.length > 0 && (
@@ -288,7 +288,7 @@ export function NewAssetDialog({
                       // eslint-disable-next-line jsx-a11y/no-autofocus -- intentional: focuses the field when this inline editor opens
                       autoFocus
                       placeholder="e.g. Memorial bench"
-                      className="h-9 flex-1 rounded-md border border-black/10 bg-surface px-3 text-sm text-text outline-none focus:border-waymarks-gold focus:ring-1 focus:ring-waymarks-gold"
+                      className="h-9 flex-1 rounded-md border border-black/10 bg-surface px-3 text-sm text-waymarks-ink outline-none focus:border-waymarks-gold focus:ring-1 focus:ring-waymarks-gold"
                     />
                     <Button
                       size="sm"
@@ -327,7 +327,7 @@ export function NewAssetDialog({
                 id="asset-name"
                 {...register('name')}
                 placeholder='e.g. "Lobby directory"'
-                className="h-11 w-full rounded-md border border-black/10 bg-surface px-3 text-sm text-text outline-none focus:border-waymarks-gold focus:ring-2 focus:ring-waymarks-gold dark:border-white/10"
+                className="h-11 w-full rounded-md border border-black/10 bg-surface px-3 text-sm text-waymarks-ink outline-none focus:border-waymarks-gold focus:ring-2 focus:ring-waymarks-gold dark:border-white/10"
               />
             </Field>
 
@@ -347,7 +347,7 @@ export function NewAssetDialog({
                 id="asset-room"
                 {...register('room_number')}
                 placeholder='e.g. "301"'
-                className="h-11 w-full rounded-md border border-black/10 bg-surface px-3 text-sm text-text outline-none focus:border-waymarks-gold focus:ring-2 focus:ring-waymarks-gold dark:border-white/10"
+                className="h-11 w-full rounded-md border border-black/10 bg-surface px-3 text-sm text-waymarks-ink outline-none focus:border-waymarks-gold focus:ring-2 focus:ring-waymarks-gold dark:border-white/10"
               />
             </Field>
 
@@ -362,7 +362,7 @@ export function NewAssetDialog({
                 rows={2}
                 {...register('location_notes')}
                 placeholder='e.g. "East elevator lobby, mounted at 5′"'
-                className="w-full rounded-md border border-black/10 bg-surface p-3 text-sm text-text outline-none focus:border-waymarks-gold focus:ring-2 focus:ring-waymarks-gold dark:border-white/10"
+                className="w-full rounded-md border border-black/10 bg-surface p-3 text-sm text-waymarks-ink outline-none focus:border-waymarks-gold focus:ring-2 focus:ring-waymarks-gold dark:border-white/10"
               />
             </Field>
 
@@ -379,7 +379,7 @@ export function NewAssetDialog({
                 rows={3}
                 {...register('notes')}
                 placeholder='e.g. "Replaced 2024-03. Brushed aluminum, custom font."'
-                className="w-full rounded-md border border-black/10 bg-surface p-3 text-sm text-text outline-none focus:border-waymarks-gold focus:ring-2 focus:ring-waymarks-gold dark:border-white/10"
+                className="w-full rounded-md border border-black/10 bg-surface p-3 text-sm text-waymarks-ink outline-none focus:border-waymarks-gold focus:ring-2 focus:ring-waymarks-gold dark:border-white/10"
               />
             </Field>
 

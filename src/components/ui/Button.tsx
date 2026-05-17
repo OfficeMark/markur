@@ -28,7 +28,7 @@ const VARIANTS: Record<ButtonVariant, string> = {
   danger:
     'border border-danger text-danger hover:bg-danger/5 disabled:opacity-50',
   gold:
-    'bg-waymarks-gold text-white hover:bg-waymarks-gold-deep disabled:bg-text-faint',
+    'bg-waymarks-gold text-waymarks-ink hover:bg-waymarks-gold-deep disabled:bg-text-faint',
 };
 
 const SIZES: Record<ButtonSize, string> = {
