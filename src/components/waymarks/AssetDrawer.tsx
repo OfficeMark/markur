@@ -27,6 +27,7 @@ import { MetricCard } from '@/components/ui/MetricCard';
 import { Button } from '@/components/ui/Button';
 import { useAsset, useUpdateAsset } from '@/hooks/useAssets';
 import { useBuilding } from '@/hooks/useBuildings';
+import { useFloor } from '@/hooks/useFloors';
 import { useActivity } from '@/hooks/useActivity';
 import {
   useAddAssetPhoto,
@@ -92,6 +93,7 @@ export function AssetDrawer({
   const canReposition = useCan('reposition', { type: 'building', id: buildingId });
   const canDelete = useCan('delete', { type: 'building', id: buildingId });
   const { data: building } = useBuilding(buildingId);
+  const { data: floor } = useFloor(floorId);
   const update = useUpdateAsset(floorId);
   const [editing, setEditing] = useState(false);
   const [recordOpen, setRecordOpen] = useState(false);
@@ -192,7 +194,8 @@ export function AssetDrawer({
                 )}
                 <VisualizeRow
                   buildingName={building?.name ?? 'Building'}
-                  assetName={asset.name}
+                  floorLabel={floor?.label ?? ''}
+                  pinValue={asset.room_number?.trim() || asset.name}
                 />
                 <OrderSignsRow />
                 <DetailsSection asset={asset} />
@@ -326,8 +329,19 @@ function QuickActions({
   );
 }
 
-function VisualizeRow({ buildingName, assetName }: { buildingName: string; assetName: string }) {
-  const url = `https://viewmark-embed.netlify.app/?building=${encodeURIComponent(buildingName)}&asset=${encodeURIComponent(assetName)}`;
+function VisualizeRow({
+  buildingName,
+  floorLabel,
+  pinValue,
+}: {
+  buildingName: string;
+  floorLabel: string;
+  pinValue: string;
+}) {
+  const url =
+    `https://viewmark-embed.netlify.app/?building=${encodeURIComponent(buildingName)}` +
+    `&floor=${encodeURIComponent(floorLabel)}` +
+    `&pin=${encodeURIComponent(pinValue)}`;
   return (
     <div className="flex items-center justify-between gap-3 rounded-md border border-waymarks-gold/30 bg-waymarks-gold-soft px-3 py-2 text-xs dark:bg-white/5">
       <div className="min-w-0">
