@@ -158,16 +158,19 @@ export function FloorPlanUploadDialog({
 
           <div className="mt-5">
             {stage.kind === 'pick' && (
-              <PickArea
-                dragOver={dragOver}
-                onDragOver={(e) => {
-                  e.preventDefault();
-                  setDragOver(true);
-                }}
-                onDragLeave={() => setDragOver(false)}
-                onDrop={onDrop}
-                onClick={() => inputRef.current?.click()}
-              />
+              <>
+                <PickArea
+                  dragOver={dragOver}
+                  onDragOver={(e) => {
+                    e.preventDefault();
+                    setDragOver(true);
+                  }}
+                  onDragLeave={() => setDragOver(false)}
+                  onDrop={onDrop}
+                  onClick={() => inputRef.current?.click()}
+                />
+                <FloorplanExportTips />
+              </>
             )}
             {stage.kind === 'analyzing' && <AnalyzingPanel name={stage.file.name} />}
             {stage.kind === 'review' && (
@@ -228,6 +231,52 @@ function PickArea(props: {
       <span className="font-medium">Drop a plan here, or click to choose</span>
       <span className="text-xs text-text-faint">PDF · PNG · JPG · up to {formatBytes(PLAN_MAX_BYTES)}</span>
     </button>
+  );
+}
+
+function FloorplanExportTips() {
+  return (
+    <details className="mt-4 rounded-lg border border-black/10 bg-surface text-sm dark:border-white/10">
+      <summary className="cursor-pointer select-none rounded-lg px-3 py-2 font-medium hover:bg-black/5 dark:hover:bg-white/5">
+        Floorplan export tips
+      </summary>
+      <div className="space-y-4 border-t border-black/10 px-3 py-3 text-text-muted dark:border-white/10">
+        <section className="space-y-1.5">
+          <p className="font-medium text-text">PDF (recommended)</p>
+          <ul className="space-y-1 text-xs">
+            <li>
+              <span className="font-medium text-text">Best for:</span>{' '}
+              most floorplans, easiest to mark up later
+            </li>
+            <li>
+              <span className="font-medium text-text">Export settings:</span>{' '}
+              {`vector PDF (not rasterized/flattened), single page per floor, actual scale preserved (1:50 or 1:100 metric, or 1/8" = 1'0" imperial)`}
+            </li>
+            <li>
+              <span className="font-medium text-text">Avoid:</span>{' '}
+              {`scanned PDFs (lose vector data), multi-floor stacked into one page, PDFs exported "fit to page" (loses scale)`}
+            </li>
+          </ul>
+        </section>
+        <section className="space-y-1.5">
+          <p className="font-medium text-text">JPG/PNG (when you only have a photo or scan)</p>
+          <ul className="space-y-1 text-xs">
+            <li>
+              <span className="font-medium text-text">Best for:</span>{' '}
+              photos or scans of printed plans
+            </li>
+            <li>
+              <span className="font-medium text-text">Export settings:</span>{' '}
+              minimum 300dpi, full-floor in one image, capture the scale bar if present
+            </li>
+            <li>
+              <span className="font-medium text-text">Avoid:</span>{' '}
+              phone photos taken at an angle, multiple images stitched in the camera roll, anything below 150dpi (illegible at zoom)
+            </li>
+          </ul>
+        </section>
+      </div>
+    </details>
   );
 }
 
