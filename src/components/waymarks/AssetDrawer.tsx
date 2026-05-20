@@ -18,6 +18,7 @@ import {
   LockOpen,
   Move,
   Eye,
+  ShoppingCart,
 } from 'lucide-react';
 import { Chip } from '@/components/ui/Chip';
 import { MetricCard } from '@/components/ui/MetricCard';
@@ -184,6 +185,7 @@ export function AssetDrawer({
                   buildingName={building?.name ?? 'Building'}
                   assetName={asset.name}
                 />
+                <OrderSignsRow />
                 <DetailsSection asset={asset} />
                 <StatusRow asset={asset} flagCount={asset.status === 'flagged' ? 1 : 0} />
                 <AssetAttachmentsPanel assetId={asset.id} canEdit={canEdit} />
@@ -331,6 +333,26 @@ function VisualizeRow({ buildingName, assetName }: { buildingName: string; asset
       >
         <Eye size={12} aria-hidden />
         Visualize
+      </a>
+    </div>
+  );
+}
+
+function OrderSignsRow() {
+  return (
+    <div className="flex items-center justify-between gap-3 rounded-md border border-waymarks-gold/30 bg-waymarks-gold-soft px-3 py-2 text-xs dark:bg-white/5">
+      <div className="min-w-0">
+        <p className="font-semibold text-waymarks-ink dark:text-white">Order signs</p>
+        <p className="text-text-muted">Order new or replacement signage from Officemark.</p>
+      </div>
+      <a
+        href="https://account.officemark.ca/authentication/login"
+        target="_blank"
+        rel="noopener noreferrer"
+        className="inline-flex h-8 shrink-0 items-center gap-1.5 rounded-md bg-waymarks-gold px-3 text-xs font-medium text-white hover:bg-waymarks-gold-deep"
+      >
+        <ShoppingCart size={12} aria-hidden />
+        Order Signs
       </a>
     </div>
   );
