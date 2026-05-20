@@ -18,14 +18,17 @@ export type ButtonProps = {
 const VARIANTS: Record<ButtonVariant, string> = {
   primary:
     'bg-waymarks-ink text-white hover:bg-waymarks-ink/90 disabled:bg-waymarks-ink/40',
+  // M32 Step 4: text-waymarks-ink (not text-text) because bg-surface is
+  // always white -- dark mode flips --color-text to near-white, which on a
+  // white button reads as invisible. waymarks-ink is dark in both modes.
   secondary:
-    'border border-black/15 bg-surface text-text hover:bg-black/5 disabled:opacity-50 dark:border-white/15 dark:hover:bg-white/5',
+    'border border-black/15 bg-surface text-waymarks-ink hover:bg-black/5 disabled:opacity-50 dark:border-white/15 dark:hover:bg-white/5',
   ghost:
     'text-text hover:bg-black/5 disabled:opacity-50 dark:hover:bg-white/5',
   danger:
     'border border-danger text-danger hover:bg-danger/5 disabled:opacity-50',
   gold:
-    'bg-waymarks-gold text-white hover:bg-waymarks-gold-deep disabled:bg-text-faint',
+    'bg-waymarks-gold text-waymarks-ink hover:bg-waymarks-gold-deep disabled:bg-text-faint',
 };
 
 const SIZES: Record<ButtonSize, string> = {

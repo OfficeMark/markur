@@ -13,6 +13,7 @@ import { getDocument, GlobalWorkerOptions } from 'pdfjs-dist';
 import pdfWorkerUrl from 'pdfjs-dist/build/pdf.worker.min.mjs?url';
 import { Loader2, ImageOff, LocateFixed } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { clampZoom } from '@/lib/zoom';
 
 if (typeof window !== 'undefined' && !GlobalWorkerOptions.workerSrc) {
   GlobalWorkerOptions.workerSrc = pdfWorkerUrl;
@@ -135,9 +136,16 @@ export function FloorPlanCanvas({
               setStatus('error');
               return;
             }
-            canvas.width = img.naturalWidth;
-            canvas.height = img.naturalHeight;
-            ctx.drawImage(img, 0, 0);
+            // SVG plans that carry only a viewBox (no explicit width/height)
+            // can report naturalWidth/Height as 0 in some browsers — fall back
+            // to sane defaults so the canvas is never 0×0. Raster images
+            // (PNG/JPG) always report real intrinsic dimensions, so the
+            // fallback is a no-op for them.
+            const w = img.naturalWidth || 1600;
+            const h = img.naturalHeight || 1200;
+            canvas.width = w;
+            canvas.height = h;
+            ctx.drawImage(img, 0, 0, w, h);
             setStatus('ready');
           };
           img.onerror = () => {
@@ -172,7 +180,7 @@ export function FloorPlanCanvas({
     if (!e.ctrlKey && !e.metaKey && Math.abs(e.deltaY) < 4) return;
     e.preventDefault();
     const factor = e.deltaY > 0 ? 0.9 : 1.1;
-    setZoom((z) => clamp(z * factor, 0.3, 6));
+    setZoom((z) => clampZoom(z * factor));
   }, []);
 
   const onPointerDown = useCallback(
@@ -238,7 +246,7 @@ export function FloorPlanCanvas({
       if (a && b) {
         const dist = Math.hypot(b.x - a.x, b.y - a.y);
         const rawRatio = dist / pinchRef.current.startDist;
-        const targetZoom = clamp(pinchRef.current.startZoom * rawRatio, 0.3, 6);
+        const targetZoom = clampZoom(pinchRef.current.startZoom * rawRatio);
         // Use the clamped ratio so the anchor stays consistent when zoom hits a bound.
         const ratio = targetZoom / pinchRef.current.startZoom;
         const focal = { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 };
@@ -304,11 +312,11 @@ export function FloorPlanCanvas({
         case '+':
         case '=':
           e.preventDefault();
-          setZoom((z) => clamp(z * 1.1, 0.3, 6));
+          setZoom((z) => clampZoom(z * 1.1));
           break;
         case '-':
           e.preventDefault();
-          setZoom((z) => clamp(z * 0.9, 0.3, 6));
+          setZoom((z) => clampZoom(z * 0.9));
           break;
         case '0':
           e.preventDefault();
@@ -437,8 +445,4 @@ export function FloorPlanCanvas({
       )}
     </div>
   );
-}
-
-function clamp(v: number, min: number, max: number): number {
-  return Math.min(max, Math.max(min, v));
 }

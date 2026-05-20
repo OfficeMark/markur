@@ -3,6 +3,8 @@ import type { Asset } from '@/types/database';
 import { PinMarker } from './PinMarker';
 import { computeStatus, type AssetStatus } from '@/lib/asset-status';
 import { useOrgBranding } from '@/hooks/useBranding';
+import { formatPinNumber } from '@/lib/pin-types';
+import { cn } from '@/lib/utils';
 
 export type PinOverlayProps = {
   assets: Asset[];
@@ -113,6 +115,12 @@ export function PinOverlay({
   const [preview, setPreview] = useState<{ assetId: string; x: number; y: number } | null>(
     null
   );
+  // M32 Step 1: pin labels are hidden by default and revealed on desktop
+  // hover (via the `group` class on the per-pin container) and on
+  // touch press-and-hold. We track the currently-touched pin id here so the
+  // label fades in only on that one — capture-phase pointerdown beats the
+  // PinMarker's e.stopPropagation in its own handler.
+  const [touchedAssetId, setTouchedAssetId] = useState<string | null>(null);
 
   function startDrag(
     asset: Asset,
@@ -225,12 +233,52 @@ export function PinOverlay({
           : !repositionAssetId && canMove && !asset.is_locked;
         const faded = !!repositionAssetId && !isRepositionTarget;
 
+        const pinLabel = formatPinNumber(asset.pin_number);
+
+        const labelVisible = touchedAssetId === asset.id;
+
         return (
           <div
             key={asset.id}
-            className="pointer-events-auto absolute"
+            className="group pointer-events-auto absolute"
             style={{ left: `${x * 100}%`, top: `${y * 100}%` }}
+            // M32 Step 1: capture-phase pointerdown beats PinMarker's
+            // e.stopPropagation in its own handler, so we can flag this pin
+            // as "touched" for the duration of the press without breaking
+            // the existing tap/drag/long-press flow. Cleared on pointerup
+            // / cancel / leave so the label fades back out.
+            onPointerDownCapture={(e) => {
+              if (e.pointerType === 'touch') setTouchedAssetId(asset.id);
+            }}
+            onPointerUp={() => setTouchedAssetId(null)}
+            onPointerCancel={() => setTouchedAssetId(null)}
+            onPointerLeave={() => setTouchedAssetId(null)}
           >
+            {/* Floor-scoped pin ID, shown just below the pin. Inverse-scaled by
+                --zoom (same trick PinMarker uses) so it stays a constant
+                viewport size as the plan zooms. Hidden while fading other pins
+                during a reposition so it doesn't clutter the focus pin's area.
+                M32 Step 1: visually hidden by default — revealed on desktop
+                hover (group-hover), keyboard focus inside the container
+                (focus-within), or touch press-and-hold (touchedAssetId state).
+                Screen readers still hear the pin number via PinMarker's
+                aria-label (the pinLabel prop). */}
+            {pinLabel && !faded && (
+              <span
+                aria-hidden
+                className={cn(
+                  'pointer-events-none absolute left-1/2 top-1/2 select-none whitespace-nowrap rounded-[3px] bg-waymarks-ink/85 px-1 font-mono text-[9px] font-semibold leading-[1.45] text-white shadow-sm',
+                  'opacity-0 transition-opacity duration-150 ease-out group-hover:opacity-100 group-focus-within:opacity-100',
+                  labelVisible && 'opacity-100'
+                )}
+                style={{
+                  transform: 'translate(-50%, 17px) scale(calc(1 / var(--zoom, 1)))',
+                  transformOrigin: 'center top',
+                }}
+              >
+                {pinLabel}
+              </span>
+            )}
             <PinMarker
               assetId={asset.id}
               name={asset.name}
@@ -238,6 +286,7 @@ export function PinOverlay({
               status={status}
               shape={pinShape}
               size={pinSize}
+              pinLabel={pinLabel}
               fillColor={statusOverride ? statusFillColor(status) : undefined}
               selected={asset.id === selectedAssetId}
               unlocked={draggable && !isRepositionTarget}

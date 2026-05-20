@@ -230,7 +230,7 @@ export function AdminBrandingPane() {
           onChange={(e) => setDisplayName(e.target.value)}
           maxLength={60}
           placeholder="e.g. ABC Donor Solutions"
-          className="h-10 w-full rounded-md border border-black/10 bg-surface px-3 text-sm text-text outline-none focus:border-waymarks-gold focus:ring-2 focus:ring-waymarks-gold"
+          className="h-10 w-full rounded-md border border-black/10 bg-surface px-3 text-sm text-waymarks-ink outline-none focus:border-waymarks-gold focus:ring-2 focus:ring-waymarks-gold"
         />
       </section>
 

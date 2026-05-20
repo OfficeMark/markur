@@ -15,3 +15,9 @@ export function initials(name: string): string {
   const last = parts[parts.length - 1]?.[0] ?? '';
   return (first + last).toUpperCase();
 }
+
+/** Absolute URL for an invitation-accept link, given its token. */
+export function inviteUrlFor(token: string): string {
+  if (typeof window === 'undefined') return `/accept/${token}`;
+  return `${window.location.origin}/accept/${token}`;
+}

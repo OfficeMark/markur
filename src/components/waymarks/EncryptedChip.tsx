@@ -32,7 +32,11 @@ export function EncryptedChip({ className, onClick }: EncryptedChipProps) {
       )}
     >
       <Lock size={11} aria-hidden />
-      <span>Encrypted</span>
+      {/* Label is the entire chip on desktop; on mobile we drop to icon-only
+          so the header (logo + chips + help + user menu) doesn't overflow a
+          375-414px viewport. The lock icon + gold pill + tooltip still
+          carry the meaning. aria-label above keeps SR users informed. */}
+      <span className="hidden sm:inline">Encrypted</span>
     </button>
   );
 }

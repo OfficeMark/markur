@@ -1,6 +1,7 @@
 import { describe, it, expect, vi } from 'vitest';
 import { render, screen } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { BuildingNav } from '@/components/waymarks/BuildingNav';
 
 const exampleBuilding = {
@@ -36,6 +37,16 @@ const ground = {
 vi.mock('@/hooks/useBuildings', () => ({
   useBuildings: () => ({ data: [exampleBuilding], isLoading: false }),
   useBuilding: () => ({ data: exampleBuilding, isLoading: false }),
+  // NewBuildingDialog (rendered inside BuildingNav's NavList) calls this on
+  // mount — needs a mutation-shaped stub or the dialog throws.
+  useCreateBuilding: () => ({
+    mutate: vi.fn(),
+    mutateAsync: vi.fn(),
+    isPending: false,
+    isError: false,
+    error: null,
+    reset: vi.fn(),
+  }),
 }));
 
 vi.mock('@/hooks/useFloors', () => ({
@@ -43,32 +54,50 @@ vi.mock('@/hooks/useFloors', () => ({
   useFloor: () => ({ data: ground, isLoading: false }),
 }));
 
-describe('BuildingNav', () => {
-  it('renders the buildings header and seeded building', () => {
-    render(
+// NewBuildingDialog reads the permissions context; without a real
+// <PermissionsProvider> in the tree the hook throws, so stub the module.
+vi.mock('@/lib/permissions-context', () => ({
+  usePermissions: () => ({
+    grants: [],
+    loading: false,
+    refreshGrants: vi.fn(async () => {}),
+  }),
+  useCan: () => false,
+  useIsSuperAdmin: () => false,
+}));
+
+// NewBuildingDialog also pulls the org picker, which uses TanStack Query.
+vi.mock('@/hooks/useOrgPickerOptions', () => ({
+  useOrgPickerOptions: () => ({ options: [], loading: false }),
+}));
+
+// BuildingNav's tree (NewBuildingDialog) expects a QueryClient in context.
+// The data hooks above are mocked, so this client never actually fetches.
+function renderNav() {
+  const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  return render(
+    <QueryClientProvider client={queryClient}>
       <MemoryRouter>
         <BuildingNav />
       </MemoryRouter>
-    );
+    </QueryClientProvider>
+  );
+}
+
+describe('BuildingNav', () => {
+  it('renders the buildings header and seeded building', () => {
+    renderNav();
     expect(screen.getByText(/buildings/i)).toBeInTheDocument();
     expect(screen.getByText('161 Bay St.')).toBeInTheDocument();
   });
 
   it('renders floors under their building', () => {
-    render(
-      <MemoryRouter>
-        <BuildingNav />
-      </MemoryRouter>
-    );
+    renderNav();
     expect(screen.getByText('Ground')).toBeInTheDocument();
   });
 
   it('floor links point to /floors/:id', () => {
-    render(
-      <MemoryRouter>
-        <BuildingNav />
-      </MemoryRouter>
-    );
+    renderNav();
     const link = screen.getByRole('link', { name: /ground/i });
     expect(link).toHaveAttribute('href', '/floors/f-ground');
   });

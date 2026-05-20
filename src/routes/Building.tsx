@@ -2,6 +2,7 @@ import { Link, useParams } from 'react-router-dom';
 import { useState } from 'react';
 import { ArrowLeft, MapPin, Layers, ImageOff, Trash2, Plus } from 'lucide-react';
 import { AppShell } from '@/components/waymarks/AppShell';
+import { Tooltip } from '@/components/ui/Tooltip';
 import { AccessManagementCard } from '@/components/waymarks/AccessManagementCard';
 import { BuildingPhotoUpload } from '@/components/waymarks/BuildingPhotoUpload';
 import { NewFloorDialog } from '@/components/waymarks/NewFloorDialog';
@@ -93,14 +94,16 @@ export function Building() {
               Floors
             </h2>
             {canEdit && (
-              <button
-                type="button"
-                onClick={() => setNewFloorOpen(true)}
-                className="inline-flex h-7 items-center gap-1 rounded-md border border-black/15 bg-surface px-2.5 text-[11px] font-medium text-text hover:bg-black/5 dark:border-white/15 dark:hover:bg-white/5"
-              >
-                <Plus size={11} aria-hidden />
-                Add floor
-              </button>
+              <Tooltip text="Add a new floor to this building">
+                <button
+                  type="button"
+                  onClick={() => setNewFloorOpen(true)}
+                  className="inline-flex h-7 items-center gap-1 rounded-md border border-black/15 bg-surface px-2.5 text-[11px] font-medium text-waymarks-ink hover:bg-black/5 dark:border-white/15 dark:hover:bg-white/5"
+                >
+                  <Plus size={11} aria-hidden />
+                  Add floor
+                </button>
+              </Tooltip>
             )}
           </div>
           {fLoading ? (
@@ -112,7 +115,7 @@ export function Building() {
                 <button
                   type="button"
                   onClick={() => setNewFloorOpen(true)}
-                  className="mt-3 inline-flex h-8 items-center gap-1 rounded-md bg-waymarks-gold px-3 text-xs font-medium text-white hover:bg-waymarks-gold-deep"
+                  className="mt-3 inline-flex h-8 items-center gap-1 rounded-md bg-waymarks-gold px-3 text-xs font-medium text-waymarks-ink hover:bg-waymarks-gold-deep"
                 >
                   <Plus size={12} aria-hidden />
                   Add the first floor

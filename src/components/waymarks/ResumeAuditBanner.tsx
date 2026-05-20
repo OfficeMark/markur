@@ -35,7 +35,7 @@ export function ResumeAuditBanner({ buildingId }: ResumeAuditBannerProps) {
       </p>
       <Link
         to={`/floors/${session.floor_id}`}
-        className="inline-flex h-9 items-center gap-1 rounded-md bg-waymarks-gold px-3 text-xs font-medium text-white hover:bg-waymarks-gold-deep"
+        className="inline-flex h-9 items-center gap-1 rounded-md bg-waymarks-gold px-3 text-xs font-medium text-waymarks-ink hover:bg-waymarks-gold-deep"
       >
         Resume <ChevronRight size={12} aria-hidden />
       </Link>

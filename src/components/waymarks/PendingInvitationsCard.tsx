@@ -17,7 +17,7 @@ import {
   type AdminInvitation,
 } from '@/hooks/useInvitations';
 import { ROLE_LABEL, type RoleKey } from '@/lib/queries/members';
-import { inviteUrlFor } from '@/components/waymarks/AccessManagementCard';
+import { inviteUrlFor } from '@/lib/utils';
 
 /**
  * Pending invitations admin card on /settings (M14b).

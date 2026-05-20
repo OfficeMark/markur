@@ -1,5 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
+  buildingHasAnyAsset,
   createAsset,
   getAsset,
   listAssetsByFloor,
@@ -19,7 +20,25 @@ export const assetKeys = {
   detail: (id: string) => [...assetKeys.all, 'detail', id] as const,
   deletedByBuilding: (buildingId: string) =>
     [...assetKeys.all, 'deleted-by-building', buildingId] as const,
+  buildingHasAny: (buildingId: string) =>
+    [...assetKeys.all, 'building-has-any', buildingId] as const,
 };
+
+/**
+ * True if this building has at least one live pin on any live floor. Used by
+ * WelcomeCard to decide whether the "Place your first pin" setup step is
+ * complete -- a single cross-table query instead of fanning out per-floor.
+ */
+export function useBuildingHasAnyAsset(buildingId: string | undefined) {
+  return useQuery({
+    queryKey: buildingId
+      ? assetKeys.buildingHasAny(buildingId)
+      : ['assets', 'building-has-any', 'none'],
+    queryFn: () =>
+      buildingId ? buildingHasAnyAsset(buildingId) : Promise.resolve(false),
+    enabled: !!buildingId,
+  });
+}
 
 /**
  * Stale-while-revalidate read of assets on a floor. Tries the network; on

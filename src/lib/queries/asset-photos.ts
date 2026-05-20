@@ -38,6 +38,27 @@ export async function listAssetPhotos(assetId: string): Promise<AssetPhoto[]> {
 }
 
 /**
+ * Map of asset_id -> first photo path for a set of assets. One query for the
+ * whole floor instead of N — used to build the floor catalogue PDF.
+ */
+export async function listFirstPhotoPaths(
+  assetIds: string[]
+): Promise<Map<string, string>> {
+  if (assetIds.length === 0) return new Map();
+  const { data, error } = await supabase
+    .from('asset_photos')
+    .select('asset_id, path, sort_order')
+    .in('asset_id', assetIds)
+    .order('sort_order', { ascending: true });
+  if (error) throw error;
+  const map = new Map<string, string>();
+  for (const row of data ?? []) {
+    if (!map.has(row.asset_id)) map.set(row.asset_id, row.path);
+  }
+  return map;
+}
+
+/**
  * Upload a single photo and add the matching public.asset_photos row.
  * Returns the inserted row.
  */
@@ -102,4 +123,41 @@ export async function signedAssetPhotoUrl(path: string): Promise<string> {
     .createSignedUrl(path, 60 * 30);
   if (error) throw error;
   return data.signedUrl;
+}
+
+/**
+ * A signed URL that forces a download instead of inline display. The
+ * `download` option makes Supabase Storage return `Content-Disposition:
+ * attachment; filename="…"`, so a plain anchor click saves the file to disk —
+ * this works cross-origin, where the bare `download` attribute is ignored.
+ */
+export async function signedAssetPhotoDownloadUrl(
+  path: string,
+  filename: string
+): Promise<string> {
+  const { data, error } = await supabase.storage
+    .from('asset-photos')
+    .createSignedUrl(path, 60 * 30, { download: filename });
+  if (error) throw error;
+  return data.signedUrl;
+}
+
+/**
+ * Build a friendly, filesystem-safe download filename for an asset photo,
+ * e.g. ("Suite 1203 Suite plate", 0, "uuid/uuid.jpg") -> "suite-1203-suite-plate-1.jpg".
+ */
+export function assetPhotoDownloadName(
+  assetName: string,
+  index: number,
+  path: string
+): string {
+  const dot = path.lastIndexOf('.');
+  const ext = dot >= 0 ? path.slice(dot + 1).toLowerCase() : 'jpg';
+  const base =
+    assetName
+      .trim()
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, '-')
+      .replace(/^-+|-+$/g, '') || 'asset-photo';
+  return `${base}-${index + 1}.${ext}`;
 }

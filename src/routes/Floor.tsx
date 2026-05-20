@@ -1,9 +1,10 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
-import { ArrowLeft, Check, ChevronRight, ClipboardList, Download, Eye, ImageOff, LayoutGrid, Map as MapIcon, Plus, RefreshCw, Trash2, Video } from 'lucide-react';
+import { ArrowLeft, Check, ChevronRight, ClipboardList, Download, Eye, FileDown, ImageOff, LayoutGrid, Map as MapIcon, Plus, RefreshCw, Trash2, Video } from 'lucide-react';
 import { AppShell } from '@/components/waymarks/AppShell';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { Button } from '@/components/ui/Button';
+import { Tooltip } from '@/components/ui/Tooltip';
 import { FloorPlanCanvas } from '@/components/waymarks/FloorPlanCanvas';
 import { FloorPlanUploadDialog } from '@/components/waymarks/FloorPlanUploadDialog';
 import { PinOverlay } from '@/components/waymarks/PinOverlay';
@@ -28,6 +29,14 @@ import {
 import { useAuth } from '@/lib/auth-context';
 import { useCan } from '@/lib/permissions-context';
 import { planKindForPath, signedUrlForPlan } from '@/lib/upload';
+import { pinNumberMatchesQuery } from '@/lib/pin-types';
+import { listFirstPhotoPaths, signedAssetPhotoUrl } from '@/lib/queries/asset-photos';
+import {
+  buildCatalogueDoc,
+  catalogueFilename,
+  prepareCatalogueEntries,
+  type CatalogueEntry,
+} from '@/lib/floor-catalogue';
 import {
   putAssetsForFloor,
   putBuilding,
@@ -81,6 +90,10 @@ export function Floor() {
     'idle'
   );
   const [cacheError, setCacheError] = useState<string | null>(null);
+
+  // Floor photo catalogue export (markur-changes #4).
+  const [catalogueState, setCatalogueState] = useState<'idle' | 'building' | 'error'>('idle');
+  const [catalogueError, setCatalogueError] = useState<string | null>(null);
 
   // Deliberate-reposition state machine (M5).
   const [repositionAssetId, setRepositionAssetId] = useState<string | null>(null);
@@ -234,6 +247,47 @@ export function Floor() {
     }
   }
 
+  // Build + download a PDF catalogue of every asset on this floor. Photo
+  // failures degrade gracefully to a "No photo" box rather than aborting.
+  async function handleExportCatalogue() {
+    if (!floor || !building) return;
+    setCatalogueError(null);
+    setCatalogueState('building');
+    try {
+      const drafts = prepareCatalogueEntries(assets);
+      const photoPaths = await listFirstPhotoPaths(assets.map((a) => a.id));
+      const entries: CatalogueEntry[] = await Promise.all(
+        drafts.map(async (d) => {
+          let photoDataUrl: string | null = null;
+          const path = photoPaths.get(d.assetId);
+          if (path) {
+            try {
+              const signed = await signedAssetPhotoUrl(path);
+              photoDataUrl = await photoToJpegDataUrl(signed);
+            } catch {
+              photoDataUrl = null;
+            }
+          }
+          return { ...d, photoDataUrl };
+        })
+      );
+      const addressLine =
+        [building.address, building.city, building.region].filter(Boolean).join(', ') || null;
+      const doc = buildCatalogueDoc({
+        buildingName: building.name,
+        floorLabel: floor.label,
+        addressLine,
+        generatedOn: new Date(),
+        entries,
+      });
+      doc.save(catalogueFilename(building.name, floor.label));
+      setCatalogueState('idle');
+    } catch (e) {
+      setCatalogueError(e instanceof Error ? e.message : 'Could not build the catalogue.');
+      setCatalogueState('error');
+    }
+  }
+
   const planKind = useMemo(() => planKindForPath(floor?.plan_url), [floor?.plan_url]);
 
   const baseSet = assets;
@@ -370,93 +424,124 @@ export function Floor() {
             No surrounding card; the actions sit naturally on the page. */}
         <div className="mb-3 flex flex-wrap items-center justify-end gap-1.5">
           {showAuditCta && (
-            <button
-              type="button"
-              onClick={() => void startOrResumeAudit()}
-              disabled={startAudit.isPending}
-              className="inline-flex h-7 items-center gap-1 rounded-md bg-waymarks-gold px-2.5 text-[11px] font-medium text-white hover:bg-waymarks-gold-deep disabled:opacity-60"
-            >
-              <ClipboardList size={11} aria-hidden />
-              {activeSession ? 'Resume audit' : 'Audit'}
-            </button>
+            <Tooltip text={activeSession ? 'Resume the audit walkaround you started' : 'Walk the floor and confirm every sign'}>
+              <button
+                type="button"
+                onClick={() => void startOrResumeAudit()}
+                disabled={startAudit.isPending}
+                className="inline-flex h-7 items-center gap-1 rounded-md bg-waymarks-gold px-2.5 text-[11px] font-medium text-waymarks-ink hover:bg-waymarks-gold-deep disabled:opacity-60"
+              >
+                <ClipboardList size={11} aria-hidden />
+                {activeSession ? 'Resume audit' : 'Audit'}
+              </button>
+            </Tooltip>
+          )}
+          {assets.length > 0 && (
+            <Tooltip text="Download a PDF catalogue of every asset on this floor">
+              <button
+                type="button"
+                onClick={() => void handleExportCatalogue()}
+                disabled={catalogueState === 'building'}
+                className="inline-flex h-7 items-center gap-1 rounded-md border border-black/15 bg-surface px-2.5 text-[11px] font-medium text-waymarks-ink hover:bg-black/5 disabled:opacity-60 dark:border-white/15 dark:hover:bg-white/5"
+              >
+                <FileDown size={11} aria-hidden />
+                {catalogueState === 'building' ? 'Building…' : 'Catalogue'}
+              </button>
+            </Tooltip>
           )}
           {canEdit && (
-            <button
-              type="button"
-              onClick={() => setVideoRecorderOpen(true)}
-              className="inline-flex h-7 items-center gap-1 rounded-md border border-black/15 bg-surface px-2.5 text-[11px] font-medium text-text hover:bg-black/5 dark:border-white/15 dark:hover:bg-white/5"
-            >
-              <Video size={11} aria-hidden />
-              Record
-            </button>
+            <Tooltip text="Record a video walkthrough of the building">
+              <button
+                type="button"
+                onClick={() => setVideoRecorderOpen(true)}
+                className="inline-flex h-7 items-center gap-1 rounded-md border border-black/15 bg-surface px-2.5 text-[11px] font-medium text-waymarks-ink hover:bg-black/5 dark:border-white/15 dark:hover:bg-white/5"
+              >
+                <Video size={11} aria-hidden />
+                Record
+              </button>
+            </Tooltip>
           )}
           {floor.plan_url && canCreate && (
-            <button
-              type="button"
-              onClick={() => setPlacing((p) => !p)}
-              className={
-                'inline-flex h-7 items-center gap-1 rounded-md px-2.5 text-[11px] font-medium ' +
-                (placing
-                  ? 'bg-waymarks-gold text-white hover:bg-waymarks-gold-deep'
-                  : 'border border-black/15 bg-surface text-text hover:bg-black/5 dark:border-white/15 dark:hover:bg-white/5')
-              }
-            >
-              <Plus size={11} aria-hidden />
-              {placing ? 'Cancel' : 'Add asset'}
-            </button>
+            <Tooltip text={placing ? 'Cancel placing a new asset' : 'Place a new asset by clicking on the floor plan'}>
+              <button
+                type="button"
+                onClick={() => setPlacing((p) => !p)}
+                className={
+                  'inline-flex h-7 items-center gap-1 rounded-md px-2.5 text-[11px] font-medium ' +
+                  (placing
+                    ? 'bg-waymarks-gold text-waymarks-ink hover:bg-waymarks-gold-deep'
+                    : 'border border-black/15 bg-surface text-waymarks-ink hover:bg-black/5 dark:border-white/15 dark:hover:bg-white/5')
+                }
+              >
+                <Plus size={11} aria-hidden />
+                {placing ? 'Cancel' : 'Add asset'}
+              </button>
+            </Tooltip>
           )}
           {floor.plan_url && (
-            <button
-              type="button"
-              onClick={() => void takeOffline()}
-              disabled={cacheState === 'caching'}
-              className="inline-flex h-7 items-center gap-1 rounded-md border border-black/15 bg-surface px-2.5 text-[11px] font-medium text-text hover:bg-black/5 disabled:opacity-60 dark:border-white/15 dark:hover:bg-white/5"
-            >
-              {cacheState === 'cached' ? <Check size={11} aria-hidden /> : <Download size={11} aria-hidden />}
-              {cacheState === 'cached' ? 'Cached' : 'Offline'}
-            </button>
+            <Tooltip text={cacheState === 'cached' ? 'This floor is saved for offline use — tap to refresh' : 'Save this floor and its plan for offline use'}>
+              <button
+                type="button"
+                onClick={() => void takeOffline()}
+                disabled={cacheState === 'caching'}
+                className="inline-flex h-7 items-center gap-1 rounded-md border border-black/15 bg-surface px-2.5 text-[11px] font-medium text-waymarks-ink hover:bg-black/5 disabled:opacity-60 dark:border-white/15 dark:hover:bg-white/5"
+              >
+                {cacheState === 'cached' ? <Check size={11} aria-hidden /> : <Download size={11} aria-hidden />}
+                {cacheState === 'cached' ? 'Cached' : 'Offline'}
+              </button>
+            </Tooltip>
           )}
           {floor.plan_url && canUploadPlan && (
-            <button
-              type="button"
-              onClick={() => setUploadOpen(true)}
-              className="inline-flex h-7 items-center gap-1 rounded-md border border-black/15 bg-surface px-2.5 text-[11px] font-medium text-text hover:bg-black/5 dark:border-white/15 dark:hover:bg-white/5"
-            >
-              <RefreshCw size={11} aria-hidden />
-              Replace
-            </button>
+            <Tooltip text="Replace the floor plan image">
+              <button
+                type="button"
+                onClick={() => setUploadOpen(true)}
+                className="inline-flex h-7 items-center gap-1 rounded-md border border-black/15 bg-surface px-2.5 text-[11px] font-medium text-waymarks-ink hover:bg-black/5 dark:border-white/15 dark:hover:bg-white/5"
+              >
+                <RefreshCw size={11} aria-hidden />
+                Replace
+              </button>
+            </Tooltip>
           )}
           {/* M14c - Visualize in ViewMark. Gold outline so it reads as a
               brand-aligned secondary, distinct from the gold-filled
               Audit primary. */}
-          <button
-            type="button"
-            onClick={() => window.open(viewmarkUrl, '_blank', 'noopener,noreferrer')}
-            title="Open ViewMark to mock up signage on a wall photo"
-            className="inline-flex h-7 items-center gap-1 rounded-md border border-waymarks-gold bg-surface px-2.5 text-[11px] font-medium text-waymarks-gold hover:bg-waymarks-gold-soft"
-          >
-            <Eye size={11} aria-hidden />
-            Visualize
-          </button>
-          {canDeleteFloor && (
+          <Tooltip text="Open ViewMark to mock up signage on a wall photo">
             <button
               type="button"
-              onClick={() => {
-                setDeleteFloorError(null);
-                setDeleteFloorOpen(true);
-              }}
-              title="Soft-delete this floor"
-              className="ml-1 inline-flex h-7 items-center gap-1 rounded-md border border-black/15 bg-surface px-2.5 text-[11px] font-medium text-text-muted hover:border-danger hover:bg-danger-bg hover:text-danger dark:border-white/15"
+              onClick={() => window.open(viewmarkUrl, '_blank', 'noopener,noreferrer')}
+              className="inline-flex h-7 items-center gap-1 rounded-md border border-waymarks-gold bg-surface px-2.5 text-[11px] font-medium text-waymarks-gold hover:bg-waymarks-gold-soft"
             >
-              <Trash2 size={11} aria-hidden />
-              Delete floor
+              <Eye size={11} aria-hidden />
+              Visualize
             </button>
+          </Tooltip>
+          {canDeleteFloor && (
+            <Tooltip text="Soft-delete this floor (recoverable)">
+              <button
+                type="button"
+                onClick={() => {
+                  setDeleteFloorError(null);
+                  setDeleteFloorOpen(true);
+                }}
+                className="ml-1 inline-flex h-7 items-center gap-1 rounded-md border border-black/15 bg-surface px-2.5 text-[11px] font-medium text-text-muted hover:border-danger hover:bg-danger-bg hover:text-danger dark:border-white/15"
+              >
+                <Trash2 size={11} aria-hidden />
+                Delete floor
+              </button>
+            </Tooltip>
           )}
         </div>
 
         {cacheError && (
           <div className="mb-4 rounded-md border border-danger/30 bg-danger-bg p-3 text-xs text-danger">
             Could not cache this floor: {cacheError}
+          </div>
+        )}
+
+        {catalogueError && (
+          <div className="mb-4 rounded-md border border-danger/30 bg-danger-bg p-3 text-xs text-danger">
+            Could not build the catalogue: {catalogueError}
           </div>
         )}
 
@@ -482,7 +567,7 @@ export function Floor() {
               Couldn't load plan: {signedUrlError}
             </div>
           ) : !signedUrl || !planKind ? (
-            <div className="flex h-[60vh] items-center justify-center rounded-xl border border-black/10 bg-surface text-text-faint dark:border-white/10 dark:bg-white/5">
+            <div className="flex h-[60vh] items-center justify-center rounded-xl border border-black/10 bg-surface text-waymarks-ink-faint dark:border-white/10 dark:bg-white/5">
               <div
                 className="h-6 w-6 animate-spin rounded-full border-2 border-waymarks-gold border-t-waymarks-gold"
                 aria-hidden
@@ -672,13 +757,74 @@ export function Floor() {
 // =============================================================================
 
 /**
+ * Fetch an asset photo (via its signed URL) and re-encode it to a compact
+ * JPEG data URL for embedding in the catalogue PDF. Re-encoding through a
+ * canvas keeps the PDF small and guarantees a jsPDF-friendly format. Returns
+ * null on any failure so the catalogue falls back to a "No photo" box.
+ */
+async function photoToJpegDataUrl(signedUrl: string, maxPx = 700): Promise<string | null> {
+  try {
+    const res = await fetch(signedUrl);
+    if (!res.ok) return null;
+    const blob = await res.blob();
+    const objUrl = URL.createObjectURL(blob);
+    return await new Promise<string | null>((resolve) => {
+      const img = new Image();
+      img.onload = () => {
+        URL.revokeObjectURL(objUrl);
+        let w = img.naturalWidth;
+        let h = img.naturalHeight;
+        if (!w || !h) {
+          resolve(null);
+          return;
+        }
+        if (w > maxPx || h > maxPx) {
+          if (w >= h) {
+            h = Math.round((h * maxPx) / w);
+            w = maxPx;
+          } else {
+            w = Math.round((w * maxPx) / h);
+            h = maxPx;
+          }
+        }
+        const canvas = document.createElement('canvas');
+        canvas.width = w;
+        canvas.height = h;
+        const ctx = canvas.getContext('2d');
+        if (!ctx) {
+          resolve(null);
+          return;
+        }
+        ctx.fillStyle = '#ffffff';
+        ctx.fillRect(0, 0, w, h);
+        ctx.drawImage(img, 0, 0, w, h);
+        try {
+          resolve(canvas.toDataURL('image/jpeg', 0.82));
+        } catch {
+          resolve(null);
+        }
+      };
+      img.onerror = () => {
+        URL.revokeObjectURL(objUrl);
+        resolve(null);
+      };
+      img.src = objUrl;
+    });
+  } catch {
+    return null;
+  }
+}
+
+/**
  * Case-insensitive substring match against the user-visible text fields
- * we care about: name, location notes, room number, notes, and the two
- * vendor-contact strings. `q` is expected to already be trimmed and
- * lower-cased by the caller.
+ * we care about: pin ID number, name, location notes, room number, notes,
+ * and the two vendor-contact strings. `q` is expected to already be trimmed
+ * and lower-cased by the caller.
  */
 function matchesAssetText(a: Asset, q: string): boolean {
   if (!q) return true;
+  // Pin ID: typing "3", "003", or "#003" finds the asset by its floor number.
+  if (pinNumberMatchesQuery(a.pin_number, q)) return true;
   const haystacks: Array<string | null | undefined> = [
     a.name,
     a.location_notes,

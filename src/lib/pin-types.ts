@@ -75,3 +75,36 @@ export const TYPE_LIST = Object.entries(DEFAULT_TYPES).map(([value, info]) => ({
   value,
   ...info,
 }));
+
+/**
+ * Format a stored pin number (a plain integer, sequential per floor) as the
+ * zero-padded reference shown on pins, in the asset drawer, and in the
+ * catalogue: 1 -> "001", 42 -> "042", 1234 -> "1234".
+ *
+ * Returns null when the pin has no number yet — e.g. an optimistic/offline
+ * insert that hasn't round-tripped through the server-side assignment trigger.
+ */
+export function formatPinNumber(pinNumber: number | null | undefined): string | null {
+  if (pinNumber == null || !Number.isFinite(pinNumber)) return null;
+  return String(Math.trunc(pinNumber)).padStart(3, '0');
+}
+
+/**
+ * Does a pin's number match a free-text search query? Lets users find an asset
+ * by typing its pin ID — accepts the query with or without a leading "#" and
+ * with or without leading zeros ("3", "003", "#3", "#003"), and also matches
+ * partials (typing "12" finds pin 120). `query` should be pre-trimmed; this
+ * only inspects the numeric portion.
+ */
+export function pinNumberMatchesQuery(
+  pinNumber: number | null | undefined,
+  query: string
+): boolean {
+  if (pinNumber == null || !Number.isFinite(pinNumber)) return false;
+  const needle = query.trim().replace(/^#/, '');
+  if (!needle) return false;
+  const raw = String(Math.trunc(pinNumber));
+  const padded = formatPinNumber(pinNumber) ?? raw;
+  if (raw.includes(needle) || padded.includes(needle)) return true;
+  return /^\d+$/.test(needle) && Math.trunc(pinNumber) === Number(needle);
+}

@@ -1,10 +1,12 @@
 import { lazy, Suspense, useEffect, useState } from 'react';
 import { Navigate, Route, Routes, useLocation, useNavigate } from 'react-router-dom';
 import { MutationCache, QueryCache, QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import * as RadixTooltip from '@radix-ui/react-tooltip';
 import { AlertCircle, Loader2 } from 'lucide-react';
 import { ThemeProvider } from '@/components/waymarks/ThemeProvider';
 import { AuthProvider } from '@/lib/AuthProvider';
 import { PermissionsProvider } from '@/lib/PermissionsProvider';
+import { ActionHintsProvider } from '@/lib/action-hints-context';
 import { Home } from '@/routes/Home';
 import { ProtectedRoute } from '@/routes/ProtectedRoute';
 import { OfflineSync } from '@/components/waymarks/OfflineSync';
@@ -119,10 +121,16 @@ export default function App() {
         <ThemeProvider>
           <AuthProvider>
             <PermissionsProvider>
-              <OfflineSync />
-              <SessionLostHandler />
-              <Suspense fallback={<RouteFallback />}>
-                <Routes>
+              {/* M32 Step 2: ActionHintsProvider reads profile.show_action_hints
+                  for the signed-in user; RadixTooltip.Provider provides the
+                  unified hover-delay machinery our <Tooltip> primitive uses.
+                  Both must wrap every route that contains tooltipped buttons. */}
+              <ActionHintsProvider>
+                <RadixTooltip.Provider delayDuration={400} skipDelayDuration={200}>
+                  <OfflineSync />
+                  <SessionLostHandler />
+                  <Suspense fallback={<RouteFallback />}>
+                    <Routes>
                   <Route path="/login" element={<Login />} />
                   <Route
                     path="/"
@@ -190,9 +198,11 @@ export default function App() {
                   <Route path="/accept/:token" element={<AcceptInvitation />} />
                   <Route path="/legal/privacy" element={<Privacy />} />
                   <Route path="/legal/terms" element={<Terms />} />
-                </Routes>
-              </Suspense>
-              <CookieConsent />
+                    </Routes>
+                  </Suspense>
+                  <CookieConsent />
+                </RadixTooltip.Provider>
+              </ActionHintsProvider>
             </PermissionsProvider>
           </AuthProvider>
         </ThemeProvider>

@@ -83,6 +83,7 @@ export function StepUpDialog({
               to confirm
             </span>
             <input
+              // eslint-disable-next-line jsx-a11y/no-autofocus -- intentional: focuses the field when this focus-trapped dialog opens
               autoFocus
               value={typed}
               onChange={(e) => setTyped(e.target.value)}
@@ -93,7 +94,7 @@ export function StepUpDialog({
               autoCorrect="off"
               autoCapitalize="off"
               spellCheck={false}
-              className="h-10 w-full rounded-md border border-black/10 bg-surface px-3 text-sm text-text outline-none focus:border-waymarks-gold focus:ring-2 focus:ring-waymarks-gold dark:border-white/10"
+              className="h-10 w-full rounded-md border border-black/10 bg-surface px-3 text-sm text-waymarks-ink outline-none focus:border-waymarks-gold focus:ring-2 focus:ring-waymarks-gold dark:border-white/10"
             />
           </label>
 

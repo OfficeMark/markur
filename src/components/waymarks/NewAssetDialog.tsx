@@ -237,7 +237,7 @@ export function NewAssetDialog({
                 value={typeQuery}
                 onChange={(e) => setTypeQuery(e.target.value)}
                 placeholder="Search types (e.g. emerg, donor, way…)"
-                className="mb-1.5 h-9 w-full rounded-md border border-black/10 bg-surface px-3 text-sm text-text outline-none focus:border-waymarks-gold focus:ring-2 focus:ring-waymarks-gold dark:border-white/10"
+                className="mb-1.5 h-9 w-full rounded-md border border-black/10 bg-surface px-3 text-sm text-waymarks-ink outline-none focus:border-waymarks-gold focus:ring-2 focus:ring-waymarks-gold dark:border-white/10"
               />
               <select
                 id="asset-type"
@@ -251,7 +251,7 @@ export function NewAssetDialog({
                   }
                   setValue('type', e.target.value);
                 }}
-                className="h-11 w-full rounded-md border border-black/10 bg-surface px-3 text-sm text-text outline-none focus:border-waymarks-gold focus:ring-2 focus:ring-waymarks-gold dark:border-white/10"
+                className="h-11 w-full rounded-md border border-black/10 bg-surface px-3 text-sm text-waymarks-ink outline-none focus:border-waymarks-gold focus:ring-2 focus:ring-waymarks-gold dark:border-white/10"
               >
                 <option value="">Choose a type… (optional)</option>
                 {filteredSignage.length > 0 && (
@@ -285,9 +285,10 @@ export function NewAssetDialog({
                       value={customTypeLabel}
                       onChange={(e) => setCustomTypeLabel(e.target.value)}
                       maxLength={60}
+                      // eslint-disable-next-line jsx-a11y/no-autofocus -- intentional: focuses the field when this inline editor opens
                       autoFocus
                       placeholder="e.g. Memorial bench"
-                      className="h-9 flex-1 rounded-md border border-black/10 bg-surface px-3 text-sm text-text outline-none focus:border-waymarks-gold focus:ring-1 focus:ring-waymarks-gold"
+                      className="h-9 flex-1 rounded-md border border-black/10 bg-surface px-3 text-sm text-waymarks-ink outline-none focus:border-waymarks-gold focus:ring-1 focus:ring-waymarks-gold"
                     />
                     <Button
                       size="sm"
@@ -326,53 +327,59 @@ export function NewAssetDialog({
                 id="asset-name"
                 {...register('name')}
                 placeholder='e.g. "Lobby directory"'
-                className="h-11 w-full rounded-md border border-black/10 bg-surface px-3 text-sm text-text outline-none focus:border-waymarks-gold focus:ring-2 focus:ring-waymarks-gold dark:border-white/10"
+                className="h-11 w-full rounded-md border border-black/10 bg-surface px-3 text-sm text-waymarks-ink outline-none focus:border-waymarks-gold focus:ring-2 focus:ring-waymarks-gold dark:border-white/10"
+              />
+            </Field>
+
+            {/* M32 Step 3: section divider — visually separates "where on
+                the floor" from "everything else about the pin." Thin uppercase
+                label with a 1px rule above, not a chunky heading. DB columns
+                are unchanged (location_notes / room_number / notes). */}
+            <SectionDivider label="Where" />
+
+            <Field
+              label="Room"
+              htmlFor="asset-room"
+              error={errors.room_number?.message}
+              hint='Number, letter, or name — "301", "B12", "Boardroom A".'
+            >
+              <input
+                id="asset-room"
+                {...register('room_number')}
+                placeholder='e.g. "301"'
+                className="h-11 w-full rounded-md border border-black/10 bg-surface px-3 text-sm text-waymarks-ink outline-none focus:border-waymarks-gold focus:ring-2 focus:ring-waymarks-gold dark:border-white/10"
               />
             </Field>
 
             <Field
-              label="Location notes"
+              label="Where on the floor"
               htmlFor="asset-loc"
               error={errors.location_notes?.message}
-              hint="Optional. Where on the floor?"
+              hint="Spatial detail used to find this pin. Filterable."
             >
               <textarea
                 id="asset-loc"
                 rows={2}
                 {...register('location_notes')}
                 placeholder='e.g. "East elevator lobby, mounted at 5′"'
-                className="w-full rounded-md border border-black/10 bg-surface p-3 text-sm text-text outline-none focus:border-waymarks-gold focus:ring-2 focus:ring-waymarks-gold dark:border-white/10"
+                className="w-full rounded-md border border-black/10 bg-surface p-3 text-sm text-waymarks-ink outline-none focus:border-waymarks-gold focus:ring-2 focus:ring-waymarks-gold dark:border-white/10"
               />
             </Field>
 
-            {/* M17b — single Room number field. Vendor info moved to the
-                drawer (added later in audit / from desk). */}
-            <Field
-              label="Room number"
-              htmlFor="asset-room"
-              error={errors.room_number?.message}
-              hint="Optional."
-            >
-              <input
-                id="asset-room"
-                {...register('room_number')}
-                placeholder='e.g. "301"'
-                className="h-11 w-full rounded-md border border-black/10 bg-surface px-3 text-sm text-text outline-none focus:border-waymarks-gold focus:ring-2 focus:ring-waymarks-gold dark:border-white/10"
-              />
-            </Field>
+            <SectionDivider label="Notes" />
 
             <Field
-              label="Notes"
+              label="Install & service notes"
               htmlFor="asset-notes"
               error={errors.notes?.message}
-              hint="Optional. Any additional context, install notes, history."
+              hint="History, vendor info, install details. Anything not about where the pin is."
             >
               <textarea
                 id="asset-notes"
                 rows={3}
                 {...register('notes')}
                 placeholder='e.g. "Replaced 2024-03. Brushed aluminum, custom font."'
-                className="w-full rounded-md border border-black/10 bg-surface p-3 text-sm text-text outline-none focus:border-waymarks-gold focus:ring-2 focus:ring-waymarks-gold dark:border-white/10"
+                className="w-full rounded-md border border-black/10 bg-surface p-3 text-sm text-waymarks-ink outline-none focus:border-waymarks-gold focus:ring-2 focus:ring-waymarks-gold dark:border-white/10"
               />
             </Field>
 
@@ -428,6 +435,23 @@ function Field({
       {children}
       {hint && !error && <p className="text-xs text-text-faint">{hint}</p>}
       {error && <p className="text-xs text-danger">{error}</p>}
+    </div>
+  );
+}
+
+/**
+ * M32 Step 3: thin section divider used inside the asset form to group
+ * "Where" (Room + Where on the floor) and "Notes" (Install & service notes).
+ * Tiny uppercase label with a hairline rule above — guidance for the eye,
+ * not navigation. Sits at the same vertical rhythm as a regular Field so
+ * the form's space-y-4 cadence stays clean.
+ */
+function SectionDivider({ label }: { label: string }) {
+  return (
+    <div className="border-t border-black/10 pt-3 dark:border-white/10">
+      <p className="text-[11px] font-medium uppercase tracking-[0.18em] text-text-faint">
+        {label}
+      </p>
     </div>
   );
 }

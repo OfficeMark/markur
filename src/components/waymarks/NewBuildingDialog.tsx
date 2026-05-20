@@ -211,9 +211,10 @@ export function NewBuildingDialog({ open, onOpenChange }: NewBuildingDialogProps
                 <input
                   {...register('name')}
                   type="text"
+                  // eslint-disable-next-line jsx-a11y/no-autofocus -- intentional: focuses the first field when this focus-trapped dialog opens
                   autoFocus
                   autoComplete="organization"
-                  className="h-10 w-full rounded-md border border-black/10 bg-surface px-3 text-sm text-text outline-none focus:border-waymarks-gold focus:ring-2 focus:ring-waymarks-gold"
+                  className="h-10 w-full rounded-md border border-black/10 bg-surface px-3 text-sm text-waymarks-ink outline-none focus:border-waymarks-gold focus:ring-2 focus:ring-waymarks-gold"
                 />
               </Field>
 
@@ -225,7 +226,7 @@ export function NewBuildingDialog({ open, onOpenChange }: NewBuildingDialogProps
                 >
                   <select
                     {...register('owner_org_id')}
-                    className="h-10 w-full rounded-md border border-black/10 bg-surface px-3 text-sm text-text outline-none focus:border-waymarks-gold focus:ring-2 focus:ring-waymarks-gold"
+                    className="h-10 w-full rounded-md border border-black/10 bg-surface px-3 text-sm text-waymarks-ink outline-none focus:border-waymarks-gold focus:ring-2 focus:ring-waymarks-gold"
                   >
                     {orgOptions.map((o) => (
                       <option key={o.id} value={o.id}>
@@ -241,7 +242,7 @@ export function NewBuildingDialog({ open, onOpenChange }: NewBuildingDialogProps
                   {...register('address')}
                   type="text"
                   autoComplete="street-address"
-                  className="h-10 w-full rounded-md border border-black/10 bg-surface px-3 text-sm text-text outline-none focus:border-waymarks-gold focus:ring-2 focus:ring-waymarks-gold"
+                  className="h-10 w-full rounded-md border border-black/10 bg-surface px-3 text-sm text-waymarks-ink outline-none focus:border-waymarks-gold focus:ring-2 focus:ring-waymarks-gold"
                 />
               </Field>
 
@@ -251,7 +252,7 @@ export function NewBuildingDialog({ open, onOpenChange }: NewBuildingDialogProps
                     {...register('city')}
                     type="text"
                     autoComplete="address-level2"
-                    className="h-10 w-full rounded-md border border-black/10 bg-surface px-3 text-sm text-text outline-none focus:border-waymarks-gold focus:ring-2 focus:ring-waymarks-gold"
+                    className="h-10 w-full rounded-md border border-black/10 bg-surface px-3 text-sm text-waymarks-ink outline-none focus:border-waymarks-gold focus:ring-2 focus:ring-waymarks-gold"
                   />
                 </Field>
                 <Field
@@ -263,7 +264,7 @@ export function NewBuildingDialog({ open, onOpenChange }: NewBuildingDialogProps
                     {...register('region')}
                     type="text"
                     autoComplete="address-level1"
-                    className="h-10 w-full rounded-md border border-black/10 bg-surface px-3 text-sm text-text outline-none focus:border-waymarks-gold focus:ring-2 focus:ring-waymarks-gold"
+                    className="h-10 w-full rounded-md border border-black/10 bg-surface px-3 text-sm text-waymarks-ink outline-none focus:border-waymarks-gold focus:ring-2 focus:ring-waymarks-gold"
                   />
                 </Field>
               </div>

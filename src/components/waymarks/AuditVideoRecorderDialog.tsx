@@ -427,7 +427,7 @@ export function AuditVideoRecorderDialog({
                 maxLength={4000}
                 onChange={(e) => setNotes(e.target.value)}
                 placeholder="What does this clip show?"
-                className="w-full rounded-md border border-black/10 bg-surface p-3 text-sm text-text outline-none focus:border-waymarks-gold focus:ring-2 focus:ring-waymarks-gold dark:border-white/10"
+                className="w-full rounded-md border border-black/10 bg-surface p-3 text-sm text-waymarks-ink outline-none focus:border-waymarks-gold focus:ring-2 focus:ring-waymarks-gold dark:border-white/10"
               />
               <p className="text-xs text-text-faint">
                 Clip length: {formatElapsed(finalDuration)}

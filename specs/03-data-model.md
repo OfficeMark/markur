@@ -69,7 +69,7 @@ create table public.organizations (
   id uuid primary key default gen_random_uuid(),
   name text not null,
   slug text not null unique,
-  plan text not null default 'free' check (plan in ('free','pro','enterprise')),
+  plan text not null default 'free' check (plan in ('free','building','portfolio','enterprise')),
   created_at timestamptz not null default now()
 );
 ```

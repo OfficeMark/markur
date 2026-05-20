@@ -81,7 +81,12 @@ export function SyncChip({
       )}
     >
       <Icon size={12} className={v.spin ? 'animate-spin' : ''} aria-hidden />
-      <span>{v.label}</span>
+      {/* Mobile: icon-only to keep the AppShell header inside a 375-414px
+          viewport. The icon + colour already encode the state (green check
+          synced, yellow cloud-off offline, etc.), and the pending-count
+          badge below still renders when there's actionable info. aria-label
+          carries the full state name for SR users. */}
+      <span className="hidden sm:inline">{v.label}</span>
       {showCount !== null && (
         <span className="rounded-full bg-black/10 px-1.5 text-[10px] tabular-nums dark:bg-white/10">
           {showCount}

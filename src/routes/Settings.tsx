@@ -120,7 +120,7 @@ export function Settings() {
               onChange={(e) => setDisplayName(e.target.value)}
               maxLength={80}
               autoComplete="name"
-              className="mt-1 h-10 w-full rounded-md border border-black/10 bg-surface px-3 text-sm text-text outline-none focus:border-waymarks-gold focus:ring-2 focus:ring-waymarks-gold"
+              className="mt-1 h-10 w-full rounded-md border border-black/10 bg-surface px-3 text-sm text-waymarks-ink outline-none focus:border-waymarks-gold focus:ring-2 focus:ring-waymarks-gold"
             />
             <span className="mt-1 block text-[11px] text-text-faint">
               Shown to other people on your buildings.
@@ -162,6 +162,8 @@ export function Settings() {
         </section>
 
         <ThemeSection />
+
+        <ActionHintsSection />
 
         <AdminLink isAdmin={isSuper || isAdmin} />
 
@@ -278,6 +280,81 @@ function ThemeSection() {
         >
           <Moon size={14} aria-hidden />
           Dark
+        </button>
+      </div>
+    </section>
+  );
+}
+
+/**
+ * M32 Step 2B — per-user toggle for the new tooltip ("action hints") system.
+ * Stored on profiles.show_action_hints (migration 0029). Read via the
+ * ActionHintsProvider context at the app root; the <Tooltip> primitive
+ * short-circuits when this is off.
+ */
+function ActionHintsSection() {
+  const { user, profile, refreshProfile } = useAuth();
+  const enabled = profile?.show_action_hints ?? true;
+  const [busy, setBusy] = useState(false);
+
+  async function setHints(value: boolean) {
+    if (!user || value === enabled || busy) return;
+    setBusy(true);
+    try {
+      await updateMyProfile(user.id, { show_action_hints: value });
+      await refreshProfile();
+    } catch {
+      // Network/RLS failures are rare for a single-column self-update;
+      // keep the previous toggle state visible if it happens.
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <section className="mt-5 rounded-lg border border-black/10 bg-surface p-5">
+      <p className="text-[11px] font-medium uppercase tracking-[0.18em] text-text-faint">
+        Hints
+      </p>
+      <h2 className="mt-1 font-semibold text-lg">Show button hints</h2>
+      <p className="mt-1 text-sm text-text-muted">
+        Small tooltips that pop up on hover describing what each button does.
+        Turn this off once you know your way around.
+      </p>
+      <div
+        role="radiogroup"
+        aria-label="Show button hints"
+        className="mt-3 inline-flex rounded-md border border-black/10 p-0.5"
+      >
+        <button
+          type="button"
+          role="radio"
+          aria-checked={enabled}
+          disabled={busy}
+          onClick={() => void setHints(true)}
+          className={
+            'inline-flex items-center gap-1.5 rounded-[5px] px-3 py-1.5 text-sm transition-colors disabled:opacity-60 ' +
+            (enabled
+              ? 'bg-waymarks-ink text-white'
+              : 'text-text-muted hover:text-text')
+          }
+        >
+          On
+        </button>
+        <button
+          type="button"
+          role="radio"
+          aria-checked={!enabled}
+          disabled={busy}
+          onClick={() => void setHints(false)}
+          className={
+            'inline-flex items-center gap-1.5 rounded-[5px] px-3 py-1.5 text-sm transition-colors disabled:opacity-60 ' +
+            (!enabled
+              ? 'bg-waymarks-ink text-white'
+              : 'text-text-muted hover:text-text')
+          }
+        >
+          Off
         </button>
       </div>
     </section>

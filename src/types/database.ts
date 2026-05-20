@@ -138,6 +138,7 @@ export type Database = {
           manufacturer: string | null
           name: string
           notes: string | null
+          pin_number: number | null
           room_number: string | null
           status: string
           tenant_scope_id: string | null
@@ -184,6 +185,7 @@ export type Database = {
           manufacturer?: string | null
           name?: string
           notes?: string | null
+          pin_number?: number | null
           room_number?: string | null
           status?: string
           tenant_scope_id?: string | null
@@ -738,6 +740,7 @@ export type Database = {
           display_name: string
           email: string
           id: string
+          show_action_hints: boolean
           updated_at: string
         }
         Insert: {
@@ -746,6 +749,7 @@ export type Database = {
           display_name: string
           email: string
           id: string
+          show_action_hints?: boolean
           updated_at?: string
         }
         Update: {
@@ -754,6 +758,7 @@ export type Database = {
           display_name?: string
           email?: string
           id?: string
+          show_action_hints?: boolean
           updated_at?: string
         }
         Relationships: []

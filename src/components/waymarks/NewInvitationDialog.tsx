@@ -6,7 +6,7 @@ import { useFloors } from '@/hooks/useFloors';
 import { useCreateInvitation } from '@/hooks/useAccess';
 import { supabase } from '@/lib/supabase';
 import { useQuery } from '@tanstack/react-query';
-import { inviteUrlFor } from '@/components/waymarks/AccessManagementCard';
+import { inviteUrlFor } from '@/lib/utils';
 import type { Tenant } from '@/types/database';
 
 /**
@@ -243,17 +243,19 @@ export function NewInvitationDialog({
                 <Field label="Email">
                   <input
                     type="email"
+                    // eslint-disable-next-line jsx-a11y/no-autofocus -- intentional: focuses the first field when this focus-trapped dialog opens
                     autoFocus
                     value={email}
                     onChange={(e) => setEmail(e.target.value)}
                     placeholder="name@example.com"
-                    className="h-10 w-full rounded-md border border-black/10 bg-surface px-3 text-sm text-text outline-none focus:border-waymarks-gold focus:ring-2 focus:ring-waymarks-gold dark:border-white/10"
+                    className="h-10 w-full rounded-md border border-black/10 bg-surface px-3 text-sm text-waymarks-ink outline-none focus:border-waymarks-gold focus:ring-2 focus:ring-waymarks-gold dark:border-white/10"
                   />
                 </Field>
 
                 <Field label="Role">
                   <div className="space-y-1.5">
                     {ROLE_OPTIONS.map((opt) => (
+                      // eslint-disable-next-line jsx-a11y/label-has-associated-control -- the label wraps its radio input and its visible text (opt.label, in the <p> below); the text is just deeper than the rule's static search depth
                       <label
                         key={opt.value}
                         className={
@@ -285,7 +287,7 @@ export function NewInvitationDialog({
                     <select
                       value={floorId}
                       onChange={(e) => setFloorId(e.target.value)}
-                      className="h-10 w-full rounded-md border border-black/10 bg-surface px-3 text-sm text-text outline-none focus:border-waymarks-gold focus:ring-2 focus:ring-waymarks-gold dark:border-white/10"
+                      className="h-10 w-full rounded-md border border-black/10 bg-surface px-3 text-sm text-waymarks-ink outline-none focus:border-waymarks-gold focus:ring-2 focus:ring-waymarks-gold dark:border-white/10"
                     >
                       <option value="">— Choose a floor —</option>
                       {(floors.data ?? []).map((f) => (
@@ -302,7 +304,7 @@ export function NewInvitationDialog({
                     <select
                       value={tenantId}
                       onChange={(e) => setTenantId(e.target.value)}
-                      className="h-10 w-full rounded-md border border-black/10 bg-surface px-3 text-sm text-text outline-none focus:border-waymarks-gold focus:ring-2 focus:ring-waymarks-gold dark:border-white/10"
+                      className="h-10 w-full rounded-md border border-black/10 bg-surface px-3 text-sm text-waymarks-ink outline-none focus:border-waymarks-gold focus:ring-2 focus:ring-waymarks-gold dark:border-white/10"
                     >
                       <option value="">— Choose a tenant —</option>
                       {(tenants.data ?? []).map((t) => (
@@ -328,7 +330,7 @@ export function NewInvitationDialog({
                     value={expiresInDays}
                     onChange={(e) => setExpiresInDays(e.target.value)}
                     placeholder={role === 'auditor' ? '30' : 'never'}
-                    className="h-10 w-full rounded-md border border-black/10 bg-surface px-3 text-sm text-text outline-none focus:border-waymarks-gold focus:ring-2 focus:ring-waymarks-gold dark:border-white/10"
+                    className="h-10 w-full rounded-md border border-black/10 bg-surface px-3 text-sm text-waymarks-ink outline-none focus:border-waymarks-gold focus:ring-2 focus:ring-waymarks-gold dark:border-white/10"
                   />
                 </Field>
               </form>

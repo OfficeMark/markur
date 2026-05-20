@@ -1,5 +1,9 @@
 # Markur — Building Signage Passport (formerly Waymarks)
 
+> **Claude Code:** read `CLAUDE-CODE-CONTEXT.md` first (in this same folder) — it has the current state, push workflow, and known gotchas. This file is the original architectural spec; both are useful.
+
+> **All Claudes (Cowork, Claude Code, web, mobile):** read `../STATE.md` first for the live snapshot — shipped milestones, current HEAD, owner-managed files, pending prompts, gotchas. STATE.md is the single source of truth; this file is the original architectural spec.
+
 > Live build (current): https://markur.netlify.app  (Netlify site renamed from `waymarks-rebuild` to `markur` on 2026-05-13)
 > Production domain target: https://markur.ca (already owned by Randy; DNS pointing to Netlify is M10 work)
 > Brand: **Markur, by Officemark.** Final name as of 2026-04-30 (history: PlaqueMark → MarkView → Markur → Markur). Trademark cleared in CIPO Canada; clean NUANS June 2023.

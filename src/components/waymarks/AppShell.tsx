@@ -67,7 +67,9 @@ export function AppShell({ children, withSidebar = true }: AppShellProps) {
         </main>
       </div>
       <footer className="border-t border-black/5 bg-waymarks-cream py-3">
-        <div className="mx-auto flex w-full max-w-[1600px] items-center gap-3 px-4 text-[11px] text-text-faint sm:px-6">
+        {/* flex-wrap + gap-y-1 so support@officemark.ca can drop to a second
+            line on a 375-414px iPhone instead of overflowing the viewport. */}
+        <div className="mx-auto flex w-full max-w-[1600px] flex-wrap items-center gap-x-3 gap-y-1 px-4 text-[11px] text-text-faint sm:px-6">
           <span>© {new Date().getFullYear()} Officemark</span>
           <span aria-hidden>·</span>
           <Link to="/legal/privacy" className="hover:underline">

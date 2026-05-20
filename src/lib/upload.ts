@@ -1,10 +1,25 @@
 import { supabase } from './supabase';
 
 export const PLAN_MAX_BYTES = 25 * 1024 * 1024; // 25 MB
+
+// Floor-plan accept list. PDF + standard web image formats + HEIC/HEIF
+// (iPhones produce HEIC by default; rejecting it forced mobile users to
+// convert before uploading, which M25-floor-fix removed). SVG accepted
+// for vector floor plans (markur-changes feature).
+//
+// Mirrored in the storage.buckets.allowed_mime_types for `floor-plans`
+// via migration 0028_m25_floor_fix.sql (pdf/png/jpeg/webp/heic/heif).
+// NOTE: image/svg+xml is in this client allowlist but the bucket allowlist
+// does not yet include it -- SVG uploads currently 400 at the storage
+// layer. Tracked as a separate fix (out of M25-floor-fix scope).
 export const PLAN_MIME_TYPES = [
   'application/pdf',
   'image/png',
   'image/jpeg',
+  'image/svg+xml',
+  'image/webp',
+  'image/heic',
+  'image/heif',
 ] as const;
 
 export type PlanMime = (typeof PLAN_MIME_TYPES)[number];
@@ -17,21 +32,34 @@ export function validatePlanFile(file: File): ValidationError | null {
   if (file.size > PLAN_MAX_BYTES) {
     return {
       code: 'too_large',
-      message: `File is ${formatBytes(file.size)} — limit is ${formatBytes(PLAN_MAX_BYTES)}.`,
+      message: `This file is ${formatBytes(file.size)}. Floor plans must be under ${formatBytes(PLAN_MAX_BYTES)} -- try compressing the PDF or reducing image resolution.`,
     };
   }
   if (!(PLAN_MIME_TYPES as readonly string[]).includes(file.type)) {
     return {
       code: 'wrong_type',
-      message: `Unsupported file type "${file.type || 'unknown'}". Use PDF, PNG, or JPG.`,
+      message: `We can't read this file format (${file.type || 'unknown'}). Floor plans should be PDF, JPG, PNG, WebP, HEIC, or SVG.`,
     };
   }
   return null;
 }
 
+const MIME_EXT: Record<PlanMime, string> = {
+  'application/pdf': 'pdf',
+  'image/png': 'png',
+  'image/jpeg': 'jpg',
+  'image/svg+xml': 'svg',
+  'image/webp': 'webp',
+  'image/heic': 'heic',
+  'image/heif': 'heif',
+};
+
+export function extForMime(mime: PlanMime): string {
+  return MIME_EXT[mime];
+}
+
 export function objectNameForFloor(floorId: string, mime: PlanMime): string {
-  const ext = mime === 'application/pdf' ? 'pdf' : mime === 'image/png' ? 'png' : 'jpg';
-  return `${floorId}.${ext}`;
+  return `${floorId}.${extForMime(mime)}`;
 }
 
 export async function uploadFloorPlan(
@@ -45,7 +73,7 @@ export async function uploadFloorPlan(
     .upload(path, file, {
       contentType: mime,
       upsert: true,
-      cacheControl: '0', // never cache — we want replaces to take effect
+      cacheControl: '0', // never cache -- we want replaces to take effect
     });
   if (error) throw error;
   return { path };
@@ -65,7 +93,9 @@ export async function signedUrlForPlan(path: string): Promise<string> {
 export function planKindForPath(path: string | null | undefined): 'pdf' | 'image' | null {
   if (!path) return null;
   if (path.endsWith('.pdf')) return 'pdf';
-  if (path.endsWith('.png') || path.endsWith('.jpg') || path.endsWith('.jpeg')) return 'image';
+  // SVG renders through the same image path as PNG/JPG (the browser
+  // rasterizes it onto the canvas in FloorPlanCanvas).
+  if (/\.(png|jpe?g|webp|heic|heif|svg)$/i.test(path)) return 'image';
   return null;
 }
 
@@ -73,4 +103,69 @@ export function formatBytes(bytes: number): string {
   if (bytes < 1024) return `${bytes} B`;
   if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
   return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+}
+
+/**
+ * Map a thrown error from the floor-create or floor-plan-upload flow to a
+ * user-actionable message. The catch-all is honest: it includes the
+ * original error text instead of swallowing it into "Could not create the
+ * floor" (the generic message that hid the M25-floor-fix unique-violation
+ * bug from view for two days).
+ *
+ * `ctx` tells the caller whether the floor row already exists ('upload'
+ * context) so the message can reassure: the floor was created, retry the
+ * upload from the floor view.
+ */
+export function floorErrorMessage(err: unknown, ctx: 'create' | 'upload'): string {
+  const e = (err ?? {}) as {
+    code?: string;
+    status?: number;
+    statusCode?: number;
+    message?: string;
+    error?: { code?: string; message?: string };
+  };
+  const code = e.code ?? e.error?.code ?? '';
+  const status = e.status ?? e.statusCode ?? 0;
+  const msg = (e.message ?? e.error?.message ?? '').toString();
+
+  // Auth / session expiry -- fires across both contexts.
+  if (status === 401 || /jwt expired|invalid jwt|session.*expired|not authenticated/i.test(msg)) {
+    return 'Your session expired. Please sign in again.';
+  }
+
+  // Postgres RLS denial -- user genuinely lacks permission.
+  if (code === '42501' || /row-level security|permission denied/i.test(msg)) {
+    return "You don't have permission to add floors to this building. Ask the building admin for access.";
+  }
+
+  // Postgres unique violation (the M25-floor-fix bug, in case the partial
+  // index regresses or another unique key starts colliding).
+  if (code === '23505') {
+    return 'A naming or ordering conflict prevented creating this floor. Try again in a moment. If it keeps happening, contact randy@officemark.ca.';
+  }
+
+  // Postgres FK / NOT NULL violations -- payload is invalid.
+  if (code === '23503' || code === '23502') {
+    return `This floor's data is invalid (${code}: ${msg || 'unknown'}). Contact randy@officemark.ca if this keeps happening.`;
+  }
+
+  if (ctx === 'upload') {
+    if (status === 413 || /payload too large|exceeds.*limit/i.test(msg)) {
+      return 'This file is too large. Floor plans must be under 25 MB. Try compressing the PDF or reducing the image resolution.';
+    }
+    if (/mime|content.?type|invalid_mime_type|unsupported/i.test(msg)) {
+      return "We can't read this file format. Floor plans should be PDF, JPG, PNG, WebP, HEIC, or SVG.";
+    }
+    if (status === 0 || /network|fetch|failed to fetch|timeout/i.test(msg)) {
+      return "Couldn't upload the floor plan. Check your connection and try again. If this keeps happening, contact randy@officemark.ca.";
+    }
+    if (/corrupt|damaged|invalid (image|pdf|file)|cannot decode/i.test(msg)) {
+      return 'The file appears to be damaged or unreadable. Try opening it in another app and re-saving, or try a different file.';
+    }
+    return `Couldn't upload the floor plan: ${msg || 'unknown error'}. The floor was created -- you can try uploading from the floor view.`;
+  }
+
+  // Generic fallback for create context: include the actual error text so
+  // the message is diagnostic instead of useless.
+  return `Couldn't create the floor: ${msg || 'unknown error'}. If this keeps happening, contact randy@officemark.ca.`;
 }

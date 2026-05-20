@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import * as Dialog from '@radix-ui/react-dialog';
 import { format } from 'date-fns';
+import { Tooltip } from '@/components/ui/Tooltip';
 import {
   X,
   MapPin,
@@ -19,6 +20,7 @@ import {
   Move,
   Eye,
   ShoppingCart,
+  Download,
 } from 'lucide-react';
 import { Chip } from '@/components/ui/Chip';
 import { MetricCard } from '@/components/ui/MetricCard';
@@ -32,10 +34,13 @@ import {
   useDeleteAssetPhoto,
 } from '@/hooks/useAssetPhotos';
 import {
+  assetPhotoDownloadName,
+  signedAssetPhotoDownloadUrl,
   signedAssetPhotoUrl,
   validateAssetPhotoFile,
 } from '@/lib/queries/asset-photos';
 import { computeStatus, statusLabel, type AssetStatus } from '@/lib/asset-status';
+import { formatPinNumber } from '@/lib/pin-types';
 import { useAssetTypes } from '@/hooks/useAssetTypes';
 import { AssetAttachmentsPanel } from './AssetAttachmentsPanel';
 import { AuditVideosPanel } from './AuditVideosPanel';
@@ -103,7 +108,7 @@ export function AssetDrawer({
         <Dialog.Overlay className="fixed inset-0 z-50 bg-black/30 data-[state=open]:animate-in data-[state=open]:fade-in-0" />
         <Dialog.Content
           aria-describedby={undefined}
-          className="fixed inset-x-0 bottom-0 z-50 flex h-[88vh] flex-col rounded-t-2xl border-t border-black/10 bg-surface text-text shadow-sheet outline-none dark:border-white/10 sm:inset-x-auto sm:right-0 sm:top-0 sm:h-full sm:w-[min(96vw,440px)] sm:rounded-t-none sm:border-l sm:border-t-0"
+          className="fixed inset-x-0 bottom-0 z-50 flex h-[88vh] flex-col rounded-t-2xl border-t border-black/10 bg-surface text-waymarks-ink shadow-sheet outline-none dark:border-white/10 sm:inset-x-auto sm:right-0 sm:top-0 sm:h-full sm:w-[min(96vw,440px)] sm:rounded-t-none sm:border-l sm:border-t-0"
         >
           <header className="flex items-start justify-between gap-3 border-b border-black/10 p-4 dark:border-white/10">
             <Dialog.Title asChild>
@@ -153,7 +158,11 @@ export function AssetDrawer({
               />
             ) : (
               <>
-                <PhotoGallery assetId={asset.id} canEdit={canEdit} />
+                <PhotoGallery
+                  assetId={asset.id}
+                  assetName={asset.name ?? 'Asset'}
+                  canEdit={canEdit}
+                />
                 {canEdit && (
                   <>
                     <LockBar
@@ -263,7 +272,7 @@ function LockBar({
           'inline-flex h-7 items-center rounded-md border px-2 text-[11px] font-medium transition-colors disabled:opacity-50 ' +
           (locked
             ? 'border-black/10 hover:bg-black/5 dark:border-white/10 dark:hover:bg-white/5'
-            : 'border-waymarks-gold bg-waymarks-gold text-white hover:bg-waymarks-gold-deep')
+            : 'border-waymarks-gold bg-waymarks-gold text-waymarks-ink hover:bg-waymarks-gold-deep')
         }
       >
         {locked ? 'Unlock' : 'Lock pin'}
@@ -329,7 +338,7 @@ function VisualizeRow({ buildingName, assetName }: { buildingName: string; asset
         href={url}
         target="_blank"
         rel="noopener noreferrer"
-        className="inline-flex h-8 shrink-0 items-center gap-1.5 rounded-md bg-waymarks-gold px-3 text-xs font-medium text-white hover:bg-waymarks-gold-deep"
+        className="inline-flex h-8 shrink-0 items-center gap-1.5 rounded-md bg-waymarks-gold px-3 text-xs font-medium text-waymarks-ink hover:bg-waymarks-gold-deep"
       >
         <Eye size={12} aria-hidden />
         Visualize
@@ -373,24 +382,28 @@ function AdminActions({
   return (
     <div className="flex flex-wrap gap-1.5">
       {canReposition && (
-        <button
-          type="button"
-          onClick={onReposition}
-          className="inline-flex h-8 items-center gap-1.5 rounded-md border border-black/10 bg-surface px-3 text-xs font-medium text-text hover:bg-black/5 dark:border-white/10 dark:hover:bg-white/5"
-        >
-          <Move size={12} aria-hidden />
-          <span>Reposition pin</span>
-        </button>
+        <Tooltip text="Drag the pin to a new location on the floor plan">
+          <button
+            type="button"
+            onClick={onReposition}
+            className="inline-flex h-8 items-center gap-1.5 rounded-md border border-black/10 bg-surface px-3 text-xs font-medium text-waymarks-ink hover:bg-black/5 dark:border-white/10 dark:hover:bg-white/5"
+          >
+            <Move size={12} aria-hidden />
+            <span>Reposition pin</span>
+          </button>
+        </Tooltip>
       )}
       {canDelete && (
-        <button
-          type="button"
-          onClick={onDelete}
-          className="inline-flex h-8 items-center gap-1.5 rounded-md border border-danger/30 bg-surface px-3 text-xs font-medium text-danger hover:bg-danger-bg dark:border-danger/40"
-        >
-          <Trash2 size={12} aria-hidden />
-          <span>Delete asset</span>
-        </button>
+        <Tooltip text="Soft-delete this asset (recoverable)">
+          <button
+            type="button"
+            onClick={onDelete}
+            className="inline-flex h-8 items-center gap-1.5 rounded-md border border-danger/30 bg-surface px-3 text-xs font-medium text-danger hover:bg-danger-bg dark:border-danger/40"
+          >
+            <Trash2 size={12} aria-hidden />
+            <span>Delete asset</span>
+          </button>
+        </Tooltip>
       )}
     </div>
   );
@@ -402,7 +415,7 @@ function variantClasses(status: AssetStatus, state: 'active' | 'idle'): string {
     if (status === 'attention') return 'border-warning/30 bg-warning-bg text-warning';
     return 'border-danger/30 bg-danger-bg text-danger';
   }
-  return 'border-black/15 bg-surface text-text-muted hover:border-black/25 hover:text-text dark:border-white/15';
+  return 'border-black/15 bg-surface text-waymarks-ink-muted hover:border-black/25 hover:text-text dark:border-white/15';
 }
 
 function EditPanel({
@@ -526,7 +539,7 @@ function EditPanel({
         <input
           value={name}
           onChange={(e) => setName(e.target.value)}
-          className="h-10 w-full rounded-md border border-black/10 bg-surface px-3 text-sm text-text outline-none focus:border-waymarks-gold focus:ring-2 focus:ring-waymarks-gold dark:border-white/10"
+          className="h-10 w-full rounded-md border border-black/10 bg-surface px-3 text-sm text-waymarks-ink outline-none focus:border-waymarks-gold focus:ring-2 focus:ring-waymarks-gold dark:border-white/10"
         />
       </FieldLabel>
 
@@ -534,7 +547,7 @@ function EditPanel({
         <select
           value={type}
           onChange={(e) => setType(e.target.value)}
-          className="h-10 w-full rounded-md border border-black/10 bg-surface px-3 text-sm text-text outline-none focus:border-waymarks-gold focus:ring-2 focus:ring-waymarks-gold dark:border-white/10"
+          className="h-10 w-full rounded-md border border-black/10 bg-surface px-3 text-sm text-waymarks-ink outline-none focus:border-waymarks-gold focus:ring-2 focus:ring-waymarks-gold dark:border-white/10"
         >
           <optgroup label="Signage">
             {signageTypes.map((t) => (
@@ -553,13 +566,19 @@ function EditPanel({
         </select>
       </FieldLabel>
 
-      <FieldLabel label="Notes">
+      {/* M32 Step 3: this field maps to `location_notes` (the state variable
+          is misleadingly named `notes` — pre-existing). Renaming the label
+          to match the NewAssetDialog ("Where on the floor") so users see the
+          same wording everywhere. DB column unchanged. The dedicated
+          `notes` and `room_number` columns aren't editable here yet — flagged
+          as a follow-up for the drawer's edit view. */}
+      <FieldLabel label="Where on the floor">
         <textarea
           rows={3}
           value={notes}
           onChange={(e) => setNotes(e.target.value)}
-          placeholder='e.g. "East elevator lobby, mounted at 5′. Replaced in 2024."'
-          className="w-full rounded-md border border-black/10 bg-surface p-3 text-sm text-text outline-none focus:border-waymarks-gold focus:ring-2 focus:ring-waymarks-gold dark:border-white/10"
+          placeholder='e.g. "East elevator lobby, mounted at 5′"'
+          className="w-full rounded-md border border-black/10 bg-surface p-3 text-sm text-waymarks-ink outline-none focus:border-waymarks-gold focus:ring-2 focus:ring-waymarks-gold dark:border-white/10"
         />
       </FieldLabel>
 
@@ -568,7 +587,7 @@ function EditPanel({
           value={manufacturer}
           onChange={(e) => setManufacturer(e.target.value)}
           placeholder="e.g. Officemark"
-          className="h-10 w-full rounded-md border border-black/10 bg-surface px-3 text-sm text-text outline-none focus:border-waymarks-gold focus:ring-2 focus:ring-waymarks-gold dark:border-white/10"
+          className="h-10 w-full rounded-md border border-black/10 bg-surface px-3 text-sm text-waymarks-ink outline-none focus:border-waymarks-gold focus:ring-2 focus:ring-waymarks-gold dark:border-white/10"
         />
       </FieldLabel>
 
@@ -578,7 +597,7 @@ function EditPanel({
             type="date"
             value={installed ?? ''}
             onChange={(e) => setInstalled(e.target.value)}
-            className="h-10 w-full rounded-md border border-black/10 bg-surface px-3 text-sm text-text outline-none focus:border-waymarks-gold focus:ring-2 focus:ring-waymarks-gold dark:border-white/10"
+            className="h-10 w-full rounded-md border border-black/10 bg-surface px-3 text-sm text-waymarks-ink outline-none focus:border-waymarks-gold focus:ring-2 focus:ring-waymarks-gold dark:border-white/10"
           />
         </FieldLabel>
 
@@ -590,7 +609,7 @@ function EditPanel({
             value={cycle}
             onChange={(e) => setCycle(e.target.value)}
             placeholder="default 90"
-            className="h-10 w-full rounded-md border border-black/10 bg-surface px-3 text-sm text-text outline-none focus:border-waymarks-gold focus:ring-2 focus:ring-waymarks-gold dark:border-white/10"
+            className="h-10 w-full rounded-md border border-black/10 bg-surface px-3 text-sm text-waymarks-ink outline-none focus:border-waymarks-gold focus:ring-2 focus:ring-waymarks-gold dark:border-white/10"
           />
         </FieldLabel>
       </div>
@@ -624,7 +643,15 @@ function FieldLabel({ label, children }: { label: string; children: React.ReactN
   );
 }
 
-function PhotoGallery({ assetId, canEdit }: { assetId: string; canEdit: boolean }) {
+function PhotoGallery({
+  assetId,
+  assetName,
+  canEdit,
+}: {
+  assetId: string;
+  assetName: string;
+  canEdit: boolean;
+}) {
   const { data: photos = [], isLoading } = useAssetPhotos(assetId);
   const [active, setActive] = useState(0);
   const add = useAddAssetPhoto(assetId);
@@ -669,7 +696,13 @@ function PhotoGallery({ assetId, canEdit }: { assetId: string; canEdit: boolean 
             Loading photos…
           </div>
         ) : current ? (
-          <PhotoFrame photo={current} canDelete={canEdit} onDelete={() => onDelete(current)} />
+          <PhotoFrame
+            photo={current}
+            assetName={assetName}
+            index={safeActive}
+            canDelete={canEdit}
+            onDelete={() => onDelete(current)}
+          />
         ) : (
           <div className="flex h-32 flex-col items-center justify-center gap-1 text-text-faint">
             <ImageOff size={20} aria-hidden />
@@ -730,15 +763,20 @@ function PhotoGallery({ assetId, canEdit }: { assetId: string; canEdit: boolean 
 
 function PhotoFrame({
   photo,
+  assetName,
+  index,
   canDelete,
   onDelete,
 }: {
   photo: AssetPhoto;
+  assetName: string;
+  index: number;
   canDelete: boolean;
   onDelete: () => void;
 }) {
   const [url, setUrl] = useState<string | null>(null);
   const [errored, setErrored] = useState(false);
+  const [downloading, setDownloading] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -751,6 +789,29 @@ function PhotoFrame({
       cancelled = true;
     };
   }, [photo.path]);
+
+  async function handleDownload() {
+    setDownloading(true);
+    try {
+      const dlUrl = await signedAssetPhotoDownloadUrl(
+        photo.path,
+        assetPhotoDownloadName(assetName, index, photo.path)
+      );
+      // The signed URL carries Content-Disposition: attachment, so a plain
+      // anchor click saves the file — works cross-origin to Supabase Storage.
+      const a = document.createElement('a');
+      a.href = dlUrl;
+      a.rel = 'noopener';
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+    } catch {
+      // Fall back to opening the inline photo in a new tab.
+      if (url) window.open(url, '_blank', 'noopener');
+    } finally {
+      setDownloading(false);
+    }
+  }
 
   if (errored) {
     return (
@@ -769,6 +830,17 @@ function PhotoFrame({
   return (
     <div className="relative">
       <img src={url} alt="" className="block w-full object-cover" />
+      {/* Download is available to anyone who can view the asset. */}
+      <button
+        type="button"
+        onClick={handleDownload}
+        disabled={downloading}
+        aria-label="Download this photo"
+        className="absolute left-2 top-2 inline-flex h-7 items-center gap-1 rounded-md bg-waymarks-ink/80 px-2 text-[11px] font-medium text-white hover:bg-waymarks-ink disabled:opacity-60"
+      >
+        <Download size={12} aria-hidden />
+        {downloading ? 'Saving…' : 'Save'}
+      </button>
       {canDelete && (
         <button
           type="button"
@@ -825,9 +897,18 @@ function ThumbButton({
 }
 
 function DetailsSection({ asset }: { asset: Asset }) {
+  const pinLabel = formatPinNumber(asset.pin_number);
   return (
     <div className="space-y-2.5">
       <div className="flex flex-wrap items-center gap-1">
+        {pinLabel && (
+          <span
+            className="inline-flex items-center rounded-md bg-waymarks-ink px-2 py-0.5 font-mono text-xs font-semibold text-white"
+            title="Pin ID — this asset's reference number on the floor"
+          >
+            #{pinLabel}
+          </span>
+        )}
         <Chip variant="gold">{prettyType(asset.type)}</Chip>
         <Chip variant="default">{asset.category}</Chip>
         {asset.room_number && (
@@ -842,7 +923,7 @@ function DetailsSection({ asset }: { asset: Asset }) {
       )}
       {asset.notes && (
         <div className="rounded-md border border-black/10 bg-bg p-2.5 text-xs text-text-muted dark:border-white/10">
-          <p className="mb-1 font-medium uppercase tracking-[0.14em] text-[10px] text-text-faint">Notes</p>
+          <p className="mb-1 font-medium uppercase tracking-[0.14em] text-[10px] text-text-faint">Install & service notes</p>
           <p className="whitespace-pre-wrap text-sm text-text">{asset.notes}</p>
         </div>
       )}
@@ -940,7 +1021,7 @@ function VendorPanel({ asset }: { asset: Asset }) {
             type="button"
             onClick={() => void save()}
             disabled={update.isPending}
-            className="inline-flex h-8 items-center rounded-md bg-waymarks-gold px-3 text-xs font-medium text-white hover:bg-waymarks-gold-deep disabled:opacity-60"
+            className="inline-flex h-8 items-center rounded-md bg-waymarks-gold px-3 text-xs font-medium text-waymarks-ink hover:bg-waymarks-gold-deep disabled:opacity-60"
           >
             {update.isPending ? 'Saving…' : 'Save'}
           </button>
