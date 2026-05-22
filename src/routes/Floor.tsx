@@ -33,8 +33,10 @@ import { pinNumberMatchesQuery } from '@/lib/pin-types';
 import { listFirstPhotoPaths, signedAssetPhotoUrl } from '@/lib/queries/asset-photos';
 import {
   buildCatalogueDoc,
-  catalogueFilename,
+  catalogueDownloadName,
+  pickCatalogueSaveTarget,
   prepareCatalogueEntries,
+  writeCatalogue,
   type CatalogueEntry,
 } from '@/lib/floor-catalogue';
 import {
@@ -247,11 +249,21 @@ export function Floor() {
     }
   }
 
-  // Build + download a PDF catalogue of every asset on this floor. Photo
-  // failures degrade gracefully to a "No photo" box rather than aborting.
+  // Build + save a PDF catalogue of every asset on this floor. Photo failures
+  // degrade gracefully to a "No photo" box rather than aborting.
   async function handleExportCatalogue() {
     if (!floor || !building) return;
     setCatalogueError(null);
+
+    // Open the OS "Save As" dialog up front, while the click's user activation
+    // is still live -- the photo loading below can outlast the activation
+    // window. On browsers without the File System Access API this resolves to
+    // a plain download instead.
+    const generatedOn = new Date();
+    const fileName = catalogueDownloadName(building.name, floor.label, generatedOn);
+    const target = await pickCatalogueSaveTarget(fileName);
+    if (target.kind === 'cancelled') return;
+
     setCatalogueState('building');
     try {
       const drafts = prepareCatalogueEntries(assets);
@@ -277,10 +289,10 @@ export function Floor() {
         buildingName: building.name,
         floorLabel: floor.label,
         addressLine,
-        generatedOn: new Date(),
+        generatedOn,
         entries,
       });
-      doc.save(catalogueFilename(building.name, floor.label));
+      await writeCatalogue(doc, target, fileName);
       setCatalogueState('idle');
     } catch (e) {
       setCatalogueError(e instanceof Error ? e.message : 'Could not build the catalogue.');

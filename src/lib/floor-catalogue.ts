@@ -62,6 +62,101 @@ export function catalogueFilename(buildingName: string, floorLabel: string): str
   return `${slug(buildingName) || 'building'}-${slug(floorLabel) || 'floor'}-catalogue.pdf`;
 }
 
+/**
+ * Suggested filename shown in the OS Save dialog, e.g.
+ * "Markur-Catalogue-Crescent-School-Level-300-2026-05-22.pdf". Keeps the
+ * building / floor words readable (hyphen-joined, original casing) and dates
+ * it with the en-CA locale, which formats as YYYY-MM-DD.
+ */
+export function catalogueDownloadName(
+  buildingName: string,
+  floorLabel: string,
+  date: Date
+): string {
+  const part = (s: string) =>
+    s.trim().replace(/[^A-Za-z0-9]+/g, '-').replace(/^-+|-+$/g, '');
+  const ymd = date.toLocaleDateString('en-CA');
+  return `Markur-Catalogue-${part(buildingName) || 'Building'}-${
+    part(floorLabel) || 'Floor'
+  }-${ymd}.pdf`;
+}
+
+// Minimal structural types for the File System Access API. It is not in every
+// TS DOM lib version, and we only touch the handful of members used below.
+type CatalogueFileHandle = {
+  createWritable: () => Promise<{
+    write: (data: Blob) => Promise<void>;
+    close: () => Promise<void>;
+  }>;
+};
+type ShowSaveFilePicker = (opts: {
+  suggestedName?: string;
+  types?: { description?: string; accept: Record<string, string[]> }[];
+}) => Promise<CatalogueFileHandle>;
+
+/**
+ * Where the finished catalogue PDF should be written:
+ *  - `handle`    — the user picked a location via the OS Save dialog
+ *  - `download`  — no Save dialog available (Firefox/Safari); use a plain download
+ *  - `cancelled` — the user dismissed the Save dialog; do nothing
+ */
+export type CatalogueSaveTarget =
+  | { kind: 'handle'; handle: CatalogueFileHandle }
+  | { kind: 'download' }
+  | { kind: 'cancelled' };
+
+/**
+ * Step 1 — open the OS "Save As" dialog. MUST be called synchronously-ish from
+ * the click handler, before the slow photo-loading work: showSaveFilePicker
+ * needs the click's user activation, which expires after a few seconds.
+ * Falls back to `download` where the API is unavailable.
+ */
+export async function pickCatalogueSaveTarget(
+  suggestedName: string
+): Promise<CatalogueSaveTarget> {
+  const picker = (window as unknown as { showSaveFilePicker?: ShowSaveFilePicker })
+    .showSaveFilePicker;
+  if (typeof picker !== 'function') return { kind: 'download' };
+  try {
+    const handle = await picker({
+      suggestedName,
+      types: [
+        { description: 'PDF document', accept: { 'application/pdf': ['.pdf'] } },
+      ],
+    });
+    return { kind: 'handle', handle };
+  } catch (err) {
+    // AbortError = the user dismissed the dialog. Any other failure degrades
+    // to a plain download so the export still completes.
+    if (err instanceof DOMException && err.name === 'AbortError') {
+      return { kind: 'cancelled' };
+    }
+    return { kind: 'download' };
+  }
+}
+
+/**
+ * Step 2 — write the built PDF to the chosen target. Run after the document is
+ * assembled. If writing to the picked handle fails, falls back to a download.
+ */
+export async function writeCatalogue(
+  doc: jsPDF,
+  target: CatalogueSaveTarget,
+  fallbackName: string
+): Promise<void> {
+  if (target.kind === 'handle') {
+    try {
+      const writable = await target.handle.createWritable();
+      await writable.write(doc.output('blob'));
+      await writable.close();
+      return;
+    } catch {
+      // Fall through to a plain download if the write fails.
+    }
+  }
+  doc.save(fallbackName);
+}
+
 export type BuildCatalogueParams = {
   buildingName: string;
   floorLabel: string;
