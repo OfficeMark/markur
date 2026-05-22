@@ -186,7 +186,12 @@ Full-screen mode for going through every sign on a floor.
    - Photo thumbnail
    - Name, type, location
    - "Confirm OK" (green), "Flag issue" (red outline), "Skip" (link)
-6. Each tap creates an `audit_event` row.
+6. "Confirm OK" and "Skip" each create an `audit_event` row in a single tap.
+   "Flag issue" opens a capture form (M33): a **required** description plus
+   **optional** photo evidence (up to 5). On save it raises a row in
+   `public.flags` (photos uploaded to the `flag-photos` bucket, paths kept in
+   `flags.photo_urls`), records a `flagged` `audit_event`, and sets the pin's
+   status to `flagged`. Cancel discards without changing the pin.
 7. Progress bar advances.
 8. When user taps End Audit → `AuditCompleteSummary` modal:
    - Total / Audited / Missed counts
@@ -204,6 +209,8 @@ Full-screen mode for going through every sign on a floor.
 - Full feature works offline if the floor was pre-cached.
 - Photos taken during audit stored locally; uploaded on reconnect.
 - Each audit_event queued to `pending_writes`.
+- The "Flag issue" capture form (M33) needs connectivity — it uploads photos
+  and inserts the flag synchronously; offline, it surfaces an error to retry.
 
 ### Acceptance
 

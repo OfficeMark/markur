@@ -453,6 +453,7 @@ export type Database = {
           created_at: string
           description: string
           id: string
+          photo_urls: Json
           raised_by: string
           resolved_at: string | null
           resolved_by: string | null
@@ -464,6 +465,7 @@ export type Database = {
           created_at?: string
           description: string
           id?: string
+          photo_urls?: Json
           raised_by: string
           resolved_at?: string | null
           resolved_by?: string | null
@@ -475,6 +477,7 @@ export type Database = {
           created_at?: string
           description?: string
           id?: string
+          photo_urls?: Json
           raised_by?: string
           resolved_at?: string | null
           resolved_by?: string | null
