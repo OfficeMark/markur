@@ -366,7 +366,7 @@ function AdminLink({ isAdmin }: { isAdmin: boolean }) {
   return (
     <Link
       to="/admin"
-      className="mt-5 flex items-center justify-between gap-3 rounded-lg border border-waymarks-gold/40 bg-waymarks-gold-soft p-4 transition-colors hover:bg-waymarks-gold/15"
+      className="mt-5 flex items-center justify-between gap-3 rounded-lg border border-waymarks-gold/40 bg-waymarks-gold-soft p-4 transition-colors hover:bg-waymarks-gold/15 dark:bg-white/5 dark:hover:bg-white/10"
     >
       <div>
         <p className="flex items-center gap-1.5 text-[11px] font-medium uppercase tracking-[0.18em] text-waymarks-gold">
