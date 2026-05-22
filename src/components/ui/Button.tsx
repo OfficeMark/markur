@@ -18,20 +18,21 @@ export type ButtonProps = {
 const VARIANTS: Record<ButtonVariant, string> = {
   primary:
     'bg-waymarks-ink text-white hover:bg-waymarks-ink/90 disabled:bg-waymarks-ink/40',
-  // M32 Step 4: text-waymarks-ink (not text-text) because bg-surface is
-  // always white -- dark mode flips --color-text to near-white, which on a
-  // white button reads as invisible. waymarks-ink is dark in both modes.
+  // Sits on bg-surface, which is now dark in dark mode -- so the label uses
+  // the semantic text token (dark in light, light in dark) rather than the
+  // always-dark waymarks-ink, which would render invisible on a dark surface.
   secondary:
-    'border border-black/15 bg-surface text-waymarks-ink hover:bg-black/5 disabled:opacity-50 dark:border-white/15 dark:hover:bg-white/5',
+    'border border-black/15 bg-surface text-text hover:bg-black/5 disabled:opacity-50 dark:border-white/15 dark:hover:bg-white/5',
   ghost:
     'text-text hover:bg-black/5 disabled:opacity-50 dark:hover:bg-white/5',
   danger:
     'border border-danger text-danger hover:bg-danger/5 disabled:opacity-50',
-  // Disabled keeps a faded gold (matching primary's disabled:bg-waymarks-ink/40
-  // pattern) so the button still reads as a gold primary action -- bg-text-faint
-  // rendered as a muted khaki rectangle, especially in dark mode.
+  // Gold has dark text, so a translucent disabled background (gold/40) turns
+  // muddy on a dark surface and the label stops contrasting. Fade the whole
+  // button with opacity instead (as secondary/ghost/danger do) -- readable in
+  // both modes and still clearly a gold action.
   gold:
-    'bg-waymarks-gold text-waymarks-ink hover:bg-waymarks-gold-deep disabled:bg-waymarks-gold/40',
+    'bg-waymarks-gold text-waymarks-ink hover:bg-waymarks-gold-deep disabled:opacity-50',
 };
 
 const SIZES: Record<ButtonSize, string> = {

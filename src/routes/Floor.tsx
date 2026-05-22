@@ -454,7 +454,7 @@ export function Floor() {
                 type="button"
                 onClick={() => void handleExportCatalogue()}
                 disabled={catalogueState === 'building'}
-                className="inline-flex h-7 items-center gap-1 rounded-md border border-black/15 bg-surface px-2.5 text-[11px] font-medium text-waymarks-ink hover:bg-black/5 disabled:opacity-60 dark:border-white/15 dark:hover:bg-white/5"
+                className="inline-flex h-7 items-center gap-1 rounded-md border border-black/15 bg-surface px-2.5 text-[11px] font-medium text-text hover:bg-black/5 disabled:opacity-60 dark:border-white/15 dark:hover:bg-white/5"
               >
                 <FileDown size={11} aria-hidden />
                 {catalogueState === 'building' ? 'Building…' : 'Catalogue'}
@@ -466,7 +466,7 @@ export function Floor() {
               <button
                 type="button"
                 onClick={() => setVideoRecorderOpen(true)}
-                className="inline-flex h-7 items-center gap-1 rounded-md border border-black/15 bg-surface px-2.5 text-[11px] font-medium text-waymarks-ink hover:bg-black/5 dark:border-white/15 dark:hover:bg-white/5"
+                className="inline-flex h-7 items-center gap-1 rounded-md border border-black/15 bg-surface px-2.5 text-[11px] font-medium text-text hover:bg-black/5 dark:border-white/15 dark:hover:bg-white/5"
               >
                 <Video size={11} aria-hidden />
                 Record
@@ -482,7 +482,7 @@ export function Floor() {
                   'inline-flex h-7 items-center gap-1 rounded-md px-2.5 text-[11px] font-medium ' +
                   (placing
                     ? 'bg-waymarks-gold text-waymarks-ink hover:bg-waymarks-gold-deep'
-                    : 'border border-black/15 bg-surface text-waymarks-ink hover:bg-black/5 dark:border-white/15 dark:hover:bg-white/5')
+                    : 'border border-black/15 bg-surface text-text hover:bg-black/5 dark:border-white/15 dark:hover:bg-white/5')
                 }
               >
                 <Plus size={11} aria-hidden />
@@ -496,7 +496,7 @@ export function Floor() {
                 type="button"
                 onClick={() => void takeOffline()}
                 disabled={cacheState === 'caching'}
-                className="inline-flex h-7 items-center gap-1 rounded-md border border-black/15 bg-surface px-2.5 text-[11px] font-medium text-waymarks-ink hover:bg-black/5 disabled:opacity-60 dark:border-white/15 dark:hover:bg-white/5"
+                className="inline-flex h-7 items-center gap-1 rounded-md border border-black/15 bg-surface px-2.5 text-[11px] font-medium text-text hover:bg-black/5 disabled:opacity-60 dark:border-white/15 dark:hover:bg-white/5"
               >
                 {cacheState === 'cached' ? <Check size={11} aria-hidden /> : <Download size={11} aria-hidden />}
                 {cacheState === 'cached' ? 'Cached' : 'Offline'}
@@ -508,7 +508,7 @@ export function Floor() {
               <button
                 type="button"
                 onClick={() => setUploadOpen(true)}
-                className="inline-flex h-7 items-center gap-1 rounded-md border border-black/15 bg-surface px-2.5 text-[11px] font-medium text-waymarks-ink hover:bg-black/5 dark:border-white/15 dark:hover:bg-white/5"
+                className="inline-flex h-7 items-center gap-1 rounded-md border border-black/15 bg-surface px-2.5 text-[11px] font-medium text-text hover:bg-black/5 dark:border-white/15 dark:hover:bg-white/5"
               >
                 <RefreshCw size={11} aria-hidden />
                 Replace

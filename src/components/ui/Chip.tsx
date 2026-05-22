@@ -10,7 +10,7 @@ export type ChipProps = {
 } & ButtonHTMLAttributes<HTMLButtonElement>;
 
 const VARIANTS: Record<ChipVariant, string> = {
-  default: 'border-black/15 bg-surface text-waymarks-ink dark:border-white/15',
+  default: 'border-black/15 bg-surface text-text dark:border-white/15',
   success: 'border-success/30 bg-success-bg text-success',
   warning: 'border-warning/30 bg-warning-bg text-warning',
   danger:  'border-danger/30 bg-danger-bg text-danger',

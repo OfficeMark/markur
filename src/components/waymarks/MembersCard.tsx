@@ -211,7 +211,7 @@ function MemberRow(props: {
             const next = e.target.value as RoleKey;
             if (next !== member.role) props.onRequestRoleChange(next);
           }}
-          className="h-8 rounded-md border border-black/10 bg-surface px-2 text-xs text-waymarks-ink outline-none disabled:opacity-60 focus:border-waymarks-gold focus:ring-1 focus:ring-waymarks-gold"
+          className="h-8 rounded-md border border-black/10 bg-surface px-2 text-xs text-text outline-none disabled:opacity-60 focus:border-waymarks-gold focus:ring-1 focus:ring-waymarks-gold"
         >
           {/* Always show the current role so it doesn't blank out */}
           {!grantableRoles.includes(member.role) && (

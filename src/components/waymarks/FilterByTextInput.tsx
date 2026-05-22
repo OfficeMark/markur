@@ -62,7 +62,7 @@ export function FilterByTextInput({
         onChange={(e) => setLocal(e.target.value)}
         placeholder={placeholder}
         aria-label="Filter pins by text"
-        className="h-full w-44 rounded-md border border-black/15 bg-surface pl-7 pr-7 text-[11px] text-waymarks-ink outline-none placeholder:text-text-faint focus:border-waymarks-gold focus:ring-2 focus:ring-waymarks-gold/40 dark:border-white/15 dark:bg-white/5 sm:w-56"
+        className="h-full w-44 rounded-md border border-black/15 bg-surface pl-7 pr-7 text-[11px] text-text outline-none placeholder:text-text-faint focus:border-waymarks-gold focus:ring-2 focus:ring-waymarks-gold/40 dark:border-white/15 dark:bg-white/5 sm:w-56"
       />
       {showClear && (
         <button

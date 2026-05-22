@@ -98,7 +98,7 @@ export function Building() {
                 <button
                   type="button"
                   onClick={() => setNewFloorOpen(true)}
-                  className="inline-flex h-7 items-center gap-1 rounded-md border border-black/15 bg-surface px-2.5 text-[11px] font-medium text-waymarks-ink hover:bg-black/5 dark:border-white/15 dark:hover:bg-white/5"
+                  className="inline-flex h-7 items-center gap-1 rounded-md border border-black/15 bg-surface px-2.5 text-[11px] font-medium text-text hover:bg-black/5 dark:border-white/15 dark:hover:bg-white/5"
                 >
                   <Plus size={11} aria-hidden />
                   Add floor
