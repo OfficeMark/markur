@@ -34,6 +34,8 @@ export type AuditModeShellProps = {
   assets: Asset[];
   planUrl: string;
   planKind: 'pdf' | 'image';
+  /** Pin to pre-select on open (drawer "Log a flag" CTA); null = none. */
+  initialAssetId?: string | null;
   onClose: () => void;
 };
 
@@ -44,12 +46,13 @@ export function AuditModeShell({
   assets,
   planUrl,
   planKind,
+  initialAssetId,
   onClose,
 }: AuditModeShellProps) {
   const { data: events = [] } = useAuditEvents(session.id);
   const createEvent = useCreateAuditEvent(session.floor_id);
   const endAudit = useEndAudit(session.floor_id, session.auditor_id);
-  const [currentId, setCurrentId] = useState<string | null>(null);
+  const [currentId, setCurrentId] = useState<string | null>(initialAssetId ?? null);
   const [showSummary, setShowSummary] = useState(false);
   const [endError, setEndError] = useState<string | null>(null);
 

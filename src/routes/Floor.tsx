@@ -71,6 +71,9 @@ export function Floor() {
   const { data: activeSession } = useActiveAuditSession(id, user?.id);
   const startAudit = useStartAudit(id, user?.id);
   const [inAudit, setInAudit] = useState(false);
+  // Pin to pre-select when entering Audit Mode (set by the AssetDrawer
+  // "Log a flag" CTA; null for a normal audit start).
+  const [auditInitialAssetId, setAuditInitialAssetId] = useState<string | null>(null);
 
   const [uploadOpen, setUploadOpen] = useState(false);
   const [signedUrl, setSignedUrl] = useState<string | null>(null);
@@ -235,7 +238,11 @@ export function Floor() {
     }
   }
 
-  async function startOrResumeAudit() {
+  async function startOrResumeAudit(targetAssetId?: string) {
+    // When launched from the drawer's "Log a flag" CTA, pre-select the pin
+    // in Audit Mode and close the drawer so it doesn't sit over the shell.
+    setAuditInitialAssetId(targetAssetId ?? null);
+    if (targetAssetId) setSelectedAssetId(null);
     if (activeSession) {
       setInAudit(true);
       return;
@@ -687,6 +694,7 @@ export function Floor() {
         }}
         onStartReposition={startReposition}
         onStartDelete={(id) => setDeleteAssetId(id)}
+        onLogFlag={(assetId) => void startOrResumeAudit(assetId)}
       />
 
       <StepUpDialog
@@ -712,6 +720,7 @@ export function Floor() {
           assets={assets}
           planUrl={signedUrl}
           planKind={planKind}
+          initialAssetId={auditInitialAssetId}
           onClose={() => setInAudit(false)}
         />
       )}

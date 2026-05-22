@@ -67,6 +67,12 @@ export type AssetDrawerProps = {
    * StepUpDialog confirmation flow.
    */
   onStartDelete?: (assetId: string) => void;
+  /**
+   * "Log a flag in Audit Mode" — closes the drawer and switches into Audit
+   * Mode with this pin pre-selected, so the auditor can flag it via the
+   * capture form. Only wired when the user can run an audit on this floor.
+   */
+  onLogFlag?: (assetId: string) => void;
 };
 
 const STATUS_OPTIONS: Array<{ value: AssetStatus; label: string; icon: typeof Check }> = [
@@ -86,6 +92,7 @@ export function AssetDrawer({
   onOpenChange,
   onStartReposition,
   onStartDelete,
+  onLogFlag,
 }: AssetDrawerProps) {
   const open = !!assetId;
   const { data: asset, isLoading } = useAsset(assetId ?? undefined);
@@ -93,6 +100,7 @@ export function AssetDrawer({
   const canEdit = useCan('edit', { type: 'building', id: buildingId });
   const canReposition = useCan('reposition', { type: 'building', id: buildingId });
   const canDelete = useCan('delete', { type: 'building', id: buildingId });
+  const canAudit = useCan('audit', { type: 'floor', id: floorId });
   const { data: building } = useBuilding(buildingId);
   const { data: floor } = useFloor(floorId);
   const update = useUpdateAsset(floorId);
@@ -161,6 +169,12 @@ export function AssetDrawer({
               />
             ) : (
               <>
+                {asset.status === 'flagged' && (
+                  <div className="flex items-center gap-2 rounded-md border border-danger/40 bg-danger-bg px-3 py-2 text-sm font-semibold text-danger">
+                    <AlertTriangle size={15} aria-hidden className="shrink-0" />
+                    <span>This asset is flagged</span>
+                  </div>
+                )}
                 <PhotoGallery
                   assetId={asset.id}
                   assetName={asset.name ?? 'Asset'}
@@ -178,13 +192,6 @@ export function AssetDrawer({
                         })
                       }
                     />
-                    <QuickActions
-                      asset={asset}
-                      busy={update.isPending}
-                      onChangeStatus={(status) =>
-                        update.mutate({ id: asset.id, patch: { status } })
-                      }
-                    />
                     <AdminActions
                       canReposition={canReposition && !!onStartReposition}
                       canDelete={canDelete && !!onStartDelete}
@@ -193,6 +200,11 @@ export function AssetDrawer({
                     />
                   </>
                 )}
+                <QuickActions
+                  asset={asset}
+                  canAudit={canAudit}
+                  onLogFlag={onLogFlag ? () => onLogFlag(asset.id) : undefined}
+                />
                 <VisualizeRow
                   buildingName={building?.name ?? 'Building'}
                   floorLabel={floor?.label ?? ''}
@@ -285,47 +297,59 @@ function LockBar({
   );
 }
 
+/**
+ * Read-only status indicators (M33). Status changes happen in Audit Mode --
+ * these chips report the current state, they don't set it. The "Log a flag"
+ * link routes the user into Audit Mode on this pin, where the flag capture
+ * form lives.
+ */
 function QuickActions({
   asset,
-  busy,
-  onChangeStatus,
+  canAudit,
+  onLogFlag,
 }: {
   asset: Asset;
-  busy: boolean;
-  onChangeStatus: (status: AssetStatus) => void;
+  canAudit: boolean;
+  onLogFlag?: () => void;
 }) {
   const current = asset.status as AssetStatus;
   return (
     <div>
       <p className="mb-1.5 text-[11px] font-medium uppercase tracking-[0.18em] text-text-faint">
-        Quick actions
+        Status
       </p>
       <div className="flex flex-wrap gap-1.5">
         {STATUS_OPTIONS.map((opt) => {
           const Icon = opt.icon;
           const active = current === opt.value;
           return (
-            <button
+            <span
               key={opt.value}
-              type="button"
-              disabled={busy || active}
-              onClick={() => onChangeStatus(opt.value)}
-              aria-pressed={active}
+              aria-current={active ? 'true' : undefined}
               className={cn(
-                'inline-flex h-8 items-center gap-1.5 rounded-full border px-3 text-xs font-medium transition-colors',
-                'disabled:cursor-not-allowed',
+                'inline-flex h-8 select-none items-center gap-1.5 rounded-full border px-3 text-xs font-medium',
                 active
                   ? variantClasses(opt.value, 'active')
-                  : variantClasses(opt.value, 'idle')
+                  : 'border-black/15 bg-surface text-text-muted opacity-60 dark:border-white/15'
               )}
             >
               <Icon size={12} aria-hidden />
               <span>{opt.label}</span>
               {active && <span className="ml-0.5 text-[10px] uppercase tracking-wide">· current</span>}
-            </button>
+            </span>
           );
         })}
       </div>
+      {canAudit && onLogFlag && (
+        <button
+          type="button"
+          onClick={onLogFlag}
+          className="mt-2 inline-flex items-center gap-1.5 text-xs font-medium text-waymarks-gold hover:underline"
+        >
+          <Flag size={12} aria-hidden />
+          Log a flag in Audit Mode
+        </button>
+      )}
     </div>
   );
 }

@@ -167,6 +167,14 @@ export const PinMarker = forwardRef<HTMLButtonElement, PinMarkerProps>(function 
         className={cn('fill-white text-white', iconCounterRotate && '-rotate-45')}
         aria-hidden
       />
+      {/* Flagged pins get a loud red badge so they stand out on the plan
+          without opening the detail panel (M33). */}
+      {status === 'flagged' && (
+        <span
+          aria-hidden
+          className="absolute -right-1 -top-1 h-2.5 w-2.5 rounded-full border border-white bg-danger"
+        />
+      )}
     </button>
   );
 });
