@@ -21,6 +21,7 @@ import {
   Eye,
   ShoppingCart,
   Download,
+  ExternalLink,
 } from 'lucide-react';
 import { Chip } from '@/components/ui/Chip';
 import { MetricCard } from '@/components/ui/MetricCard';
@@ -965,35 +966,55 @@ function DetailsSection({ asset }: { asset: Asset }) {
  * NewAssetDialog. Click "Add vendor info" or the edit pencil to open
  * the inline form.
  */
+/**
+ * Normalize a user-typed vendor URL into a usable href. We deliberately don't
+ * validate hard (per the brief) — just prepend https:// when no scheme is
+ * present so the link actually resolves.
+ */
+function vendorUrlHref(raw: string): string {
+  const url = raw.trim();
+  return /^https?:\/\//i.test(url) ? url : `https://${url}`;
+}
+
 function VendorPanel({ asset }: { asset: Asset }) {
   const update = useUpdateAsset(asset.floor_id);
   const vendor = (asset.vendor_contact ?? null) as
-    | { name?: string; email?: string; phone?: string; company?: string }
+    | { name?: string; email?: string; phone?: string; company?: string; url?: string }
     | null;
-  const hasVendor = !!(vendor && (vendor.name || vendor.email || vendor.phone || vendor.company));
+  const hasVendor = !!(
+    vendor &&
+    (vendor.name || vendor.email || vendor.phone || vendor.company || vendor.url)
+  );
 
   const [editing, setEditing] = useState(false);
   const [draftName, setDraftName] = useState(vendor?.name ?? '');
   const [draftEmail, setDraftEmail] = useState(vendor?.email ?? '');
   const [draftPhone, setDraftPhone] = useState(vendor?.phone ?? '');
   const [draftCompany, setDraftCompany] = useState(vendor?.company ?? '');
+  const [draftUrl, setDraftUrl] = useState(vendor?.url ?? '');
 
   function startEdit() {
     setDraftName(vendor?.name ?? '');
     setDraftEmail(vendor?.email ?? '');
     setDraftPhone(vendor?.phone ?? '');
     setDraftCompany(vendor?.company ?? '');
+    setDraftUrl(vendor?.url ?? '');
     setEditing(true);
   }
 
   async function save() {
     const next =
-      draftName.trim() || draftEmail.trim() || draftPhone.trim() || draftCompany.trim()
+      draftName.trim() ||
+      draftEmail.trim() ||
+      draftPhone.trim() ||
+      draftCompany.trim() ||
+      draftUrl.trim()
         ? {
             name: draftName.trim() || undefined,
             email: draftEmail.trim() || undefined,
             phone: draftPhone.trim() || undefined,
             company: draftCompany.trim() || undefined,
+            url: draftUrl.trim() || undefined,
           }
         : null;
     await update.mutateAsync({ id: asset.id, patch: { vendor_contact: next } });
@@ -1032,6 +1053,14 @@ function VendorPanel({ asset }: { asset: Asset }) {
           onChange={(e) => setDraftPhone(e.target.value)}
           placeholder="Phone"
           maxLength={60}
+          className="h-9 w-full rounded-md border border-black/10 bg-surface px-3 text-sm outline-none focus:border-waymarks-gold focus:ring-1 focus:ring-waymarks-gold"
+        />
+        <input
+          type="url"
+          value={draftUrl}
+          onChange={(e) => setDraftUrl(e.target.value)}
+          placeholder="Product / supplier URL (https://…)"
+          maxLength={300}
           className="h-9 w-full rounded-md border border-black/10 bg-surface px-3 text-sm outline-none focus:border-waymarks-gold focus:ring-1 focus:ring-waymarks-gold"
         />
         <div className="flex justify-end gap-2 pt-1">
@@ -1082,6 +1111,17 @@ function VendorPanel({ asset }: { asset: Asset }) {
         )}
         {vendor!.phone && (
           <a href={`tel:${vendor!.phone}`} className="block text-sm text-text-muted hover:text-text">{vendor!.phone}</a>
+        )}
+        {vendor!.url && (
+          <a
+            href={vendorUrlHref(vendor!.url)}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="mt-0.5 inline-flex items-center gap-1 text-sm text-waymarks-gold hover:underline"
+          >
+            Product / supplier
+            <ExternalLink size={11} aria-hidden />
+          </a>
         )}
       </div>
       <button
