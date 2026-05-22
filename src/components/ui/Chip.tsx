@@ -15,7 +15,7 @@ const VARIANTS: Record<ChipVariant, string> = {
   warning: 'border-warning/30 bg-warning-bg text-warning',
   danger:  'border-danger/30 bg-danger-bg text-danger',
   info:    'border-info/30 bg-info-bg text-info',
-  gold:    'border-waymarks-gold bg-waymarks-gold-soft text-waymarks-ink dark:text-white',
+  gold:    'border-waymarks-gold bg-waymarks-gold-soft text-waymarks-ink dark:bg-white/5 dark:text-white',
 };
 
 export const Chip = forwardRef<HTMLButtonElement, ChipProps>(function Chip(
