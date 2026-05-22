@@ -191,8 +191,11 @@ function Row({
         }
       }}
       className={cn(
-        'cursor-pointer border-t border-black/5 transition-colors hover:bg-waymarks-gold-soft focus-visible:bg-waymarks-gold-soft focus-visible:outline-none dark:border-white/5',
-        selected && 'bg-waymarks-gold-soft'
+        // waymarks-gold-soft is a light cream with no dark-mode token override,
+        // so the hover/selected row stayed pale against dark siblings. Lighten
+        // the dark-mode surface with a translucent white instead.
+        'cursor-pointer border-t border-black/5 transition-colors hover:bg-waymarks-gold-soft focus-visible:bg-waymarks-gold-soft focus-visible:outline-none dark:border-white/5 dark:hover:bg-white/5 dark:focus-visible:bg-white/5',
+        selected && 'bg-waymarks-gold-soft dark:bg-white/5'
       )}
     >
       <td className="py-2 pl-3 pr-1">

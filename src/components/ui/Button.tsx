@@ -27,8 +27,11 @@ const VARIANTS: Record<ButtonVariant, string> = {
     'text-text hover:bg-black/5 disabled:opacity-50 dark:hover:bg-white/5',
   danger:
     'border border-danger text-danger hover:bg-danger/5 disabled:opacity-50',
+  // Disabled keeps a faded gold (matching primary's disabled:bg-waymarks-ink/40
+  // pattern) so the button still reads as a gold primary action -- bg-text-faint
+  // rendered as a muted khaki rectangle, especially in dark mode.
   gold:
-    'bg-waymarks-gold text-waymarks-ink hover:bg-waymarks-gold-deep disabled:bg-text-faint',
+    'bg-waymarks-gold text-waymarks-ink hover:bg-waymarks-gold-deep disabled:bg-waymarks-gold/40',
 };
 
 const SIZES: Record<ButtonSize, string> = {
