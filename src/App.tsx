@@ -21,6 +21,7 @@ import { handleQueryError, onSessionLost } from '@/lib/queryErrorHandler';
 // the auth check.
 const Building = lazy(() => import('@/routes/Building').then((m) => ({ default: m.Building })));
 const Floor = lazy(() => import('@/routes/Floor').then((m) => ({ default: m.Floor })));
+const Report = lazy(() => import('@/routes/Report').then((m) => ({ default: m.Report })));
 const Login = lazy(() => import('@/routes/Login').then((m) => ({ default: m.Login })));
 const Trash = lazy(() => import('@/routes/Trash').then((m) => ({ default: m.Trash })));
 const AcceptInvitation = lazy(() =>
@@ -161,6 +162,14 @@ export default function App() {
                     element={
                       <ProtectedRoute>
                         <Floor />
+                      </ProtectedRoute>
+                    }
+                  />
+                  <Route
+                    path="/reports/:buildingId"
+                    element={
+                      <ProtectedRoute>
+                        <Report />
                       </ProtectedRoute>
                     }
                   />

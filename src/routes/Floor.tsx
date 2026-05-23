@@ -30,6 +30,7 @@ import { useAuth } from '@/lib/auth-context';
 import { useCan } from '@/lib/permissions-context';
 import { planKindForPath, signedUrlForPlan } from '@/lib/upload';
 import { pinNumberMatchesQuery } from '@/lib/pin-types';
+import { photoToJpegDataUrl } from '@/lib/photo-to-data-url';
 import { listFirstPhotoPaths, signedAssetPhotoUrl } from '@/lib/queries/asset-photos';
 import {
   buildCatalogueDoc,
@@ -776,65 +777,6 @@ export function Floor() {
 // =============================================================================
 // Filter helpers (M22 #6)
 // =============================================================================
-
-/**
- * Fetch an asset photo (via its signed URL) and re-encode it to a compact
- * JPEG data URL for embedding in the catalogue PDF. Re-encoding through a
- * canvas keeps the PDF small and guarantees a jsPDF-friendly format. Returns
- * null on any failure so the catalogue falls back to a "No photo" box.
- */
-async function photoToJpegDataUrl(signedUrl: string, maxPx = 700): Promise<string | null> {
-  try {
-    const res = await fetch(signedUrl);
-    if (!res.ok) return null;
-    const blob = await res.blob();
-    const objUrl = URL.createObjectURL(blob);
-    return await new Promise<string | null>((resolve) => {
-      const img = new Image();
-      img.onload = () => {
-        URL.revokeObjectURL(objUrl);
-        let w = img.naturalWidth;
-        let h = img.naturalHeight;
-        if (!w || !h) {
-          resolve(null);
-          return;
-        }
-        if (w > maxPx || h > maxPx) {
-          if (w >= h) {
-            h = Math.round((h * maxPx) / w);
-            w = maxPx;
-          } else {
-            w = Math.round((w * maxPx) / h);
-            h = maxPx;
-          }
-        }
-        const canvas = document.createElement('canvas');
-        canvas.width = w;
-        canvas.height = h;
-        const ctx = canvas.getContext('2d');
-        if (!ctx) {
-          resolve(null);
-          return;
-        }
-        ctx.fillStyle = '#ffffff';
-        ctx.fillRect(0, 0, w, h);
-        ctx.drawImage(img, 0, 0, w, h);
-        try {
-          resolve(canvas.toDataURL('image/jpeg', 0.82));
-        } catch {
-          resolve(null);
-        }
-      };
-      img.onerror = () => {
-        URL.revokeObjectURL(objUrl);
-        resolve(null);
-      };
-      img.src = objUrl;
-    });
-  } catch {
-    return null;
-  }
-}
 
 /**
  * Case-insensitive substring match against the user-visible text fields

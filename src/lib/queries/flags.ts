@@ -35,6 +35,30 @@ async function uploadFlagPhoto(assetId: string, file: File): Promise<string> {
   return path;
 }
 
+export async function signedFlagPhotoUrl(path: string): Promise<string> {
+  const { data, error } = await supabase.storage
+    .from('flag-photos')
+    .createSignedUrl(path, 60 * 30);
+  if (error) throw error;
+  return data.signedUrl;
+}
+
+/**
+ * Fetch every open flag attached to assets on a building's floors. Used by
+ * the building Audit Report. Returns `[]` when RLS denies the user — no
+ * leaking via error.
+ */
+export async function listFlagsForAssets(assetIds: string[]): Promise<Flag[]> {
+  if (assetIds.length === 0) return [];
+  const { data, error } = await supabase
+    .from('flags')
+    .select('*')
+    .in('asset_id', assetIds)
+    .order('created_at', { ascending: false });
+  if (error) throw error;
+  return data ?? [];
+}
+
 /** Best-effort cleanup of uploaded objects when a later step fails. */
 async function removeFlagPhotos(paths: string[]): Promise<void> {
   if (paths.length > 0) {

@@ -1,6 +1,6 @@
 import { Link, useParams } from 'react-router-dom';
 import { useState } from 'react';
-import { ArrowLeft, MapPin, Layers, ImageOff, Trash2, Plus } from 'lucide-react';
+import { ArrowLeft, MapPin, Layers, ImageOff, Trash2, Plus, FileDown } from 'lucide-react';
 import { AppShell } from '@/components/waymarks/AppShell';
 import { Tooltip } from '@/components/ui/Tooltip';
 import { AccessManagementCard } from '@/components/waymarks/AccessManagementCard';
@@ -76,8 +76,30 @@ export function Building() {
 
         <ResumeAuditBanner buildingId={building.id} />
 
-        {isSuperAdmin && building && (
-          <div className="mb-6 flex flex-wrap gap-2">
+        <div className="mb-6 flex flex-wrap gap-2">
+          <Tooltip text="Survey report: every asset in this building, grouped by floor.">
+            <Link
+              to={`/reports/${building.id}?mode=survey`}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex h-9 items-center gap-1.5 rounded-md border border-black/10 bg-surface px-3 text-xs font-medium text-text hover:border-black/20 dark:border-white/10 dark:hover:border-white/20"
+            >
+              <FileDown size={12} aria-hidden />
+              <span>Survey report</span>
+            </Link>
+          </Tooltip>
+          <Tooltip text="Audit report: flagged + needs-attention assets, with descriptions and photos.">
+            <Link
+              to={`/reports/${building.id}?mode=audit`}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex h-9 items-center gap-1.5 rounded-md border border-black/10 bg-surface px-3 text-xs font-medium text-text hover:border-black/20 dark:border-white/10 dark:hover:border-white/20"
+            >
+              <FileDown size={12} aria-hidden />
+              <span>Audit report</span>
+            </Link>
+          </Tooltip>
+          {isSuperAdmin && (
             <Link
               to={`/buildings/${building.id}/trash`}
               className="inline-flex h-9 items-center gap-1.5 rounded-md border border-black/10 bg-surface px-3 text-xs font-medium text-text-muted hover:border-black/20 hover:text-text dark:border-white/10 dark:hover:border-white/20"
@@ -85,8 +107,8 @@ export function Building() {
               <Trash2 size={12} aria-hidden />
               <span>Trash</span>
             </Link>
-          </div>
-        )}
+          )}
+        </div>
 
         <section className="space-y-3">
           <div className="flex items-center justify-between">
