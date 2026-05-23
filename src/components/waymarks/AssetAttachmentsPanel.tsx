@@ -87,7 +87,7 @@ export function AssetAttachmentsPanel({ assetId, canEdit }: AssetAttachmentsPane
                 type="button"
                 onClick={() => fileInput.current?.click()}
                 disabled={add.isPending}
-                className="inline-flex h-7 items-center gap-1 rounded-md border border-black/15 bg-surface px-2.5 text-[11px] font-medium text-waymarks-ink hover:bg-black/5 disabled:opacity-60 dark:border-white/15 dark:hover:bg-white/5"
+                className="inline-flex h-7 items-center gap-1 rounded-md border border-black/15 bg-surface px-2.5 text-[11px] font-medium text-text hover:bg-black/5 disabled:opacity-60 dark:border-white/15 dark:hover:bg-white/5"
               >
                 <Upload size={11} aria-hidden />
                 {add.isPending ? 'Uploading…' : 'Attach'}
@@ -177,7 +177,7 @@ function AttachmentRow({
           href={signedUrl}
           target="_blank"
           rel="noopener noreferrer"
-          className="inline-flex h-7 items-center gap-1 rounded-md border border-black/15 bg-surface px-2 text-[11px] font-medium text-waymarks-ink hover:bg-black/5 dark:border-white/15 dark:hover:bg-white/5"
+          className="inline-flex h-7 items-center gap-1 rounded-md border border-black/15 bg-surface px-2 text-[11px] font-medium text-text hover:bg-black/5 dark:border-white/15 dark:hover:bg-white/5"
         >
           <Download size={11} aria-hidden />
           View

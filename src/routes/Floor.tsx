@@ -30,11 +30,14 @@ import { useAuth } from '@/lib/auth-context';
 import { useCan } from '@/lib/permissions-context';
 import { planKindForPath, signedUrlForPlan } from '@/lib/upload';
 import { pinNumberMatchesQuery } from '@/lib/pin-types';
+import { photoToJpegDataUrl } from '@/lib/photo-to-data-url';
 import { listFirstPhotoPaths, signedAssetPhotoUrl } from '@/lib/queries/asset-photos';
 import {
   buildCatalogueDoc,
-  catalogueFilename,
+  catalogueDownloadName,
+  pickCatalogueSaveTarget,
   prepareCatalogueEntries,
+  writeCatalogue,
   type CatalogueEntry,
 } from '@/lib/floor-catalogue';
 import {
@@ -69,6 +72,9 @@ export function Floor() {
   const { data: activeSession } = useActiveAuditSession(id, user?.id);
   const startAudit = useStartAudit(id, user?.id);
   const [inAudit, setInAudit] = useState(false);
+  // Pin to pre-select when entering Audit Mode (set by the AssetDrawer
+  // "Log a flag" CTA; null for a normal audit start).
+  const [auditInitialAssetId, setAuditInitialAssetId] = useState<string | null>(null);
 
   const [uploadOpen, setUploadOpen] = useState(false);
   const [signedUrl, setSignedUrl] = useState<string | null>(null);
@@ -233,7 +239,11 @@ export function Floor() {
     }
   }
 
-  async function startOrResumeAudit() {
+  async function startOrResumeAudit(targetAssetId?: string) {
+    // When launched from the drawer's "Log a flag" CTA, pre-select the pin
+    // in Audit Mode and close the drawer so it doesn't sit over the shell.
+    setAuditInitialAssetId(targetAssetId ?? null);
+    if (targetAssetId) setSelectedAssetId(null);
     if (activeSession) {
       setInAudit(true);
       return;
@@ -247,11 +257,21 @@ export function Floor() {
     }
   }
 
-  // Build + download a PDF catalogue of every asset on this floor. Photo
-  // failures degrade gracefully to a "No photo" box rather than aborting.
+  // Build + save a PDF catalogue of every asset on this floor. Photo failures
+  // degrade gracefully to a "No photo" box rather than aborting.
   async function handleExportCatalogue() {
     if (!floor || !building) return;
     setCatalogueError(null);
+
+    // Open the OS "Save As" dialog up front, while the click's user activation
+    // is still live -- the photo loading below can outlast the activation
+    // window. On browsers without the File System Access API this resolves to
+    // a plain download instead.
+    const generatedOn = new Date();
+    const fileName = catalogueDownloadName(building.name, floor.label, generatedOn);
+    const target = await pickCatalogueSaveTarget(fileName);
+    if (target.kind === 'cancelled') return;
+
     setCatalogueState('building');
     try {
       const drafts = prepareCatalogueEntries(assets);
@@ -277,10 +297,10 @@ export function Floor() {
         buildingName: building.name,
         floorLabel: floor.label,
         addressLine,
-        generatedOn: new Date(),
+        generatedOn,
         entries,
       });
-      doc.save(catalogueFilename(building.name, floor.label));
+      await writeCatalogue(doc, target, fileName);
       setCatalogueState('idle');
     } catch (e) {
       setCatalogueError(e instanceof Error ? e.message : 'Could not build the catalogue.');
@@ -442,7 +462,7 @@ export function Floor() {
                 type="button"
                 onClick={() => void handleExportCatalogue()}
                 disabled={catalogueState === 'building'}
-                className="inline-flex h-7 items-center gap-1 rounded-md border border-black/15 bg-surface px-2.5 text-[11px] font-medium text-waymarks-ink hover:bg-black/5 disabled:opacity-60 dark:border-white/15 dark:hover:bg-white/5"
+                className="inline-flex h-7 items-center gap-1 rounded-md border border-black/15 bg-surface px-2.5 text-[11px] font-medium text-text hover:bg-black/5 disabled:opacity-60 dark:border-white/15 dark:hover:bg-white/5"
               >
                 <FileDown size={11} aria-hidden />
                 {catalogueState === 'building' ? 'Building…' : 'Catalogue'}
@@ -454,7 +474,7 @@ export function Floor() {
               <button
                 type="button"
                 onClick={() => setVideoRecorderOpen(true)}
-                className="inline-flex h-7 items-center gap-1 rounded-md border border-black/15 bg-surface px-2.5 text-[11px] font-medium text-waymarks-ink hover:bg-black/5 dark:border-white/15 dark:hover:bg-white/5"
+                className="inline-flex h-7 items-center gap-1 rounded-md border border-black/15 bg-surface px-2.5 text-[11px] font-medium text-text hover:bg-black/5 dark:border-white/15 dark:hover:bg-white/5"
               >
                 <Video size={11} aria-hidden />
                 Record
@@ -470,7 +490,7 @@ export function Floor() {
                   'inline-flex h-7 items-center gap-1 rounded-md px-2.5 text-[11px] font-medium ' +
                   (placing
                     ? 'bg-waymarks-gold text-waymarks-ink hover:bg-waymarks-gold-deep'
-                    : 'border border-black/15 bg-surface text-waymarks-ink hover:bg-black/5 dark:border-white/15 dark:hover:bg-white/5')
+                    : 'border border-black/15 bg-surface text-text hover:bg-black/5 dark:border-white/15 dark:hover:bg-white/5')
                 }
               >
                 <Plus size={11} aria-hidden />
@@ -484,7 +504,7 @@ export function Floor() {
                 type="button"
                 onClick={() => void takeOffline()}
                 disabled={cacheState === 'caching'}
-                className="inline-flex h-7 items-center gap-1 rounded-md border border-black/15 bg-surface px-2.5 text-[11px] font-medium text-waymarks-ink hover:bg-black/5 disabled:opacity-60 dark:border-white/15 dark:hover:bg-white/5"
+                className="inline-flex h-7 items-center gap-1 rounded-md border border-black/15 bg-surface px-2.5 text-[11px] font-medium text-text hover:bg-black/5 disabled:opacity-60 dark:border-white/15 dark:hover:bg-white/5"
               >
                 {cacheState === 'cached' ? <Check size={11} aria-hidden /> : <Download size={11} aria-hidden />}
                 {cacheState === 'cached' ? 'Cached' : 'Offline'}
@@ -496,7 +516,7 @@ export function Floor() {
               <button
                 type="button"
                 onClick={() => setUploadOpen(true)}
-                className="inline-flex h-7 items-center gap-1 rounded-md border border-black/15 bg-surface px-2.5 text-[11px] font-medium text-waymarks-ink hover:bg-black/5 dark:border-white/15 dark:hover:bg-white/5"
+                className="inline-flex h-7 items-center gap-1 rounded-md border border-black/15 bg-surface px-2.5 text-[11px] font-medium text-text hover:bg-black/5 dark:border-white/15 dark:hover:bg-white/5"
               >
                 <RefreshCw size={11} aria-hidden />
                 Replace
@@ -675,6 +695,7 @@ export function Floor() {
         }}
         onStartReposition={startReposition}
         onStartDelete={(id) => setDeleteAssetId(id)}
+        onLogFlag={(assetId) => void startOrResumeAudit(assetId)}
       />
 
       <StepUpDialog
@@ -700,6 +721,7 @@ export function Floor() {
           assets={assets}
           planUrl={signedUrl}
           planKind={planKind}
+          initialAssetId={auditInitialAssetId}
           onClose={() => setInAudit(false)}
         />
       )}
@@ -755,65 +777,6 @@ export function Floor() {
 // =============================================================================
 // Filter helpers (M22 #6)
 // =============================================================================
-
-/**
- * Fetch an asset photo (via its signed URL) and re-encode it to a compact
- * JPEG data URL for embedding in the catalogue PDF. Re-encoding through a
- * canvas keeps the PDF small and guarantees a jsPDF-friendly format. Returns
- * null on any failure so the catalogue falls back to a "No photo" box.
- */
-async function photoToJpegDataUrl(signedUrl: string, maxPx = 700): Promise<string | null> {
-  try {
-    const res = await fetch(signedUrl);
-    if (!res.ok) return null;
-    const blob = await res.blob();
-    const objUrl = URL.createObjectURL(blob);
-    return await new Promise<string | null>((resolve) => {
-      const img = new Image();
-      img.onload = () => {
-        URL.revokeObjectURL(objUrl);
-        let w = img.naturalWidth;
-        let h = img.naturalHeight;
-        if (!w || !h) {
-          resolve(null);
-          return;
-        }
-        if (w > maxPx || h > maxPx) {
-          if (w >= h) {
-            h = Math.round((h * maxPx) / w);
-            w = maxPx;
-          } else {
-            w = Math.round((w * maxPx) / h);
-            h = maxPx;
-          }
-        }
-        const canvas = document.createElement('canvas');
-        canvas.width = w;
-        canvas.height = h;
-        const ctx = canvas.getContext('2d');
-        if (!ctx) {
-          resolve(null);
-          return;
-        }
-        ctx.fillStyle = '#ffffff';
-        ctx.fillRect(0, 0, w, h);
-        ctx.drawImage(img, 0, 0, w, h);
-        try {
-          resolve(canvas.toDataURL('image/jpeg', 0.82));
-        } catch {
-          resolve(null);
-        }
-      };
-      img.onerror = () => {
-        URL.revokeObjectURL(objUrl);
-        resolve(null);
-      };
-      img.src = objUrl;
-    });
-  } catch {
-    return null;
-  }
-}
 
 /**
  * Case-insensitive substring match against the user-visible text fields

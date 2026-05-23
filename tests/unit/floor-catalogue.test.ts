@@ -2,6 +2,7 @@ import { describe, it, expect } from 'vitest';
 import {
   prepareCatalogueEntries,
   catalogueFilename,
+  catalogueDownloadName,
   buildCatalogueDoc,
   type CatalogueEntry,
 } from '@/lib/floor-catalogue';
@@ -65,6 +66,19 @@ describe('catalogueFilename', () => {
   });
   it('falls back when names have no usable characters', () => {
     expect(catalogueFilename('   ', '!!!')).toBe('building-floor-catalogue.pdf');
+  });
+});
+
+describe('catalogueDownloadName', () => {
+  it('builds a readable, dated filename for the Save dialog', () => {
+    expect(
+      catalogueDownloadName('Crescent School', 'Level 300', new Date(2026, 4, 22))
+    ).toBe('Markur-Catalogue-Crescent-School-Level-300-2026-05-22.pdf');
+  });
+  it('falls back when names have no usable characters', () => {
+    expect(catalogueDownloadName('   ', '!!!', new Date(2026, 4, 22))).toBe(
+      'Markur-Catalogue-Building-Floor-2026-05-22.pdf'
+    );
   });
 });
 

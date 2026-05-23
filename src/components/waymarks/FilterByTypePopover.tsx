@@ -81,14 +81,14 @@ export function FilterByTypePopover({ selectedTypes, onChange }: FilterByTypePop
             <button
               type="button"
               onClick={() => onChange(new Set(all))}
-              className="inline-flex h-8 items-center rounded-md border border-black/10 px-3 text-xs font-medium text-waymarks-ink hover:bg-black/5"
+              className="inline-flex h-8 items-center rounded-md border border-black/10 px-3 text-xs font-medium text-text hover:bg-black/5"
             >
               All
             </button>
             <button
               type="button"
               onClick={() => onChange(new Set())}
-              className="inline-flex h-8 items-center rounded-md border border-black/10 px-3 text-xs font-medium text-waymarks-ink hover:bg-black/5"
+              className="inline-flex h-8 items-center rounded-md border border-black/10 px-3 text-xs font-medium text-text hover:bg-black/5"
             >
               None
             </button>

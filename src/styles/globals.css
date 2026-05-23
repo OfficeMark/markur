@@ -9,7 +9,7 @@
     --waymarks-gold: 237 126 44;
     --waymarks-gold-deep: 192 101 31;
     --waymarks-gold-soft: 251 240 228;
-    --waymarks-cream: 245 241 232;
+    --waymarks-cream: 194 188 174;
 
     /* Semantic */
     --color-success: 31 110 74;
@@ -79,4 +79,26 @@
     transition-duration: 0.01ms !important;
     animation-duration: 0.01ms !important;
   }
+}
+
+
+.dark {
+  /* Brand */
+  --waymarks-ink: 17 21 28;          /* deeper than light-mode ink, becomes page bg */
+  --waymarks-cream: 38 43 50;        /* dark-mode cream (already used elsewhere) */
+
+  /* Semantic — text */
+  --color-text: 240 237 230;         /* near-cream, primary readable text */
+  --color-text-muted: 180 175 165;   /* muted body */
+  --color-text-faint: 130 125 115;   /* eyebrow labels, captions */
+
+  /* Surfaces — cards, sheets, modals, popovers */
+  --color-surface: 31 38 48;         /* one step lighter than page bg */
+  --color-surface-soft: 24 30 38;    /* nested surfaces */
+
+  /* Status backgrounds — dimmed for dark mode */
+  --color-success-bg: 28 50 40;
+  --color-warning-bg: 60 48 25;
+  --color-danger-bg: 60 30 30;
+  --color-info-bg: 25 45 70;
 }

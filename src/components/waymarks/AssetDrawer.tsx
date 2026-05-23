@@ -21,6 +21,7 @@ import {
   Eye,
   ShoppingCart,
   Download,
+  ExternalLink,
 } from 'lucide-react';
 import { Chip } from '@/components/ui/Chip';
 import { MetricCard } from '@/components/ui/MetricCard';
@@ -66,6 +67,12 @@ export type AssetDrawerProps = {
    * StepUpDialog confirmation flow.
    */
   onStartDelete?: (assetId: string) => void;
+  /**
+   * "Log a flag in Audit Mode" — closes the drawer and switches into Audit
+   * Mode with this pin pre-selected, so the auditor can flag it via the
+   * capture form. Only wired when the user can run an audit on this floor.
+   */
+  onLogFlag?: (assetId: string) => void;
 };
 
 const STATUS_OPTIONS: Array<{ value: AssetStatus; label: string; icon: typeof Check }> = [
@@ -85,6 +92,7 @@ export function AssetDrawer({
   onOpenChange,
   onStartReposition,
   onStartDelete,
+  onLogFlag,
 }: AssetDrawerProps) {
   const open = !!assetId;
   const { data: asset, isLoading } = useAsset(assetId ?? undefined);
@@ -92,6 +100,7 @@ export function AssetDrawer({
   const canEdit = useCan('edit', { type: 'building', id: buildingId });
   const canReposition = useCan('reposition', { type: 'building', id: buildingId });
   const canDelete = useCan('delete', { type: 'building', id: buildingId });
+  const canAudit = useCan('audit', { type: 'floor', id: floorId });
   const { data: building } = useBuilding(buildingId);
   const { data: floor } = useFloor(floorId);
   const update = useUpdateAsset(floorId);
@@ -110,7 +119,7 @@ export function AssetDrawer({
         <Dialog.Overlay className="fixed inset-0 z-50 bg-black/30 data-[state=open]:animate-in data-[state=open]:fade-in-0" />
         <Dialog.Content
           aria-describedby={undefined}
-          className="fixed inset-x-0 bottom-0 z-50 flex h-[88vh] flex-col rounded-t-2xl border-t border-black/10 bg-surface text-waymarks-ink shadow-sheet outline-none dark:border-white/10 sm:inset-x-auto sm:right-0 sm:top-0 sm:h-full sm:w-[min(96vw,440px)] sm:rounded-t-none sm:border-l sm:border-t-0"
+          className="fixed inset-x-0 bottom-0 z-50 flex h-[88vh] flex-col rounded-t-2xl border-t border-black/10 bg-surface text-text shadow-sheet outline-none dark:border-white/10 sm:inset-x-auto sm:right-0 sm:top-0 sm:h-full sm:w-[min(96vw,440px)] sm:rounded-t-none sm:border-l sm:border-t-0"
         >
           <header className="flex items-start justify-between gap-3 border-b border-black/10 p-4 dark:border-white/10">
             <Dialog.Title asChild>
@@ -160,6 +169,12 @@ export function AssetDrawer({
               />
             ) : (
               <>
+                {asset.status === 'flagged' && (
+                  <div className="flex items-center gap-2 rounded-md border border-danger/40 bg-danger-bg px-3 py-2 text-sm font-semibold text-danger">
+                    <AlertTriangle size={15} aria-hidden className="shrink-0" />
+                    <span>This asset is flagged</span>
+                  </div>
+                )}
                 <PhotoGallery
                   assetId={asset.id}
                   assetName={asset.name ?? 'Asset'}
@@ -177,13 +192,6 @@ export function AssetDrawer({
                         })
                       }
                     />
-                    <QuickActions
-                      asset={asset}
-                      busy={update.isPending}
-                      onChangeStatus={(status) =>
-                        update.mutate({ id: asset.id, patch: { status } })
-                      }
-                    />
                     <AdminActions
                       canReposition={canReposition && !!onStartReposition}
                       canDelete={canDelete && !!onStartDelete}
@@ -192,6 +200,11 @@ export function AssetDrawer({
                     />
                   </>
                 )}
+                <QuickActions
+                  asset={asset}
+                  canAudit={canAudit}
+                  onLogFlag={onLogFlag ? () => onLogFlag(asset.id) : undefined}
+                />
                 <VisualizeRow
                   buildingName={building?.name ?? 'Building'}
                   floorLabel={floor?.label ?? ''}
@@ -284,47 +297,59 @@ function LockBar({
   );
 }
 
+/**
+ * Read-only status indicators (M33). Status changes happen in Audit Mode --
+ * these chips report the current state, they don't set it. The "Log a flag"
+ * link routes the user into Audit Mode on this pin, where the flag capture
+ * form lives.
+ */
 function QuickActions({
   asset,
-  busy,
-  onChangeStatus,
+  canAudit,
+  onLogFlag,
 }: {
   asset: Asset;
-  busy: boolean;
-  onChangeStatus: (status: AssetStatus) => void;
+  canAudit: boolean;
+  onLogFlag?: () => void;
 }) {
   const current = asset.status as AssetStatus;
   return (
     <div>
       <p className="mb-1.5 text-[11px] font-medium uppercase tracking-[0.18em] text-text-faint">
-        Quick actions
+        Status
       </p>
       <div className="flex flex-wrap gap-1.5">
         {STATUS_OPTIONS.map((opt) => {
           const Icon = opt.icon;
           const active = current === opt.value;
           return (
-            <button
+            <span
               key={opt.value}
-              type="button"
-              disabled={busy || active}
-              onClick={() => onChangeStatus(opt.value)}
-              aria-pressed={active}
+              aria-current={active ? 'true' : undefined}
               className={cn(
-                'inline-flex h-8 items-center gap-1.5 rounded-full border px-3 text-xs font-medium transition-colors',
-                'disabled:cursor-not-allowed',
+                'inline-flex h-8 select-none items-center gap-1.5 rounded-full border px-3 text-xs font-medium',
                 active
                   ? variantClasses(opt.value, 'active')
-                  : variantClasses(opt.value, 'idle')
+                  : 'border-black/15 bg-surface text-text-muted opacity-60 dark:border-white/15'
               )}
             >
               <Icon size={12} aria-hidden />
               <span>{opt.label}</span>
               {active && <span className="ml-0.5 text-[10px] uppercase tracking-wide">· current</span>}
-            </button>
+            </span>
           );
         })}
       </div>
+      {canAudit && onLogFlag && (
+        <button
+          type="button"
+          onClick={onLogFlag}
+          className="mt-2 inline-flex items-center gap-1.5 text-xs font-medium text-waymarks-gold hover:underline"
+        >
+          <Flag size={12} aria-hidden />
+          Log a flag in Audit Mode
+        </button>
+      )}
     </div>
   );
 }
@@ -412,7 +437,7 @@ function AdminActions({
           <button
             type="button"
             onClick={onReposition}
-            className="inline-flex h-8 items-center gap-1.5 rounded-md border border-black/10 bg-surface px-3 text-xs font-medium text-waymarks-ink hover:bg-black/5 dark:border-white/10 dark:hover:bg-white/5"
+            className="inline-flex h-8 items-center gap-1.5 rounded-md border border-black/10 bg-surface px-3 text-xs font-medium text-text hover:bg-black/5 dark:border-white/10 dark:hover:bg-white/5"
           >
             <Move size={12} aria-hidden />
             <span>Reposition pin</span>
@@ -565,7 +590,7 @@ function EditPanel({
         <input
           value={name}
           onChange={(e) => setName(e.target.value)}
-          className="h-10 w-full rounded-md border border-black/10 bg-surface px-3 text-sm text-waymarks-ink outline-none focus:border-waymarks-gold focus:ring-2 focus:ring-waymarks-gold dark:border-white/10"
+          className="h-10 w-full rounded-md border border-black/10 bg-surface px-3 text-sm text-text outline-none focus:border-waymarks-gold focus:ring-2 focus:ring-waymarks-gold dark:border-white/10"
         />
       </FieldLabel>
 
@@ -573,7 +598,7 @@ function EditPanel({
         <select
           value={type}
           onChange={(e) => setType(e.target.value)}
-          className="h-10 w-full rounded-md border border-black/10 bg-surface px-3 text-sm text-waymarks-ink outline-none focus:border-waymarks-gold focus:ring-2 focus:ring-waymarks-gold dark:border-white/10"
+          className="h-10 w-full rounded-md border border-black/10 bg-surface px-3 text-sm text-text outline-none focus:border-waymarks-gold focus:ring-2 focus:ring-waymarks-gold dark:border-white/10"
         >
           <optgroup label="Signage">
             {signageTypes.map((t) => (
@@ -604,7 +629,7 @@ function EditPanel({
           value={notes}
           onChange={(e) => setNotes(e.target.value)}
           placeholder='e.g. "East elevator lobby, mounted at 5′"'
-          className="w-full rounded-md border border-black/10 bg-surface p-3 text-sm text-waymarks-ink outline-none focus:border-waymarks-gold focus:ring-2 focus:ring-waymarks-gold dark:border-white/10"
+          className="w-full rounded-md border border-black/10 bg-surface p-3 text-sm text-text outline-none focus:border-waymarks-gold focus:ring-2 focus:ring-waymarks-gold dark:border-white/10"
         />
       </FieldLabel>
 
@@ -613,7 +638,7 @@ function EditPanel({
           value={manufacturer}
           onChange={(e) => setManufacturer(e.target.value)}
           placeholder="e.g. Officemark"
-          className="h-10 w-full rounded-md border border-black/10 bg-surface px-3 text-sm text-waymarks-ink outline-none focus:border-waymarks-gold focus:ring-2 focus:ring-waymarks-gold dark:border-white/10"
+          className="h-10 w-full rounded-md border border-black/10 bg-surface px-3 text-sm text-text outline-none focus:border-waymarks-gold focus:ring-2 focus:ring-waymarks-gold dark:border-white/10"
         />
       </FieldLabel>
 
@@ -623,7 +648,7 @@ function EditPanel({
             type="date"
             value={installed ?? ''}
             onChange={(e) => setInstalled(e.target.value)}
-            className="h-10 w-full rounded-md border border-black/10 bg-surface px-3 text-sm text-waymarks-ink outline-none focus:border-waymarks-gold focus:ring-2 focus:ring-waymarks-gold dark:border-white/10"
+            className="h-10 w-full rounded-md border border-black/10 bg-surface px-3 text-sm text-text outline-none focus:border-waymarks-gold focus:ring-2 focus:ring-waymarks-gold dark:border-white/10"
           />
         </FieldLabel>
 
@@ -635,7 +660,7 @@ function EditPanel({
             value={cycle}
             onChange={(e) => setCycle(e.target.value)}
             placeholder="default 90"
-            className="h-10 w-full rounded-md border border-black/10 bg-surface px-3 text-sm text-waymarks-ink outline-none focus:border-waymarks-gold focus:ring-2 focus:ring-waymarks-gold dark:border-white/10"
+            className="h-10 w-full rounded-md border border-black/10 bg-surface px-3 text-sm text-text outline-none focus:border-waymarks-gold focus:ring-2 focus:ring-waymarks-gold dark:border-white/10"
           />
         </FieldLabel>
       </div>
@@ -965,35 +990,55 @@ function DetailsSection({ asset }: { asset: Asset }) {
  * NewAssetDialog. Click "Add vendor info" or the edit pencil to open
  * the inline form.
  */
+/**
+ * Normalize a user-typed vendor URL into a usable href. We deliberately don't
+ * validate hard (per the brief) — just prepend https:// when no scheme is
+ * present so the link actually resolves.
+ */
+function vendorUrlHref(raw: string): string {
+  const url = raw.trim();
+  return /^https?:\/\//i.test(url) ? url : `https://${url}`;
+}
+
 function VendorPanel({ asset }: { asset: Asset }) {
   const update = useUpdateAsset(asset.floor_id);
   const vendor = (asset.vendor_contact ?? null) as
-    | { name?: string; email?: string; phone?: string; company?: string }
+    | { name?: string; email?: string; phone?: string; company?: string; url?: string }
     | null;
-  const hasVendor = !!(vendor && (vendor.name || vendor.email || vendor.phone || vendor.company));
+  const hasVendor = !!(
+    vendor &&
+    (vendor.name || vendor.email || vendor.phone || vendor.company || vendor.url)
+  );
 
   const [editing, setEditing] = useState(false);
   const [draftName, setDraftName] = useState(vendor?.name ?? '');
   const [draftEmail, setDraftEmail] = useState(vendor?.email ?? '');
   const [draftPhone, setDraftPhone] = useState(vendor?.phone ?? '');
   const [draftCompany, setDraftCompany] = useState(vendor?.company ?? '');
+  const [draftUrl, setDraftUrl] = useState(vendor?.url ?? '');
 
   function startEdit() {
     setDraftName(vendor?.name ?? '');
     setDraftEmail(vendor?.email ?? '');
     setDraftPhone(vendor?.phone ?? '');
     setDraftCompany(vendor?.company ?? '');
+    setDraftUrl(vendor?.url ?? '');
     setEditing(true);
   }
 
   async function save() {
     const next =
-      draftName.trim() || draftEmail.trim() || draftPhone.trim() || draftCompany.trim()
+      draftName.trim() ||
+      draftEmail.trim() ||
+      draftPhone.trim() ||
+      draftCompany.trim() ||
+      draftUrl.trim()
         ? {
             name: draftName.trim() || undefined,
             email: draftEmail.trim() || undefined,
             phone: draftPhone.trim() || undefined,
             company: draftCompany.trim() || undefined,
+            url: draftUrl.trim() || undefined,
           }
         : null;
     await update.mutateAsync({ id: asset.id, patch: { vendor_contact: next } });
@@ -1032,6 +1077,14 @@ function VendorPanel({ asset }: { asset: Asset }) {
           onChange={(e) => setDraftPhone(e.target.value)}
           placeholder="Phone"
           maxLength={60}
+          className="h-9 w-full rounded-md border border-black/10 bg-surface px-3 text-sm outline-none focus:border-waymarks-gold focus:ring-1 focus:ring-waymarks-gold"
+        />
+        <input
+          type="url"
+          value={draftUrl}
+          onChange={(e) => setDraftUrl(e.target.value)}
+          placeholder="Product / supplier URL (https://…)"
+          maxLength={300}
           className="h-9 w-full rounded-md border border-black/10 bg-surface px-3 text-sm outline-none focus:border-waymarks-gold focus:ring-1 focus:ring-waymarks-gold"
         />
         <div className="flex justify-end gap-2 pt-1">
@@ -1082,6 +1135,17 @@ function VendorPanel({ asset }: { asset: Asset }) {
         )}
         {vendor!.phone && (
           <a href={`tel:${vendor!.phone}`} className="block text-sm text-text-muted hover:text-text">{vendor!.phone}</a>
+        )}
+        {vendor!.url && (
+          <a
+            href={vendorUrlHref(vendor!.url)}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="mt-0.5 inline-flex items-center gap-1 text-sm text-waymarks-gold hover:underline"
+          >
+            Product / supplier
+            <ExternalLink size={11} aria-hidden />
+          </a>
         )}
       </div>
       <button

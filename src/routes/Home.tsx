@@ -96,7 +96,9 @@ function BuildingCard({ building }: { building: Building }) {
           )}
         </div>
         <div className="space-y-1.5 p-5">
-          <p className="font-semibold text-2xl text-text">{building.name}</p>
+          <p className="font-semibold text-2xl text-text dark:text-waymarks-gold">
+            {building.name}
+          </p>
           <p className="flex items-start gap-1.5 text-sm text-text-muted">
             <MapPin size={13} aria-hidden className="mt-0.5 shrink-0" />
             <span>

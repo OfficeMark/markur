@@ -11,7 +11,10 @@ import { Button } from '@/components/ui/Button';
 import { FloorPlanCanvas } from '@/components/waymarks/FloorPlanCanvas';
 import { PinOverlay } from '@/components/waymarks/PinOverlay';
 import { AuditCompleteSummary } from '@/components/waymarks/AuditCompleteSummary';
+import { AuditFlagDialog } from '@/components/waymarks/AuditFlagDialog';
 import { useAuditEvents, useCreateAuditEvent, useEndAudit, summarizeSession } from '@/hooks/useAudit';
+import { useUpdateAsset } from '@/hooks/useAssets';
+import { createFlag } from '@/lib/queries/flags';
 import type { AssetStatus } from '@/lib/asset-status';
 import type { Asset, AuditSession } from '@/types/database';
 // PlanKind isn't exported as a named type yet; use the inline literal
@@ -34,6 +37,8 @@ export type AuditModeShellProps = {
   assets: Asset[];
   planUrl: string;
   planKind: 'pdf' | 'image';
+  /** Pin to pre-select on open (drawer "Log a flag" CTA); null = none. */
+  initialAssetId?: string | null;
   onClose: () => void;
 };
 
@@ -44,14 +49,20 @@ export function AuditModeShell({
   assets,
   planUrl,
   planKind,
+  initialAssetId,
   onClose,
 }: AuditModeShellProps) {
   const { data: events = [] } = useAuditEvents(session.id);
   const createEvent = useCreateAuditEvent(session.floor_id);
   const endAudit = useEndAudit(session.floor_id, session.auditor_id);
-  const [currentId, setCurrentId] = useState<string | null>(null);
+  const [currentId, setCurrentId] = useState<string | null>(initialAssetId ?? null);
   const [showSummary, setShowSummary] = useState(false);
   const [endError, setEndError] = useState<string | null>(null);
+  // Flag capture (M33): tapping "Flag issue" opens a form before any write.
+  const [flagAsset, setFlagAsset] = useState<Asset | null>(null);
+  const [flagBusy, setFlagBusy] = useState(false);
+  const [flagError, setFlagError] = useState<string | null>(null);
+  const updateAsset = useUpdateAsset(session.floor_id);
 
   const { auditedAssetIds, lastByAsset } = useMemo(() => summarizeSession(events), [events]);
   const total = assets.length;
@@ -124,6 +135,14 @@ export function AuditModeShell({
   function handleOutcome(outcome: AuditOutcome) {
     if (!current) return;
     setEndError(null);
+    // "Flag issue" opens the capture form (required description + optional
+    // photos); the flag + audit event are written on save. Confirm OK and
+    // Skip stay one-tap.
+    if (outcome === 'flagged') {
+      setFlagError(null);
+      setFlagAsset(current);
+      return;
+    }
     void createEvent
       .mutateAsync({ session_id: session.id, asset_id: current.id, outcome })
       .then(() => {
@@ -132,6 +151,36 @@ export function AuditModeShell({
         // by the optimistic update before we read it.
         setTimeout(advanceToNext, 0);
       });
+  }
+
+  /**
+   * Save a flag raised from the capture form: write the flag row (with photo
+   * evidence), record the matching 'flagged' audit event, and persist the
+   * pin's status so it reads as flagged after the audit ends.
+   */
+  async function handleFlagSubmit(description: string, photos: File[]) {
+    if (!flagAsset) return;
+    setFlagBusy(true);
+    setFlagError(null);
+    try {
+      await createFlag({ assetId: flagAsset.id, description, photos });
+      await createEvent.mutateAsync({
+        session_id: session.id,
+        asset_id: flagAsset.id,
+        outcome: 'flagged',
+        notes: description,
+      });
+      await updateAsset.mutateAsync({
+        id: flagAsset.id,
+        patch: { status: 'flagged' },
+      });
+      setFlagAsset(null);
+      setTimeout(advanceToNext, 0);
+    } catch (e) {
+      setFlagError(e instanceof Error ? e.message : 'Could not save the flag.');
+    } finally {
+      setFlagBusy(false);
+    }
   }
 
   async function handleEndAudit() {
@@ -239,6 +288,20 @@ export function AuditModeShell({
         }}
         onConfirmEnd={confirmEnd}
         endingBusy={endAudit.isPending}
+      />
+
+      <AuditFlagDialog
+        open={!!flagAsset}
+        asset={flagAsset}
+        busy={flagBusy}
+        error={flagError}
+        onCancel={() => {
+          if (!flagBusy) {
+            setFlagAsset(null);
+            setFlagError(null);
+          }
+        }}
+        onSubmit={(description, photos) => void handleFlagSubmit(description, photos)}
       />
     </div>
   );

@@ -168,7 +168,7 @@ export function NewFloorDialog({
                 autoFocus
                 maxLength={40}
                 placeholder="e.g. B2, Ground, Floor 14"
-                className="mt-1 h-10 w-full rounded-md border border-black/10 bg-surface px-3 text-sm text-waymarks-ink outline-none focus:border-waymarks-gold focus:ring-2 focus:ring-waymarks-gold"
+                className="mt-1 h-10 w-full rounded-md border border-black/10 bg-surface px-3 text-sm text-text outline-none focus:border-waymarks-gold focus:ring-2 focus:ring-waymarks-gold"
               />
               {errors.label && (
                 <p className="mt-1 text-xs text-danger">{errors.label.message}</p>

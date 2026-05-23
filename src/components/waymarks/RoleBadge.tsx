@@ -11,7 +11,7 @@ export type RoleBadgeProps = {
 const ROLE_VISUALS: Record<Role, { label: string; className: string }> = {
   super_admin: {
     label: 'Super admin',
-    className: 'border-waymarks-gold bg-waymarks-gold-soft text-waymarks-ink dark:text-white',
+    className: 'border-waymarks-gold bg-waymarks-gold-soft text-waymarks-ink dark:bg-white/5 dark:text-white',
   },
   building_admin: {
     label: 'Manager',
