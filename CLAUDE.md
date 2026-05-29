@@ -1,8 +1,6 @@
 # Markur — Building Signage Passport (formerly Waymarks)
 
-> **Claude Code:** read `CLAUDE-CODE-CONTEXT.md` first (in this same folder) — it has the current state, push workflow, and known gotchas. This file is the original architectural spec; both are useful.
-
-> **All Claudes (Cowork, Claude Code, web, mobile):** read `../STATE.md` first for the live snapshot — shipped milestones, current HEAD, owner-managed files, pending prompts, gotchas. STATE.md is the single source of truth; this file is the original architectural spec.
+> **All Claudes (Cowork, Claude Code, web, mobile):** Session briefs live at `C:\Users\ranch\OneDrive\Documents\officemark\briefs\` — read the most recent brief for current task context. This file is the original architectural spec.
 
 > Live build (current): https://markur.netlify.app  (Netlify site renamed from `waymarks-rebuild` to `markur` on 2026-05-13)
 > Production domain target: https://markur.ca (already owned by Randy; DNS pointing to Netlify is M10 work)
