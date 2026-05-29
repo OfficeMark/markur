@@ -49,6 +49,20 @@ export async function createBuilding(input: NewBuildingInput): Promise<Building>
   return data as Building;
 }
 
+export async function updateBuildingSettings(
+  buildingId: string,
+  settings: Building['settings']
+): Promise<Building> {
+  const { data, error } = await supabase
+    .from('buildings')
+    .update({ settings })
+    .eq('id', buildingId)
+    .select('*')
+    .single();
+  if (error) throw error;
+  return data;
+}
+
 const BUILDING_PHOTO_BUCKET = 'building-photos';
 
 function buildingPhotoPath(buildingId: string, file: File): string {

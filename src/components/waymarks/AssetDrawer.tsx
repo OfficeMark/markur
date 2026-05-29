@@ -19,7 +19,6 @@ import {
   LockOpen,
   Move,
   Eye,
-  ShoppingCart,
   Download,
   ExternalLink,
 } from 'lucide-react';
@@ -49,6 +48,8 @@ import { AuditVideosPanel } from './AuditVideosPanel';
 import { AuditVideoRecorderDialog } from './AuditVideoRecorderDialog';
 import { useCan } from '@/lib/permissions-context';
 import { cn } from '@/lib/utils';
+import { ExternalLinkButton } from './ExternalLinkButton';
+import { getBuildingExternalLink } from '@/lib/building-settings';
 import type { Asset, AssetPhoto, AuditLogEntry } from '@/types/database';
 
 export type AssetDrawerProps = {
@@ -102,6 +103,7 @@ export function AssetDrawer({
   const canDelete = useCan('delete', { type: 'building', id: buildingId });
   const canAudit = useCan('audit', { type: 'floor', id: floorId });
   const { data: building } = useBuilding(buildingId);
+  const externalLink = getBuildingExternalLink(building);
   const { data: floor } = useFloor(floorId);
   const update = useUpdateAsset(floorId);
   const [editing, setEditing] = useState(false);
@@ -210,7 +212,12 @@ export function AssetDrawer({
                   floorLabel={floor?.label ?? ''}
                   pinValue={asset.room_number?.trim() || asset.name}
                 />
-                <OrderSignsRow />
+                <ExternalLinkButton
+                  url={externalLink?.url}
+                  label={externalLink?.label}
+                  iconSize={14}
+                  className="h-10 w-full justify-center rounded-md border border-waymarks-gold/40 bg-surface text-sm text-waymarks-gold hover:border-waymarks-gold hover:bg-waymarks-gold-soft dark:bg-white/5 dark:hover:bg-white/10"
+                />
                 <DetailsSection asset={asset} />
                 <StatusRow asset={asset} flagCount={asset.status === 'flagged' ? 1 : 0} />
                 <AssetAttachmentsPanel assetId={asset.id} canEdit={canEdit} />
@@ -398,25 +405,6 @@ function VisualizeRow({
   );
 }
 
-function OrderSignsRow() {
-  return (
-    <div className="flex items-center justify-between gap-3 rounded-md border border-waymarks-gold/30 bg-waymarks-gold-soft px-3 py-2 text-xs dark:bg-white/5">
-      <div className="min-w-0">
-        <p className="font-semibold text-waymarks-ink dark:text-white">Order signs</p>
-        <p className="text-text-muted">Order new or replacement signage from Officemark.</p>
-      </div>
-      <a
-        href="https://account.officemark.ca/authentication/login"
-        target="_blank"
-        rel="noopener noreferrer"
-        className="inline-flex h-8 shrink-0 items-center gap-1.5 rounded-md bg-waymarks-gold px-3 text-xs font-medium text-white hover:bg-waymarks-gold-deep"
-      >
-        <ShoppingCart size={12} aria-hidden />
-        Order Signs
-      </a>
-    </div>
-  );
-}
 
 function AdminActions({
   canReposition,
