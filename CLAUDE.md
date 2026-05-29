@@ -109,6 +109,7 @@ markur/
 - **Tailwind only** for styling. No inline `style=` props except for dynamic positions (pin x/y on the floor plan). Tokens live in `tailwind.config.ts`, not in component files.
 - **Server data goes through TanStack Query**, never raw `await supabase.from(...)` inside components. Wrap each table in `lib/queries/<table>.ts`.
 - **All mutations log to `audit_log`** via Postgres triggers — defined in migrations, not in app code.
+- **Flags live in the `flags` table** — *not* `service_flag_history`. That older name appears in some pre-rename briefs and is obsolete; all flag and notify-on-flag DB work targets `flags`.
 - **Offline-first reads**: every query checks Dexie first, returns immediately, then revalidates from Supabase in the background (stale-while-revalidate pattern).
 - **Permissions**: never check roles inline in component bodies. Use `<Can action="..." resource={...}>...</Can>` and `useCan(action, resource)`.
 - **Accessibility is a first-class concern**: keyboard navigable, semantic HTML, ARIA where Radix doesn't already handle it, WCAG 2.1 AA contrast minimum.
