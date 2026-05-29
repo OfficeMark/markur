@@ -7,6 +7,7 @@ import { usePermissions } from '@/lib/permissions-context';
 import { useBuildingPhotoUrl, useBuildings } from '@/hooks/useBuildings';
 import { useTenantRepRedirect } from '@/hooks/useTenantRepRedirect';
 import { ResumeAuditBanner } from '@/components/waymarks/ResumeAuditBanner';
+import { OrderSignsButton } from '@/components/waymarks/OrderSignsButton';
 import { WelcomeCard } from '@/components/waymarks/WelcomeCard';
 import type { Building } from '@/types/database';
 
@@ -76,7 +77,8 @@ export function Home() {
 function BuildingCard({ building }: { building: Building }) {
   const photoUrl = useBuildingPhotoUrl(building.photo_url);
   return (
-    <li>
+    <li className="relative">
+      <OrderSignsButton className="absolute right-3 top-3 z-10 h-8 rounded-md border border-waymarks-gold/50 bg-black/45 px-2.5 text-[11px] text-waymarks-gold backdrop-blur-sm hover:border-waymarks-gold hover:bg-black/65" />
       <Link
         to={`/buildings/${building.id}`}
         className="group block overflow-hidden rounded-xl border border-black/10 bg-surface shadow-sm transition-all hover:-translate-y-0.5 hover:border-waymarks-gold hover:shadow-md dark:border-white/10"

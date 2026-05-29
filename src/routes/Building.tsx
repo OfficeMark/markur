@@ -6,6 +6,7 @@ import { Tooltip } from '@/components/ui/Tooltip';
 import { AccessManagementCard } from '@/components/waymarks/AccessManagementCard';
 import { BuildingPhotoUpload } from '@/components/waymarks/BuildingPhotoUpload';
 import { NewFloorDialog } from '@/components/waymarks/NewFloorDialog';
+import { OrderSignsButton } from '@/components/waymarks/OrderSignsButton';
 import { ResumeAuditBanner } from '@/components/waymarks/ResumeAuditBanner';
 import { useBuilding } from '@/hooks/useBuildings';
 import { useFloors } from '@/hooks/useFloors';
@@ -108,6 +109,7 @@ export function Building() {
               <span>Trash</span>
             </Link>
           )}
+          <OrderSignsButton className="ml-auto h-9 rounded-md border border-waymarks-gold/40 bg-surface px-3 text-xs text-waymarks-gold hover:border-waymarks-gold hover:bg-waymarks-gold-soft dark:bg-white/5 dark:hover:bg-white/10" />
         </div>
 
         <section className="space-y-3">
