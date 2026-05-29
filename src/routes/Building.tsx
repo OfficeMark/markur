@@ -7,6 +7,9 @@ import { AccessManagementCard } from '@/components/waymarks/AccessManagementCard
 import { BuildingPhotoUpload } from '@/components/waymarks/BuildingPhotoUpload';
 import { NewFloorDialog } from '@/components/waymarks/NewFloorDialog';
 import { ResumeAuditBanner } from '@/components/waymarks/ResumeAuditBanner';
+import { BuildingExternalLinkCard } from '@/components/waymarks/BuildingExternalLinkCard';
+import { ExternalLinkButton } from '@/components/waymarks/ExternalLinkButton';
+import { getBuildingExternalLink } from '@/lib/building-settings';
 import { useBuilding } from '@/hooks/useBuildings';
 import { useFloors } from '@/hooks/useFloors';
 import { useCan, useIsSuperAdmin } from '@/lib/permissions-context';
@@ -42,6 +45,8 @@ export function Building() {
       </AppShell>
     );
   }
+
+  const externalLink = getBuildingExternalLink(building);
 
   return (
     <AppShell>
@@ -108,6 +113,11 @@ export function Building() {
               <span>Trash</span>
             </Link>
           )}
+          <ExternalLinkButton
+            url={externalLink?.url}
+            label={externalLink?.label}
+            className="ml-auto h-9 rounded-md border border-waymarks-gold/40 bg-surface px-3 text-xs text-waymarks-gold hover:border-waymarks-gold hover:bg-waymarks-gold-soft dark:bg-white/5 dark:hover:bg-white/10"
+          />
         </div>
 
         <section className="space-y-3">
@@ -156,6 +166,12 @@ export function Building() {
         {canManageAccess && (
           <section className="mt-10">
             <AccessManagementCard buildingId={building.id} />
+          </section>
+        )}
+
+        {canConfigure && (
+          <section className="mt-10">
+            <BuildingExternalLinkCard building={building} />
           </section>
         )}
       </div>

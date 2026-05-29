@@ -6,10 +6,12 @@ import {
   listBuildings,
   removeBuildingPhoto,
   signedBuildingPhotoUrl,
+  updateBuildingSettings,
   uploadBuildingPhoto,
   type NewBuildingInput,
 } from '@/lib/queries/buildings';
 import { accessKeys } from '@/hooks/useAccess';
+import type { Building } from '@/types/database';
 
 export const buildingKeys = {
   all: ['buildings'] as const,
@@ -69,6 +71,21 @@ export function useBuildingPhotoUrl(path: string | null | undefined): string | n
     };
   }, [path]);
   return url;
+}
+
+/** Persist the building's settings jsonb (e.g. the configurable external link). */
+export function useUpdateBuildingSettings(buildingId: string | undefined) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (settings: Building['settings']) => {
+      if (!buildingId) throw new Error('No building selected');
+      return updateBuildingSettings(buildingId, settings);
+    },
+    onSuccess: (b) => {
+      qc.invalidateQueries({ queryKey: buildingKeys.detail(b.id) });
+      qc.invalidateQueries({ queryKey: buildingKeys.list() });
+    },
+  });
 }
 
 export function useUploadBuildingPhoto(buildingId: string | undefined) {
