@@ -240,6 +240,7 @@ const MUTED: [number, number, number] = [110, 110, 110];
 const FAINT: [number, number, number] = [150, 145, 138];
 const HAIRLINE: [number, number, number] = [230, 227, 220];
 const FLAG_BG: [number, number, number] = [253, 247, 234];
+const FLAG_BG_RESOLVED: [number, number, number] = [248, 248, 246];
 const FLAG_BORDER: [number, number, number] = [214, 188, 122];
 
 const PHOTO_MAX_PX = 50; // mm, matches catalogue card photo width
@@ -565,7 +566,7 @@ function drawAssetEntry(
       const isOpen = flag.status !== 'resolved' && !flag.resolved_at;
       const bgY = fy - 1;
       const bgH = flagBoxHeight(doc, flag, PW, M);
-      doc.setFillColor(...(isOpen ? FLAG_BG : [248, 248, 246]));
+      doc.setFillColor(...(isOpen ? FLAG_BG : FLAG_BG_RESOLVED));
       doc.setDrawColor(...(isOpen ? FLAG_BORDER : HAIRLINE));
       doc.setLineWidth(0.3);
       doc.roundedRect(M, bgY, PW - 2 * M, bgH, 1.5, 1.5, 'FD');

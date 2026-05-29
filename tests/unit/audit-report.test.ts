@@ -23,7 +23,7 @@ function fakeBuilding(over: Partial<Building> = {}): Building {
     updated_at: '2026-01-01T00:00:00Z',
     deleted_at: null,
     owner_org_id: null,
-    ...(over as Building),
+    ...over,
   } as Building;
 }
 
