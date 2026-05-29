@@ -104,8 +104,8 @@
 /* Rule 1 — text contrast safety net (dark only).
    Hardcoded dark text utilities (text-waymarks-ink + the Tailwind gray families)
    bypass --color-text and go invisible on dark surfaces. Force them white.
-   Excluded: .bg-waymarks-gold-soft (a LIGHT tint that stays light in dark mode,
-   so its ink text must stay dark) and form controls (handled by rule 3 below). */
+   Excluded: any .bg-waymarks-gold* background (gold buttons keep ink text via
+   rule 2; the -soft tint is a light surface) and form controls (rule 3). */
 .dark
   :where(
     .text-waymarks-ink, .text-black,
@@ -114,17 +114,19 @@
     .text-neutral-600, .text-neutral-700, .text-neutral-800, .text-neutral-900,
     .text-zinc-600, .text-zinc-700, .text-zinc-800, .text-zinc-900,
     .text-stone-600, .text-stone-700, .text-stone-800, .text-stone-900
-  ):not([class*='bg-waymarks-gold-soft']):not(input):not(textarea):not(select) {
+  ):not([class*='bg-waymarks-gold']):not(input):not(textarea):not(select) {
   color: #ffffff;
 }
 
-/* Rule 2 — orange primary buttons get white text in dark mode.
-   Targets the filled orange backgrounds only (bg-waymarks-gold / -deep). The
-   light tint (-soft) and orange ACCENTS (text-waymarks-gold, border-waymarks-gold)
+/* Rule 2 — orange primary buttons use ink (#0F0E0C) text for maximum contrast
+   (~9:1 vs ~3:1 for white on orange). This is the ONE cross-mode rule (NOT under
+   .dark): the orange button colour is identical in light and dark, so its label
+   colour should match in both. Targets the filled orange backgrounds only
+   (bg-waymarks-gold / -deep); orange ACCENTS (text-/border-waymarks-gold, icons)
    are untouched, so accent borders and icons stay orange-on-context. */
-.dark .bg-waymarks-gold,
-.dark .bg-waymarks-gold-deep {
-  color: #ffffff;
+.bg-waymarks-gold,
+.bg-waymarks-gold-deep {
+  color: #0f0e0c;
 }
 
 /* Rule 3 — field outlines (dark only): white at rest, orange on focus.
