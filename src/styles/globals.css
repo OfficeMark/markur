@@ -36,17 +36,8 @@
     --pin-size-desktop: 21px;
   }
 
-  /* Minimal dark mode (M10g). Swap ONLY two tokens:
-     - --waymarks-cream (page bg) -> dark grey
-     - --color-text (default body text) -> near-white
-     Cards (--color-surface = white), gold accents, ink sidebar/header,
-     status colors all stay the same. The previous full-invert dark theme
-     kept breaking surfaces; this one only flips the two things that
-     materially affect "the page is dark". */
-  .dark {
-    --waymarks-cream: 38 43 50;
-    --color-text: 240 240 235;
-  }
+  /* Dark mode is defined in a single consolidated block below this @layer
+     (after @tailwind utilities) so it can override hardcoded text utilities. */
 
   html {
     @apply bg-waymarks-cream text-text antialiased;
@@ -82,23 +73,83 @@
 }
 
 
+/* ── Dark mode (consolidated, dark-only) ────────────────────────────────────
+   Single source of truth for dark mode. NOTHING here touches light mode — every
+   rule is scoped under `.dark`. Three rules:
+     1. text on dark surfaces -> white (#FFFFFF)
+     2. orange (bg-waymarks-gold) buttons -> white text
+     3. field outlines -> white at rest, orange on focus (error red preserved)
+   Replaces the earlier dead "minimal" .dark block. */
 .dark {
   /* Brand */
   --waymarks-ink: 17 21 28;          /* deeper than light-mode ink, becomes page bg */
-  --waymarks-cream: 38 43 50;        /* dark-mode cream (already used elsewhere) */
+  --waymarks-cream: 38 43 50;        /* dark-mode page surface */
 
-  /* Semantic — text */
-  --color-text: 240 237 230;         /* near-cream, primary readable text */
-  --color-text-muted: 180 175 165;   /* muted body */
-  --color-text-faint: 130 125 115;   /* eyebrow labels, captions */
+  /* Text — primary is pure white (rule 1); muted/faint are readable dimmed white. */
+  --color-text: 255 255 255;
+  --color-text-muted: 214 214 211;
+  --color-text-faint: 176 176 172;
 
   /* Surfaces — cards, sheets, modals, popovers */
   --color-surface: 31 38 48;         /* one step lighter than page bg */
-  --color-surface-soft: 24 30 38;    /* nested surfaces */
+  --color-surface-soft: 24 30 38;    /* nested surfaces + field fill */
 
   /* Status backgrounds — dimmed for dark mode */
   --color-success-bg: 28 50 40;
   --color-warning-bg: 60 48 25;
   --color-danger-bg: 60 30 30;
   --color-info-bg: 25 45 70;
+}
+
+/* Rule 1 — text contrast safety net (dark only).
+   Hardcoded dark text utilities (text-waymarks-ink + the Tailwind gray families)
+   bypass --color-text and go invisible on dark surfaces. Force them white.
+   Excluded: .bg-waymarks-gold-soft (a LIGHT tint that stays light in dark mode,
+   so its ink text must stay dark) and form controls (handled by rule 3 below). */
+.dark
+  :where(
+    .text-waymarks-ink, .text-black,
+    .text-gray-600, .text-gray-700, .text-gray-800, .text-gray-900,
+    .text-slate-600, .text-slate-700, .text-slate-800, .text-slate-900,
+    .text-neutral-600, .text-neutral-700, .text-neutral-800, .text-neutral-900,
+    .text-zinc-600, .text-zinc-700, .text-zinc-800, .text-zinc-900,
+    .text-stone-600, .text-stone-700, .text-stone-800, .text-stone-900
+  ):not([class*='bg-waymarks-gold-soft']):not(input):not(textarea):not(select) {
+  color: #ffffff;
+}
+
+/* Rule 2 — orange primary buttons get white text in dark mode.
+   Targets the filled orange backgrounds only (bg-waymarks-gold / -deep). The
+   light tint (-soft) and orange ACCENTS (text-waymarks-gold, border-waymarks-gold)
+   are untouched, so accent borders and icons stay orange-on-context. */
+.dark .bg-waymarks-gold,
+.dark .bg-waymarks-gold-deep {
+  color: #ffffff;
+}
+
+/* Rule 3 — field outlines (dark only): white at rest, orange on focus.
+   Native form controls get a dark fill + white text + a visible 1.5px white
+   border. !important is required to beat the per-field inline dark:border-white/15
+   and dark:bg-white/5 utilities (we are NOT rewriting the 216 inline occurrences).
+   Error fields (aria-invalid) keep their existing danger border. */
+.dark input:not([type='checkbox']):not([type='radio']):not([type='range']):not([type='color']):not([type='file']):not([type='submit']):not([type='button']):not([type='reset']):not([type='image']),
+.dark textarea,
+.dark select {
+  background-color: rgb(var(--color-surface-soft)) !important;
+  color: #ffffff !important;
+  border-width: 1.5px;
+}
+.dark input:not([type='checkbox']):not([type='radio']):not([type='range']):not([type='color']):not([type='file']):not([type='submit']):not([type='button']):not([type='reset']):not([type='image']):not([aria-invalid='true']),
+.dark textarea:not([aria-invalid='true']),
+.dark select:not([aria-invalid='true']) {
+  border-color: #ffffff !important;
+}
+.dark input:not([type='checkbox']):not([type='radio']):not([type='range']):not([type='color']):not([type='file']):not([type='submit']):not([type='button']):not([type='reset']):not([type='image']):focus,
+.dark textarea:focus,
+.dark select:focus {
+  border-color: rgb(var(--waymarks-gold)) !important;
+}
+.dark input::placeholder,
+.dark textarea::placeholder {
+  color: rgb(var(--color-text-faint));
 }
