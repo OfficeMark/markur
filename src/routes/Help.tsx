@@ -5,6 +5,7 @@ import {
   ClipboardCheck,
   ClipboardList,
   Download,
+  FileImage,
   Image as ImageIcon,
   MapPin,
   Plus,
@@ -28,6 +29,9 @@ type Section = {
   title: string;
   intro: string;
   steps: { label: string; detail: string }[];
+  // Defaults to numbered steps. false = a reference list (bullet markers), for
+  // sections whose items are alternatives rather than an ordered sequence.
+  numbered?: boolean;
 };
 
 const SECTIONS: Section[] = [
@@ -52,6 +56,36 @@ const SECTIONS: Section[] = [
         label: 'Upload a floor plan',
         detail:
           "Click any floor with 'No plan yet'. Use 'Upload floor plan' — PDF works best (we read its title and warn you if it doesn't match the floor name).",
+      },
+    ],
+  },
+  {
+    id: 'floorplans',
+    icon: FileImage,
+    title: 'Preparing your floorplans',
+    intro:
+      "Markur works best when floorplans are clean, high-contrast, and consistently scaled. Here's how to export from common sources.",
+    numbered: false,
+    steps: [
+      {
+        label: 'From PDF (architect drawings)',
+        detail:
+          'Export at 300 DPI minimum, page size matching the original sheet. Flatten layers before export. Avoid "compressed" or "web" PDF settings — they soften linework and pin placement loses precision.',
+      },
+      {
+        label: 'From DWG (AutoCAD)',
+        detail:
+          'Use Export to PDF with a monochrome plot style (monochrome.ctb). Turn off hatches, furniture, and electrical layers — keep walls, doors, room numbers, and room names. Export one floor per page.',
+      },
+      {
+        label: 'From JPG',
+        detail:
+          'Acceptable but not ideal. Scan or export at 300 DPI, save at maximum quality, and crop tight to the floor edge. Avoid photographs of printed plans — perspective distortion, lighting, and shadows make them hard to work with and will need cleanup before use.',
+      },
+      {
+        label: 'General rules',
+        detail:
+          "One floor per file. Filename should include the building name and floor — for example, BAS-Tower-Floor-12.pdf. Keep north up. Don't include title blocks or revision clouds inside the croppable area.",
       },
     ],
   },
@@ -254,9 +288,16 @@ export function Help() {
                 <ol className="mt-5 space-y-4">
                   {section.steps.map((step, i) => (
                     <li key={i} className="flex gap-3">
-                      <span className="inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-waymarks-ink font-mono text-[11px] font-bold text-white">
-                        {i + 1}
-                      </span>
+                      {section.numbered === false ? (
+                        <span
+                          className="mt-2 inline-flex h-1.5 w-1.5 shrink-0 rounded-full bg-waymarks-gold"
+                          aria-hidden
+                        />
+                      ) : (
+                        <span className="inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-waymarks-ink font-mono text-[11px] font-bold text-white">
+                          {i + 1}
+                        </span>
+                      )}
                       <div>
                         <p className="font-medium text-text">{step.label}</p>
                         <p className="mt-0.5 text-sm text-text-muted">{step.detail}</p>
