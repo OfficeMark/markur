@@ -71,6 +71,8 @@ export type CreateFlagInput = {
   description: string;
   /** Files to attach; uploaded before the flags row is inserted. */
   photos: File[];
+  /** M34 item 1: optional directory contact associated with the flag. */
+  contactId?: string | null;
 };
 
 /**
@@ -104,6 +106,7 @@ export async function createFlag(input: CreateFlagInput): Promise<Flag> {
       raised_by: raisedBy,
       description,
       photo_urls: paths,
+      contact_id: input.contactId ?? null,
     })
     .select('*')
     .single();

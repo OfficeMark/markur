@@ -4,6 +4,12 @@ import userEvent from '@testing-library/user-event';
 import { AuditFlagDialog } from '@/components/waymarks/AuditFlagDialog';
 import type { Asset } from '@/types/database';
 
+// The contact picker reads the org's contacts via TanStack Query; stub it so
+// the dialog renders without a QueryClient in the test tree.
+vi.mock('@/hooks/useContacts', () => ({
+  useContacts: () => ({ list: [], orgId: null, isLoading: false }),
+}));
+
 // The dialog only reads asset.name; a minimal cast keeps the fixture small.
 const fakeAsset = { id: 'a1', name: 'Lobby directory' } as Asset;
 
@@ -38,7 +44,7 @@ describe('AuditFlagDialog', () => {
     expect(saveBtn).toBeEnabled();
 
     await user.click(saveBtn);
-    expect(onSubmit).toHaveBeenCalledWith('Sign is cracked', []);
+    expect(onSubmit).toHaveBeenCalledWith('Sign is cracked', [], null);
   });
 
   it('treats a whitespace-only description as empty', async () => {

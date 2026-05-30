@@ -127,6 +127,7 @@ export type Database = {
         Row: {
           audit_cycle_days: number | null
           category: string
+          contact_id: string | null
           created_at: string
           created_by: string | null
           deleted_at: string | null
@@ -151,6 +152,7 @@ export type Database = {
         Insert: {
           audit_cycle_days?: number | null
           category: string
+          contact_id?: string | null
           created_at?: string
           created_by?: string | null
           deleted_at?: string | null
@@ -174,6 +176,7 @@ export type Database = {
         Update: {
           audit_cycle_days?: number | null
           category?: string
+          contact_id?: string | null
           created_at?: string
           created_by?: string | null
           deleted_at?: string | null
@@ -450,6 +453,7 @@ export type Database = {
       flags: {
         Row: {
           asset_id: string
+          contact_id: string | null
           created_at: string
           description: string
           id: string
@@ -462,6 +466,7 @@ export type Database = {
         }
         Insert: {
           asset_id: string
+          contact_id?: string | null
           created_at?: string
           description: string
           id?: string
@@ -474,6 +479,7 @@ export type Database = {
         }
         Update: {
           asset_id?: string
+          contact_id?: string | null
           created_at?: string
           description?: string
           id?: string
@@ -490,6 +496,114 @@ export type Database = {
             columns: ["asset_id"]
             isOneToOne: false
             referencedRelation: "assets"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      contacts: {
+        Row: {
+          created_at: string
+          deleted_at: string | null
+          email: string | null
+          id: string
+          kind: string
+          label: string
+          owner_org_id: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          deleted_at?: string | null
+          email?: string | null
+          id?: string
+          kind?: string
+          label: string
+          owner_org_id: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          deleted_at?: string | null
+          email?: string | null
+          id?: string
+          kind?: string
+          label?: string
+          owner_org_id?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      vendors: {
+        Row: {
+          created_at: string
+          deleted_at: string | null
+          email: string | null
+          id: string
+          name: string
+          owner_org_id: string
+          phone: string | null
+          updated_at: string
+          url: string | null
+        }
+        Insert: {
+          created_at?: string
+          deleted_at?: string | null
+          email?: string | null
+          id?: string
+          name: string
+          owner_org_id: string
+          phone?: string | null
+          updated_at?: string
+          url?: string | null
+        }
+        Update: {
+          created_at?: string
+          deleted_at?: string | null
+          email?: string | null
+          id?: string
+          name?: string
+          owner_org_id?: string
+          phone?: string | null
+          updated_at?: string
+          url?: string | null
+        }
+        Relationships: []
+      }
+      asset_vendors: {
+        Row: {
+          asset_id: string
+          created_at: string
+          id: string
+          owner_org_id: string
+          vendor_id: string
+        }
+        Insert: {
+          asset_id: string
+          created_at?: string
+          id?: string
+          owner_org_id: string
+          vendor_id: string
+        }
+        Update: {
+          asset_id?: string
+          created_at?: string
+          id?: string
+          owner_org_id?: string
+          vendor_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "asset_vendors_asset_id_fkey"
+            columns: ["asset_id"]
+            isOneToOne: false
+            referencedRelation: "assets"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "asset_vendors_vendor_id_fkey"
+            columns: ["vendor_id"]
+            isOneToOne: false
+            referencedRelation: "vendors"
             referencedColumns: ["id"]
           },
         ]
@@ -864,3 +978,6 @@ export type OrgAssetTypeOverrideRow = Tbl['org_asset_type_overrides']['Row'];
 export type OrgBrandingRow = Tbl['org_branding']['Row'];
 export type AssetAttachmentRow = Tbl['asset_attachments']['Row'];
 export type AuditVideoRow = Tbl['audit_videos']['Row'];
+export type Contact = Tbl['contacts']['Row'];
+export type Vendor = Tbl['vendors']['Row'];
+export type AssetVendor = Tbl['asset_vendors']['Row'];

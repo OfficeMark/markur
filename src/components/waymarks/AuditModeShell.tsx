@@ -158,12 +158,12 @@ export function AuditModeShell({
    * evidence), record the matching 'flagged' audit event, and persist the
    * pin's status so it reads as flagged after the audit ends.
    */
-  async function handleFlagSubmit(description: string, photos: File[]) {
+  async function handleFlagSubmit(description: string, photos: File[], contactId: string | null) {
     if (!flagAsset) return;
     setFlagBusy(true);
     setFlagError(null);
     try {
-      await createFlag({ assetId: flagAsset.id, description, photos });
+      await createFlag({ assetId: flagAsset.id, description, photos, contactId });
       await createEvent.mutateAsync({
         session_id: session.id,
         asset_id: flagAsset.id,
@@ -301,7 +301,9 @@ export function AuditModeShell({
             setFlagError(null);
           }
         }}
-        onSubmit={(description, photos) => void handleFlagSubmit(description, photos)}
+        onSubmit={(description, photos, contactId) =>
+          void handleFlagSubmit(description, photos, contactId)
+        }
       />
     </div>
   );

@@ -1,12 +1,13 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import * as Dialog from '@radix-ui/react-dialog';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
-import { Camera, FileImage, X, AlertCircle, Trash2, Check } from 'lucide-react';
+import { Camera, FileImage, X, AlertCircle, Trash2, Check, Layers } from 'lucide-react';
 import { Button } from '@/components/ui/Button';
 import { useCreateAsset } from '@/hooks/useAssets';
-import { type AssetCategory } from '@/lib/queries/assets';
+import { useFloors } from '@/hooks/useFloors';
+import { listAssetsByFloor, type AssetCategory } from '@/lib/queries/assets';
 import { addAssetPhoto, validateAssetPhotoFile } from '@/lib/queries/asset-photos';
 import { useAssetTypes, useCreateAssetType } from '@/hooks/useAssetTypes';
 import { useTheme } from '@/components/waymarks/theme-context';
@@ -36,6 +37,8 @@ export type NewAssetDialogProps = {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   floorId: string;
+  /** Building the placement floor belongs to — drives the multi-floor picker (item 4). */
+  buildingId: string;
   position: { x: number; y: number } | null;
   onCreated?: (asset: Asset) => void;
 };
@@ -44,12 +47,27 @@ export function NewAssetDialog({
   open,
   onOpenChange,
   floorId,
+  buildingId,
   position,
   onCreated,
 }: NewAssetDialogProps) {
   const create = useCreateAsset();
   const { signage: signageTypes, facility: facilityTypes, list: allTypes, orgId } = useAssetTypes();
   const createAssetType = useCreateAssetType();
+
+  // Item 4: a pin can be placed on several floors of the same building at once.
+  // Each selected floor gets an independent asset row at the same x/y.
+  const { data: buildingFloors } = useFloors(buildingId);
+  const floors = [...(buildingFloors ?? [])].sort((a, b) => a.sort_order - b.sort_order);
+  const [selectedFloorIds, setSelectedFloorIds] = useState<Set<string>>(() => new Set([floorId]));
+  const [result, setResult] = useState<{ created: number; skipped: string[] } | null>(null);
+
+  useEffect(() => {
+    if (open) {
+      setSelectedFloorIds(new Set([floorId]));
+      setResult(null);
+    }
+  }, [open, floorId]);
   const [customTypeMode, setCustomTypeMode] = useState(false);
   const [customTypeLabel, setCustomTypeLabel] = useState('');
   const [customTypeError, setCustomTypeError] = useState<string | null>(null);
@@ -147,6 +165,8 @@ export function NewAssetDialog({
       setSubmitError('No position set — click on the floor plan first.');
       return;
     }
+    // Always include the floor the pin was placed on, even if the picker isn't shown.
+    const targetIds = selectedFloorIds.size > 0 ? [...selectedFloorIds] : [floorId];
     setSubmitError(null);
     try {
       // M17b: type optional, fallback to seeded 'other' so the pin still
@@ -156,31 +176,70 @@ export function NewAssetDialog({
       const finalCategory: AssetCategory =
         (allTypes.find((t) => t.key === finalType)?.category as AssetCategory) ?? 'signage';
 
-      const asset = await create.mutateAsync({
-        floor_id: floorId,
-        type: finalType,
-        category: finalCategory,
-        name: values.name?.trim() || null,
-        location_notes: values.location_notes?.trim() || null,
-        room_number: values.room_number?.trim() || null,
-        notes: values.notes?.trim() || null,
-        x: position.x,
-        y: position.y,
-      });
+      // Item 4: create one independent asset per selected floor at the same
+      // x/y. Skip any floor that already has a pin at that exact spot.
+      const skipped: string[] = [];
+      let firstCreated: Asset | null = null;
+      let createdCount = 0;
+      const labelFor = (id: string) => floors.find((f) => f.id === id)?.label ?? 'floor';
 
-      // Upload photos sequentially so sort_order is deterministic.
-      for (const f of photos) {
-        await addAssetPhoto(asset.id, f);
+      for (const targetFloorId of targetIds) {
+        const existing = await listAssetsByFloor(targetFloorId);
+        const clash = existing.some(
+          (a) =>
+            Math.abs(Number(a.x) - position.x) < 1e-4 &&
+            Math.abs(Number(a.y) - position.y) < 1e-4
+        );
+        if (clash) {
+          skipped.push(labelFor(targetFloorId));
+          continue;
+        }
+
+        const asset = await create.mutateAsync({
+          floor_id: targetFloorId,
+          type: finalType,
+          category: finalCategory,
+          name: values.name?.trim() || null,
+          location_notes: values.location_notes?.trim() || null,
+          room_number: values.room_number?.trim() || null,
+          notes: values.notes?.trim() || null,
+          x: position.x,
+          y: position.y,
+        });
+        createdCount += 1;
+        if (targetFloorId === floorId || firstCreated === null) firstCreated = asset;
+
+        // Upload photos sequentially so sort_order is deterministic. Each
+        // floor's copy gets its own photos (the copies diverge independently).
+        for (const f of photos) {
+          await addAssetPhoto(asset.id, f);
+        }
       }
 
-      reset();
-      setPhotos([]);
-      setPhotoErrors([]);
-      onCreated?.(asset);
-      onOpenChange(false);
+      // Refresh the current floor view if anything landed there.
+      if (firstCreated) onCreated?.(firstCreated);
+
+      if (skipped.length === 0) {
+        // Clean run — behave like the single-floor path: reset and close.
+        reset();
+        setPhotos([]);
+        setPhotoErrors([]);
+        onOpenChange(false);
+      } else {
+        // Surface what was skipped; the user dismisses with "Done".
+        setResult({ created: createdCount, skipped });
+      }
     } catch (err) {
       setSubmitError(err instanceof Error ? err.message : 'Failed to create asset.');
     }
+  }
+
+  function finish() {
+    reset();
+    setPhotos([]);
+    setPhotoErrors([]);
+    setResult(null);
+    onOpenChange(false);
   }
 
   return (
@@ -192,6 +251,7 @@ export function NewAssetDialog({
           setPhotos([]);
           setPhotoErrors([]);
           setSubmitError(null);
+          setResult(null);
         }
         onOpenChange(o);
       }}
@@ -216,6 +276,26 @@ export function NewAssetDialog({
             </Dialog.Close>
           </div>
 
+          {result ? (
+            <div className="mt-5 space-y-4">
+              <div className="rounded-md border border-black/10 bg-bg p-4 text-sm dark:border-white/10">
+                <p className="font-medium text-text">
+                  {result.created > 0
+                    ? `Placed on ${result.created} floor${result.created === 1 ? '' : 's'}.`
+                    : 'Nothing placed.'}
+                </p>
+                <p className="mt-1 text-text-muted">
+                  Skipped {result.skipped.length} floor{result.skipped.length === 1 ? '' : 's'} that
+                  already had a pin at this spot: {result.skipped.join(', ')}.
+                </p>
+              </div>
+              <div className="flex justify-end">
+                <Button variant="gold" onClick={finish}>
+                  Done
+                </Button>
+              </div>
+            </div>
+          ) : (
           <form onSubmit={handleSubmit(onSubmit)} className="mt-5 space-y-4" noValidate>
             {submitError && (
               <div
@@ -332,6 +412,26 @@ export function NewAssetDialog({
               />
             </Field>
 
+            {/* Item 4: place the same pin on multiple floors at once. Each
+                selected floor gets an independent copy at this x/y. */}
+            {floors.length > 1 && (
+              <div className="space-y-1.5">
+                <span className="block text-xs font-medium uppercase tracking-[0.18em] text-text-faint">
+                  Floors
+                </span>
+                <FloorPicker
+                  floors={floors}
+                  currentFloorId={floorId}
+                  selected={selectedFloorIds}
+                  onChange={setSelectedFloorIds}
+                />
+                <p className="text-xs text-text-faint">
+                  Creates a separate, independent pin on each selected floor. Shift-click to
+                  select a range. A floor that already has a pin here is skipped.
+                </p>
+              </div>
+            )}
+
             {/* M32 Step 3: section divider — visually separates "where on
                 the floor" from "everything else about the pin." Thin uppercase
                 label with a 1px rule above, not a chunky heading. DB columns
@@ -406,6 +506,7 @@ export function NewAssetDialog({
               </Button>
             </div>
           </form>
+          )}
         </Dialog.Content>
       </Dialog.Portal>
     </Dialog.Root>
@@ -437,6 +538,91 @@ function Field({
       {hint && !error && <p className="text-xs text-text-faint">{hint}</p>}
       {error && <p className="text-xs text-danger">{error}</p>}
     </div>
+  );
+}
+
+/**
+ * Item 4: multi-floor selector. Checkbox list ordered by sort_order. The
+ * placement floor is always checked and locked (you can't deselect the floor
+ * you clicked on). Shift-click extends a contiguous range from the last
+ * toggled floor, so "floors 3–9" is one gesture.
+ */
+function FloorPicker({
+  floors,
+  currentFloorId,
+  selected,
+  onChange,
+}: {
+  floors: { id: string; label: string }[];
+  currentFloorId: string;
+  selected: Set<string>;
+  onChange: (next: Set<string>) => void;
+}) {
+  const [lastIndex, setLastIndex] = useState<number | null>(null);
+
+  function toggle(index: number, shiftKey: boolean) {
+    const clicked = floors[index];
+    if (!clicked) return;
+    const next = new Set(selected);
+    if (shiftKey && lastIndex !== null) {
+      const [lo, hi] = lastIndex < index ? [lastIndex, index] : [index, lastIndex];
+      const turnOn = !next.has(clicked.id);
+      for (let i = lo; i <= hi; i++) {
+        const f = floors[i];
+        if (!f) continue;
+        if (turnOn) next.add(f.id);
+        else if (f.id !== currentFloorId) next.delete(f.id);
+      }
+    } else {
+      const id = clicked.id;
+      if (next.has(id)) {
+        if (id !== currentFloorId) next.delete(id);
+      } else {
+        next.add(id);
+      }
+    }
+    // The placement floor is always included.
+    next.add(currentFloorId);
+    setLastIndex(index);
+    onChange(next);
+  }
+
+  return (
+    <ul className="max-h-44 space-y-0.5 overflow-y-auto rounded-md border border-black/10 p-1 dark:border-white/10">
+      {floors.map((f, i) => {
+        const isCurrent = f.id === currentFloorId;
+        const checked = selected.has(f.id);
+        return (
+          <li key={f.id}>
+            <label
+              className={cn(
+                'flex cursor-pointer items-center gap-2 rounded px-2 py-1.5 text-sm hover:bg-black/5 dark:hover:bg-white/5',
+                isCurrent && 'cursor-default'
+              )}
+            >
+              <input
+                type="checkbox"
+                checked={checked}
+                disabled={isCurrent}
+                onClick={(e) => {
+                  if (isCurrent) return;
+                  toggle(i, (e as React.MouseEvent).shiftKey);
+                }}
+                onChange={() => {
+                  /* handled in onClick to access shiftKey */
+                }}
+                className="h-4 w-4 shrink-0 accent-waymarks-gold"
+              />
+              <Layers size={12} aria-hidden className="shrink-0 text-text-faint" />
+              <span className="truncate">{f.label}</span>
+              {isCurrent && (
+                <span className="ml-auto text-[11px] text-text-faint">this floor</span>
+              )}
+            </label>
+          </li>
+        );
+      })}
+    </ul>
   );
 }
 

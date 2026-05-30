@@ -44,6 +44,9 @@ import {
 import { computeStatus, statusLabel, type AssetStatus } from '@/lib/asset-status';
 import { formatPinNumber } from '@/lib/pin-types';
 import { useAssetTypes } from '@/hooks/useAssetTypes';
+import { useContacts } from '@/hooks/useContacts';
+import { useAssetVendors, useAddAssetVendor, useRemoveAssetVendor } from '@/hooks/useAssetVendors';
+import { useVendors, useCreateVendor } from '@/hooks/useVendors';
 import { AssetAttachmentsPanel } from './AssetAttachmentsPanel';
 import { AuditVideosPanel } from './AuditVideosPanel';
 import { AuditVideoRecorderDialog } from './AuditVideoRecorderDialog';
@@ -211,7 +214,7 @@ export function AssetDrawer({
                   pinValue={asset.room_number?.trim() || asset.name}
                 />
                 <OrderSignsRow asset={asset} />
-                <DetailsSection asset={asset} />
+                <DetailsSection asset={asset} canEdit={canEdit} />
                 <StatusRow asset={asset} flagCount={asset.status === 'flagged' ? 1 : 0} />
                 <AssetAttachmentsPanel assetId={asset.id} canEdit={canEdit} />
                 <AuditVideosPanel
@@ -400,42 +403,54 @@ function VisualizeRow({
 
 const OFFICEMARK_ORDER_URL = 'https://account.officemark.ca/authentication/login';
 
+function orderMailto(toEmail: string, toName: string | undefined, asset: Asset): string {
+  const subject = `Sign order — ${asset.name}`;
+  const body =
+    `Hi${toName ? ` ${toName}` : ''},\n\n` +
+    `I'd like to order signage for "${asset.name}"` +
+    `${asset.room_number ? ` (room ${asset.room_number})` : ''}.\n\n` +
+    `Details:\n\n\nThanks.`;
+  return `mailto:${toEmail}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
+}
+
 /**
- * Item 3: "Order signs" is an action button. Its target follows the asset's
- * vendor info (the existing single `vendor_contact`):
- *   1. vendor email  → prefilled mailto draft to that contact
- *   2. else vendor url → opens the supplier site in a new tab
- *   3. else            → falls back to the Officemark order login
- * (The schema pass upgrades this to pick from the Contacts / Vendors directory.)
+ * Item 3: "Order signs" is an action button targeted at the directory the pin
+ * references. Priority:
+ *   1. a linked vendor with an email → prefilled mailto draft
+ *   2. a linked vendor with a URL    → opens the supplier site in a new tab
+ *   3. the pin's contact with an email → prefilled mailto draft
+ *   4. fallback                       → the Officemark order login
  */
 function OrderSignsRow({ asset }: { asset: Asset }) {
-  const vendor = (asset.vendor_contact ?? null) as
-    | { name?: string; email?: string; phone?: string; company?: string; url?: string }
-    | null;
-  const vendorName = vendor?.name || vendor?.company;
-  const email = vendor?.email?.trim();
-  const url = vendor?.url?.trim();
+  const { data: vendors } = useAssetVendors(asset.id);
+  const contacts = useContacts();
+
+  const vendorEmail = (vendors ?? []).find((v) => v.email?.trim());
+  const vendorUrl = (vendors ?? []).find((v) => v.url?.trim());
+  const contact = asset.contact_id
+    ? contacts.list.find((c) => c.id === asset.contact_id)
+    : undefined;
 
   let href: string;
   let helper: string;
-  if (email) {
-    const subject = `Sign order — ${asset.name}`;
-    const body =
-      `Hi${vendorName ? ` ${vendorName}` : ''},\n\n` +
-      `I'd like to order signage for "${asset.name}"` +
-      `${asset.room_number ? ` (room ${asset.room_number})` : ''}.\n\n` +
-      `Details:\n\n\nThanks.`;
-    href = `mailto:${email}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
-    helper = `Email ${vendorName || email} to order replacement signage.`;
-  } else if (url) {
-    href = vendorUrlHref(url);
-    helper = `Open ${vendorName ? `${vendorName}'s` : 'the'} supplier site to order signage.`;
+  let opensExternally: boolean;
+  if (vendorEmail) {
+    href = orderMailto(vendorEmail.email!.trim(), vendorEmail.name, asset);
+    helper = `Email ${vendorEmail.name} to order replacement signage.`;
+    opensExternally = false;
+  } else if (vendorUrl) {
+    href = vendorUrlHref(vendorUrl.url!.trim());
+    helper = `Open ${vendorUrl.name}'s site to order signage.`;
+    opensExternally = true;
+  } else if (contact?.email?.trim()) {
+    href = orderMailto(contact.email.trim(), contact.label, asset);
+    helper = `Email ${contact.label} to order replacement signage.`;
+    opensExternally = false;
   } else {
     href = OFFICEMARK_ORDER_URL;
     helper = 'Order new or replacement signage from Officemark.';
+    opensExternally = true;
   }
-
-  const opensExternally = !email; // mailto stays in the mail client; url/login open a tab
 
   return (
     <div className="flex items-center justify-between gap-3 rounded-md border border-waymarks-gold/30 bg-waymarks-gold-soft px-3 py-2 text-xs dark:bg-white/5">
@@ -523,9 +538,11 @@ function EditPanel({
     installed_at: string | null;
     audit_cycle_days: number | null;
     status: AssetStatus;
+    contact_id: string | null;
   }) => Promise<void>;
 }) {
   const { signage: signageTypes, facility: facilityTypes } = useAssetTypes();
+  const contacts = useContacts();
   const [name, setName] = useState(asset.name);
   const [type, setType] = useState(asset.type);
   const [notes, setNotes] = useState(asset.location_notes ?? '');
@@ -535,6 +552,7 @@ function EditPanel({
     asset.audit_cycle_days != null ? String(asset.audit_cycle_days) : ''
   );
   const [status, setStatus] = useState<AssetStatus>(asset.status as AssetStatus);
+  const [contactId, setContactId] = useState(asset.contact_id ?? '');
   const [error, setError] = useState<string | null>(null);
 
   const dirty = useMemo(() => {
@@ -545,9 +563,10 @@ function EditPanel({
       (manufacturer || '') !== (asset.manufacturer || '') ||
       (installed || '') !== (asset.installed_at || '') ||
       (cycle || '') !== (asset.audit_cycle_days != null ? String(asset.audit_cycle_days) : '') ||
-      status !== asset.status
+      status !== asset.status ||
+      (contactId || '') !== (asset.contact_id || '')
     );
-  }, [name, type, notes, manufacturer, installed, cycle, status, asset]);
+  }, [name, type, notes, manufacturer, installed, cycle, status, contactId, asset]);
 
   async function submit() {
     setError(null);
@@ -577,6 +596,7 @@ function EditPanel({
         installed_at: installed === '' ? null : installed,
         audit_cycle_days: cycleNum,
         status,
+        contact_id: contactId === '' ? null : contactId,
       });
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Save failed.');
@@ -677,6 +697,28 @@ function EditPanel({
           placeholder="e.g. Officemark"
           className="h-10 w-full rounded-md border border-black/10 bg-surface px-3 text-sm text-text outline-none focus:border-waymarks-gold focus:ring-2 focus:ring-waymarks-gold dark:border-white/10"
         />
+      </FieldLabel>
+
+      {/* M34 item 1: associate a directory contact (person/department) with
+          this pin. Managed in Admin → Contacts & Vendors. */}
+      <FieldLabel label="Contact">
+        <select
+          value={contactId}
+          onChange={(e) => setContactId(e.target.value)}
+          className="h-10 w-full rounded-md border border-black/10 bg-surface px-3 text-sm text-text outline-none focus:border-waymarks-gold focus:ring-2 focus:ring-waymarks-gold dark:border-white/10"
+        >
+          <option value="">— None —</option>
+          {/* Keep the current contact selectable even if it's been removed from the directory. */}
+          {asset.contact_id && !contacts.list.some((c) => c.id === asset.contact_id) && (
+            <option value={asset.contact_id}>(previously selected contact)</option>
+          )}
+          {contacts.list.map((c) => (
+            <option key={c.id} value={c.id}>
+              {c.label}
+              {c.email ? ` · ${c.email}` : ''}
+            </option>
+          ))}
+        </select>
       </FieldLabel>
 
       <div className="grid grid-cols-2 gap-2">
@@ -984,7 +1026,7 @@ function ThumbButton({
   );
 }
 
-function DetailsSection({ asset }: { asset: Asset }) {
+function DetailsSection({ asset, canEdit }: { asset: Asset; canEdit: boolean }) {
   const pinLabel = formatPinNumber(asset.pin_number);
   return (
     <div className="space-y-2.5">
@@ -1015,18 +1057,11 @@ function DetailsSection({ asset }: { asset: Asset }) {
           <p className="whitespace-pre-wrap text-sm text-text">{asset.notes}</p>
         </div>
       )}
-      <VendorPanel asset={asset} />
+      <VendorPanel asset={asset} canEdit={canEdit} />
     </div>
   );
 }
 
-/**
- * Vendor info — collapsed by default, expandable. Per Randy's directive
- * (M17b), vendor data is added during audit or from desk later, not
- * during placement. So this lives in the drawer rather than the
- * NewAssetDialog. Click "Add vendor info" or the edit pencil to open
- * the inline form.
- */
 /**
  * Normalize a user-typed vendor URL into a usable href. We deliberately don't
  * validate hard (per the brief) — just prepend https:// when no scheme is
@@ -1037,162 +1072,223 @@ function vendorUrlHref(raw: string): string {
   return /^https?:\/\//i.test(url) ? url : `https://${url}`;
 }
 
-function VendorPanel({ asset }: { asset: Asset }) {
-  const update = useUpdateAsset(asset.floor_id);
-  const vendor = (asset.vendor_contact ?? null) as
-    | { name?: string; email?: string; phone?: string; company?: string; url?: string }
-    | null;
-  const hasVendor = !!(
-    vendor &&
-    (vendor.name || vendor.email || vendor.phone || vendor.company || vendor.url)
-  );
+/**
+ * M34 item 2: an asset can reference multiple vendors, chosen from the org's
+ * Vendors directory (Admin → Contacts & Vendors). Admins can also inline-add a
+ * brand-new vendor, which creates the directory row and links it in one step.
+ * Supersedes the old single `vendor_contact` JSON blob (that column is kept in
+ * the DB but no longer read/written here; legacy data was migrated forward).
+ */
+function VendorPanel({ asset, canEdit }: { asset: Asset; canEdit: boolean }) {
+  const linked = useAssetVendors(asset.id);
+  const directory = useVendors();
+  const orgId = directory.orgId;
+  const addLink = useAddAssetVendor(asset.id);
+  const removeLink = useRemoveAssetVendor(asset.id);
+  const createVendor = useCreateVendor();
 
-  const [editing, setEditing] = useState(false);
-  const [draftName, setDraftName] = useState(vendor?.name ?? '');
-  const [draftEmail, setDraftEmail] = useState(vendor?.email ?? '');
-  const [draftPhone, setDraftPhone] = useState(vendor?.phone ?? '');
-  const [draftCompany, setDraftCompany] = useState(vendor?.company ?? '');
-  const [draftUrl, setDraftUrl] = useState(vendor?.url ?? '');
+  const [mode, setMode] = useState<'idle' | 'pick' | 'create'>('idle');
+  const [pickId, setPickId] = useState('');
+  const [error, setError] = useState<string | null>(null);
+  // inline-create fields
+  const [newName, setNewName] = useState('');
+  const [newEmail, setNewEmail] = useState('');
+  const [newUrl, setNewUrl] = useState('');
 
-  function startEdit() {
-    setDraftName(vendor?.name ?? '');
-    setDraftEmail(vendor?.email ?? '');
-    setDraftPhone(vendor?.phone ?? '');
-    setDraftCompany(vendor?.company ?? '');
-    setDraftUrl(vendor?.url ?? '');
-    setEditing(true);
+  const linkedVendors = linked.data ?? [];
+  const linkedIds = new Set(linkedVendors.map((v) => v.id));
+  const available = directory.list.filter((v) => !linkedIds.has(v.id));
+
+  function resetForms() {
+    setMode('idle');
+    setPickId('');
+    setNewName('');
+    setNewEmail('');
+    setNewUrl('');
+    setError(null);
   }
 
-  async function save() {
-    const next =
-      draftName.trim() ||
-      draftEmail.trim() ||
-      draftPhone.trim() ||
-      draftCompany.trim() ||
-      draftUrl.trim()
-        ? {
-            name: draftName.trim() || undefined,
-            email: draftEmail.trim() || undefined,
-            phone: draftPhone.trim() || undefined,
-            company: draftCompany.trim() || undefined,
-            url: draftUrl.trim() || undefined,
-          }
-        : null;
-    await update.mutateAsync({ id: asset.id, patch: { vendor_contact: next } });
-    setEditing(false);
+  async function addExisting() {
+    if (!pickId || !orgId) return;
+    setError(null);
+    try {
+      await addLink.mutateAsync({ vendorId: pickId, ownerOrgId: orgId });
+      resetForms();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Could not link the vendor.');
+    }
   }
 
-  if (editing) {
-    return (
-      <div className="space-y-2 rounded-md border border-waymarks-gold/40 bg-waymarks-gold-soft p-3">
-        <p className="text-[11px] font-medium uppercase tracking-[0.18em] text-waymarks-gold">Vendor info</p>
-        <input
-          value={draftName}
-          onChange={(e) => setDraftName(e.target.value)}
-          placeholder="Vendor name (e.g. Acme Sign Co.)"
-          maxLength={120}
-          className="h-9 w-full rounded-md border border-black/10 bg-surface px-3 text-sm outline-none focus:border-waymarks-gold focus:ring-1 focus:ring-waymarks-gold"
-        />
-        <input
-          value={draftCompany}
-          onChange={(e) => setDraftCompany(e.target.value)}
-          placeholder="Company (if different)"
-          maxLength={120}
-          className="h-9 w-full rounded-md border border-black/10 bg-surface px-3 text-sm outline-none focus:border-waymarks-gold focus:ring-1 focus:ring-waymarks-gold"
-        />
-        <input
-          type="email"
-          value={draftEmail}
-          onChange={(e) => setDraftEmail(e.target.value)}
-          placeholder="Email"
-          maxLength={120}
-          className="h-9 w-full rounded-md border border-black/10 bg-surface px-3 text-sm outline-none focus:border-waymarks-gold focus:ring-1 focus:ring-waymarks-gold"
-        />
-        <input
-          type="tel"
-          value={draftPhone}
-          onChange={(e) => setDraftPhone(e.target.value)}
-          placeholder="Phone"
-          maxLength={60}
-          className="h-9 w-full rounded-md border border-black/10 bg-surface px-3 text-sm outline-none focus:border-waymarks-gold focus:ring-1 focus:ring-waymarks-gold"
-        />
-        <input
-          type="url"
-          value={draftUrl}
-          onChange={(e) => setDraftUrl(e.target.value)}
-          placeholder="Product / supplier URL (https://…)"
-          maxLength={300}
-          className="h-9 w-full rounded-md border border-black/10 bg-surface px-3 text-sm outline-none focus:border-waymarks-gold focus:ring-1 focus:ring-waymarks-gold"
-        />
-        <div className="flex justify-end gap-2 pt-1">
-          <button
-            type="button"
-            onClick={() => setEditing(false)}
-            disabled={update.isPending}
-            className="inline-flex h-8 items-center rounded-md border border-black/15 bg-surface px-3 text-xs font-medium hover:bg-black/5"
-          >
-            Cancel
-          </button>
-          <button
-            type="button"
-            onClick={() => void save()}
-            disabled={update.isPending}
-            className="inline-flex h-8 items-center rounded-md bg-waymarks-gold px-3 text-xs font-medium text-waymarks-ink hover:bg-waymarks-gold-deep disabled:opacity-60"
-          >
-            {update.isPending ? 'Saving…' : 'Save'}
-          </button>
-        </div>
-      </div>
-    );
+  async function createAndLink() {
+    if (!orgId) return;
+    if (!newName.trim()) {
+      setError('A vendor name is required.');
+      return;
+    }
+    setError(null);
+    try {
+      const vendor = await createVendor.mutateAsync({
+        owner_org_id: orgId,
+        name: newName,
+        email: newEmail,
+        url: newUrl,
+      });
+      await addLink.mutateAsync({ vendorId: vendor.id, ownerOrgId: orgId });
+      resetForms();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Could not add the vendor.');
+    }
   }
 
-  if (!hasVendor) {
-    return (
-      <button
-        type="button"
-        onClick={startEdit}
-        className="inline-flex h-8 items-center gap-1.5 rounded-md border border-dashed border-black/15 bg-bg px-3 text-xs font-medium text-text-muted transition-colors hover:border-waymarks-gold hover:text-waymarks-gold dark:border-white/15"
-      >
-        <Plus size={12} aria-hidden />
-        Add vendor info
-      </button>
-    );
-  }
+  const busy = addLink.isPending || removeLink.isPending || createVendor.isPending;
 
   return (
-    <div className="flex items-start justify-between gap-3 rounded-md border border-black/10 bg-bg p-2.5 dark:border-white/10">
-      <div className="min-w-0 flex-1">
-        <p className="mb-1 font-medium uppercase tracking-[0.14em] text-[10px] text-text-faint">Vendor</p>
-        {vendor!.name && <p className="text-sm font-medium text-text">{vendor!.name}</p>}
-        {vendor!.company && vendor!.company !== vendor!.name && (
-          <p className="text-xs text-text-muted">{vendor!.company}</p>
-        )}
-        {vendor!.email && (
-          <a href={`mailto:${vendor!.email}`} className="block text-sm text-waymarks-gold hover:underline">{vendor!.email}</a>
-        )}
-        {vendor!.phone && (
-          <a href={`tel:${vendor!.phone}`} className="block text-sm text-text-muted hover:text-text">{vendor!.phone}</a>
-        )}
-        {vendor!.url && (
-          <a
-            href={vendorUrlHref(vendor!.url)}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="mt-0.5 inline-flex items-center gap-1 text-sm text-waymarks-gold hover:underline"
+    <div className="space-y-2 rounded-md border border-black/10 bg-bg p-2.5 dark:border-white/10">
+      <p className="font-medium uppercase tracking-[0.14em] text-[10px] text-text-faint">
+        Vendors
+      </p>
+
+      {linkedVendors.length === 0 && (
+        <p className="text-xs text-text-faint">No vendors linked.</p>
+      )}
+
+      {linkedVendors.map((v) => (
+        <div key={v.id} className="flex items-start justify-between gap-2">
+          <div className="min-w-0 flex-1">
+            <p className="text-sm font-medium text-text">{v.name}</p>
+            {v.email && (
+              <a href={`mailto:${v.email}`} className="block text-sm text-waymarks-gold hover:underline">
+                {v.email}
+              </a>
+            )}
+            {v.url && (
+              <a
+                href={vendorUrlHref(v.url)}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="mt-0.5 inline-flex items-center gap-1 text-sm text-waymarks-gold hover:underline"
+              >
+                Supplier link
+                <ExternalLink size={11} aria-hidden />
+              </a>
+            )}
+          </div>
+          {canEdit && (
+            <button
+              type="button"
+              onClick={() => void removeLink.mutateAsync(v.id)}
+              disabled={busy}
+              aria-label={`Unlink ${v.name}`}
+              className="shrink-0 rounded p-1 text-text-muted hover:bg-danger/10 hover:text-danger disabled:opacity-40"
+            >
+              <X size={12} aria-hidden />
+            </button>
+          )}
+        </div>
+      ))}
+
+      {canEdit && mode === 'idle' && (
+        <button
+          type="button"
+          onClick={() => setMode(available.length > 0 ? 'pick' : 'create')}
+          className="inline-flex h-8 items-center gap-1.5 rounded-md border border-dashed border-black/15 bg-bg px-3 text-xs font-medium text-text-muted transition-colors hover:border-waymarks-gold hover:text-waymarks-gold dark:border-white/15"
+        >
+          <Plus size={12} aria-hidden />
+          Add vendor
+        </button>
+      )}
+
+      {canEdit && mode === 'pick' && (
+        <div className="space-y-2 rounded-md border border-waymarks-gold/40 bg-waymarks-gold-soft p-2.5">
+          <select
+            value={pickId}
+            onChange={(e) => setPickId(e.target.value)}
+            className="h-9 w-full rounded-md border border-black/10 bg-surface px-3 text-sm outline-none focus:border-waymarks-gold focus:ring-1 focus:ring-waymarks-gold"
           >
-            Product / supplier
-            <ExternalLink size={11} aria-hidden />
-          </a>
-        )}
-      </div>
-      <button
-        type="button"
-        onClick={startEdit}
-        aria-label="Edit vendor info"
-        className="shrink-0 rounded p-1 text-text-muted hover:bg-black/5 hover:text-text"
-      >
-        <Pencil size={12} aria-hidden />
-      </button>
+            <option value="">Choose a vendor…</option>
+            {available.map((v) => (
+              <option key={v.id} value={v.id}>
+                {v.name}
+              </option>
+            ))}
+          </select>
+          {error && <p className="text-xs text-danger">{error}</p>}
+          <div className="flex items-center justify-between gap-2 pt-0.5">
+            <button
+              type="button"
+              onClick={() => setMode('create')}
+              className="text-xs font-medium text-waymarks-gold hover:underline"
+            >
+              + New vendor
+            </button>
+            <div className="flex gap-2">
+              <button
+                type="button"
+                onClick={resetForms}
+                disabled={busy}
+                className="inline-flex h-8 items-center rounded-md border border-black/15 bg-surface px-3 text-xs font-medium hover:bg-black/5"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={() => void addExisting()}
+                disabled={busy || !pickId}
+                className="inline-flex h-8 items-center rounded-md bg-waymarks-gold px-3 text-xs font-medium text-waymarks-ink hover:bg-waymarks-gold-deep disabled:opacity-60"
+              >
+                {busy ? 'Linking…' : 'Link vendor'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {canEdit && mode === 'create' && (
+        <div className="space-y-2 rounded-md border border-waymarks-gold/40 bg-waymarks-gold-soft p-2.5">
+          <input
+            value={newName}
+            onChange={(e) => setNewName(e.target.value)}
+            placeholder="Vendor name (e.g. Acme Sign Co.)"
+            maxLength={160}
+            className="h-9 w-full rounded-md border border-black/10 bg-surface px-3 text-sm outline-none focus:border-waymarks-gold focus:ring-1 focus:ring-waymarks-gold"
+          />
+          <input
+            type="email"
+            value={newEmail}
+            onChange={(e) => setNewEmail(e.target.value)}
+            placeholder="Email (optional)"
+            maxLength={200}
+            className="h-9 w-full rounded-md border border-black/10 bg-surface px-3 text-sm outline-none focus:border-waymarks-gold focus:ring-1 focus:ring-waymarks-gold"
+          />
+          <input
+            type="url"
+            value={newUrl}
+            onChange={(e) => setNewUrl(e.target.value)}
+            placeholder="Order link / supplier URL (optional)"
+            maxLength={500}
+            className="h-9 w-full rounded-md border border-black/10 bg-surface px-3 text-sm outline-none focus:border-waymarks-gold focus:ring-1 focus:ring-waymarks-gold"
+          />
+          {error && <p className="text-xs text-danger">{error}</p>}
+          <div className="flex justify-end gap-2 pt-0.5">
+            <button
+              type="button"
+              onClick={() => (available.length > 0 ? setMode('pick') : resetForms())}
+              disabled={busy}
+              className="inline-flex h-8 items-center rounded-md border border-black/15 bg-surface px-3 text-xs font-medium hover:bg-black/5"
+            >
+              Cancel
+            </button>
+            <button
+              type="button"
+              onClick={() => void createAndLink()}
+              disabled={busy || !newName.trim()}
+              className="inline-flex h-8 items-center rounded-md bg-waymarks-gold px-3 text-xs font-medium text-waymarks-ink hover:bg-waymarks-gold-deep disabled:opacity-60"
+            >
+              {busy ? 'Saving…' : 'Add & link'}
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

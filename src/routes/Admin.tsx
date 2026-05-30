@@ -1,5 +1,5 @@
 import { Navigate, NavLink, Outlet } from 'react-router-dom';
-import { ArrowLeft, Image, Lock, Mail, Tag, Users } from 'lucide-react';
+import { ArrowLeft, BookUser, Image, Lock, Mail, Tag, Users } from 'lucide-react';
 import { AppShell } from '@/components/waymarks/AppShell';
 import { usePermissions } from '@/lib/permissions-context';
 
@@ -26,6 +26,7 @@ type NavItem = {
 const NAV: NavItem[] = [
   { to: '/admin/asset-types', label: 'Asset types', icon: Tag },
   { to: '/admin/members', label: 'Members', icon: Users },
+  { to: '/admin/directory', label: 'Contacts & Vendors', icon: BookUser },
   { to: '/admin/invitations', label: 'Invitations', icon: Mail },
   { to: '/admin/security', label: 'Security', icon: Lock },
   { to: '/admin/branding', label: 'Branding', icon: Image },

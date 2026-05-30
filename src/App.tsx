@@ -41,6 +41,7 @@ const AdminMembersPane = lazy(() => import('@/components/waymarks/admin/AdminMem
 const AdminInvitationsPane = lazy(() => import('@/components/waymarks/admin/AdminInvitationsPane').then((m) => ({ default: m.AdminInvitationsPane })));
 const AdminSecurityPane = lazy(() => import('@/components/waymarks/admin/AdminSecurityPane').then((m) => ({ default: m.AdminSecurityPane })));
 const AdminBrandingPane = lazy(() => import('@/components/waymarks/admin/AdminBrandingPane').then((m) => ({ default: m.AdminBrandingPane })));
+const AdminDirectoryPane = lazy(() => import('@/components/waymarks/admin/AdminDirectoryPane').then((m) => ({ default: m.AdminDirectoryPane })));
 
 function RouteFallback() {
   return (
@@ -200,6 +201,7 @@ export default function App() {
                     <Route index element={<Navigate to="asset-types" replace />} />
                     <Route path="asset-types" element={<AdminAssetTypesPane />} />
                     <Route path="members" element={<AdminMembersPane />} />
+                    <Route path="directory" element={<AdminDirectoryPane />} />
                     <Route path="invitations" element={<AdminInvitationsPane />} />
                     <Route path="security" element={<AdminSecurityPane />} />
                     <Route path="branding" element={<AdminBrandingPane />} />

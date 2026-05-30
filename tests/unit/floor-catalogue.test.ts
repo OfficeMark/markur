@@ -32,6 +32,7 @@ function fakeAsset(over: Partial<Asset>): Asset {
     notes: null,
     vendor_contact: null,
     pin_number: null,
+    contact_id: null,
     ...over,
   };
 }

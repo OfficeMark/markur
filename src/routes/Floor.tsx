@@ -677,6 +677,7 @@ export function Floor() {
             if (!o) setPlacePos(null);
           }}
           floorId={floor.id}
+          buildingId={floor.building_id}
           position={placePos}
           // M28: after creation, return the user to the map view without
           // popping the edit drawer. They can tap the new pin to edit it.

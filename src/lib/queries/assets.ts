@@ -98,6 +98,7 @@ export type UpdateAssetInput = Partial<{
   status: 'good' | 'attention' | 'flagged';
   is_locked: boolean;
   tenant_scope_id: string | null;
+  contact_id: string | null;   // M34 item 1: associated directory contact
   x: number;
   y: number;
 }>;

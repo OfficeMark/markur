@@ -3,6 +3,7 @@ import * as Dialog from '@radix-ui/react-dialog';
 import { AlertCircle, Camera, FileImage, Flag, Trash2, X } from 'lucide-react';
 import { Button } from '@/components/ui/Button';
 import { FLAG_PHOTO_MAX, validateFlagPhotoFile } from '@/lib/queries/flags';
+import { useContacts } from '@/hooks/useContacts';
 import type { Asset } from '@/types/database';
 
 /**
@@ -19,7 +20,7 @@ export type AuditFlagDialogProps = {
   busy: boolean;
   error: string | null;
   onCancel: () => void;
-  onSubmit: (description: string, photos: File[]) => void;
+  onSubmit: (description: string, photos: File[], contactId: string | null) => void;
 };
 
 export function AuditFlagDialog({
@@ -30,9 +31,11 @@ export function AuditFlagDialog({
   onCancel,
   onSubmit,
 }: AuditFlagDialogProps) {
+  const contacts = useContacts();
   const [description, setDescription] = useState('');
   const [photos, setPhotos] = useState<File[]>([]);
   const [photoError, setPhotoError] = useState<string | null>(null);
+  const [contactId, setContactId] = useState('');
 
   // Reset whenever the dialog (re)opens — possibly on a different pin.
   useEffect(() => {
@@ -40,6 +43,7 @@ export function AuditFlagDialog({
       setDescription('');
       setPhotos([]);
       setPhotoError(null);
+      setContactId('');
     }
   }, [open, asset?.id]);
 
@@ -117,6 +121,26 @@ export function AuditFlagDialog({
               error={photoError}
             />
 
+            {/* M34 item 1: notify / route to a directory contact. */}
+            <label className="block">
+              <span className="block text-xs font-medium uppercase tracking-[0.18em] text-text-faint">
+                Contact (optional)
+              </span>
+              <select
+                value={contactId}
+                onChange={(e) => setContactId(e.target.value)}
+                className="mt-1 h-10 w-full rounded-md border border-black/10 bg-surface px-3 text-sm text-text outline-none focus:border-waymarks-gold focus:ring-2 focus:ring-waymarks-gold dark:border-white/10"
+              >
+                <option value="">— None —</option>
+                {contacts.list.map((c) => (
+                  <option key={c.id} value={c.id}>
+                    {c.label}
+                    {c.email ? ` · ${c.email}` : ''}
+                  </option>
+                ))}
+              </select>
+            </label>
+
             {error && (
               <p
                 role="alert"
@@ -136,7 +160,7 @@ export function AuditFlagDialog({
                 loading={busy}
                 disabled={!canSave}
                 iconLeft={<Flag size={12} aria-hidden />}
-                onClick={() => onSubmit(description.trim(), photos)}
+                onClick={() => onSubmit(description.trim(), photos, contactId || null)}
               >
                 Save flag
               </Button>
