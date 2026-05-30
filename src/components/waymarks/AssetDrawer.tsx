@@ -210,7 +210,7 @@ export function AssetDrawer({
                   floorLabel={floor?.label ?? ''}
                   pinValue={asset.room_number?.trim() || asset.name}
                 />
-                <OrderSignsRow />
+                <OrderSignsRow asset={asset} />
                 <DetailsSection asset={asset} />
                 <StatusRow asset={asset} flagCount={asset.status === 'flagged' ? 1 : 0} />
                 <AssetAttachmentsPanel assetId={asset.id} canEdit={canEdit} />
@@ -398,17 +398,54 @@ function VisualizeRow({
   );
 }
 
-function OrderSignsRow() {
+const OFFICEMARK_ORDER_URL = 'https://account.officemark.ca/authentication/login';
+
+/**
+ * Item 3: "Order signs" is an action button. Its target follows the asset's
+ * vendor info (the existing single `vendor_contact`):
+ *   1. vendor email  → prefilled mailto draft to that contact
+ *   2. else vendor url → opens the supplier site in a new tab
+ *   3. else            → falls back to the Officemark order login
+ * (The schema pass upgrades this to pick from the Contacts / Vendors directory.)
+ */
+function OrderSignsRow({ asset }: { asset: Asset }) {
+  const vendor = (asset.vendor_contact ?? null) as
+    | { name?: string; email?: string; phone?: string; company?: string; url?: string }
+    | null;
+  const vendorName = vendor?.name || vendor?.company;
+  const email = vendor?.email?.trim();
+  const url = vendor?.url?.trim();
+
+  let href: string;
+  let helper: string;
+  if (email) {
+    const subject = `Sign order — ${asset.name}`;
+    const body =
+      `Hi${vendorName ? ` ${vendorName}` : ''},\n\n` +
+      `I'd like to order signage for "${asset.name}"` +
+      `${asset.room_number ? ` (room ${asset.room_number})` : ''}.\n\n` +
+      `Details:\n\n\nThanks.`;
+    href = `mailto:${email}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
+    helper = `Email ${vendorName || email} to order replacement signage.`;
+  } else if (url) {
+    href = vendorUrlHref(url);
+    helper = `Open ${vendorName ? `${vendorName}'s` : 'the'} supplier site to order signage.`;
+  } else {
+    href = OFFICEMARK_ORDER_URL;
+    helper = 'Order new or replacement signage from Officemark.';
+  }
+
+  const opensExternally = !email; // mailto stays in the mail client; url/login open a tab
+
   return (
     <div className="flex items-center justify-between gap-3 rounded-md border border-waymarks-gold/30 bg-waymarks-gold-soft px-3 py-2 text-xs dark:bg-white/5">
       <div className="min-w-0">
         <p className="font-semibold text-waymarks-ink dark:text-white">Order signs</p>
-        <p className="text-text-muted">Order new or replacement signage from Officemark.</p>
+        <p className="text-text-muted">{helper}</p>
       </div>
       <a
-        href="https://account.officemark.ca/authentication/login"
-        target="_blank"
-        rel="noopener noreferrer"
+        href={href}
+        {...(opensExternally ? { target: '_blank', rel: 'noopener noreferrer' } : {})}
         className="inline-flex h-8 shrink-0 items-center gap-1.5 rounded-md bg-waymarks-gold px-3 text-xs font-medium text-white hover:bg-waymarks-gold-deep"
       >
         <ShoppingCart size={12} aria-hidden />

@@ -129,7 +129,7 @@ export function FloorPlanUploadDialog({
   const title = isReplace ? `Replace floor plan for ${floorLabel}` : `Upload floor plan`;
   const description = isReplace
     ? 'Replacing a plan keeps existing pins on the floor. Pin coordinates are normalized — they\'ll appear in the same relative position on the new plan.'
-    : `Pick a PDF, PNG, JPG, or SVG of ${floorLabel}'s plan. Up to ${formatBytes(PLAN_MAX_BYTES)}.`;
+    : `Pick a PDF, PNG, JPG, WebP, or SVG of ${floorLabel}'s plan. Up to ${formatBytes(PLAN_MAX_BYTES)}.`;
 
   return (
     <Dialog.Root open={open} onOpenChange={onOpenChange}>
@@ -229,7 +229,7 @@ function PickArea(props: {
     >
       <Upload size={28} aria-hidden className="text-waymarks-gold" />
       <span className="font-medium">Drop a plan here, or click to choose</span>
-      <span className="text-xs text-text-faint">PDF · PNG · JPG · SVG · up to {formatBytes(PLAN_MAX_BYTES)}</span>
+      <span className="text-xs text-text-faint">PDF · PNG · JPG · WEBP · SVG · up to {formatBytes(PLAN_MAX_BYTES)}</span>
     </button>
   );
 }
@@ -259,11 +259,15 @@ function FloorplanExportTips() {
           </ul>
         </section>
         <section className="space-y-1.5">
-          <p className="font-medium text-text">JPG/PNG (when you only have a photo or scan)</p>
+          <p className="font-medium text-text">JPG / PNG / WebP (when you only have a photo or scan)</p>
           <ul className="space-y-1 text-xs">
             <li>
               <span className="font-medium text-text">Best for:</span>{' '}
               photos or scans of printed plans
+            </li>
+            <li>
+              <span className="font-medium text-text">Formats:</span>{' '}
+              JPG, PNG, and WebP all work — use whichever your export tool produces
             </li>
             <li>
               <span className="font-medium text-text">Export settings:</span>{' '}

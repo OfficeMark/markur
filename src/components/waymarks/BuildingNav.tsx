@@ -124,25 +124,53 @@ function BuildingItem({
   const location = useLocation();
   const buildingActive = location.pathname === `/buildings/${building.id}`;
 
+  // Item 8: the top level shows only building names. Floors are revealed on
+  // drill-in via the chevron toggle. We auto-expand when the current route
+  // belongs to this building (its building page, or one of its floors) so
+  // deep links and refreshes still show the active floor in context.
+  const floorActive = !!floors?.some((f) => location.pathname === `/floors/${f.id}`);
+  const autoExpand = buildingActive || floorActive;
+  const [manualExpanded, setManualExpanded] = useState<boolean | null>(null);
+  const expanded = manualExpanded ?? autoExpand;
+  const hasFloors = !!(floors && floors.length > 0);
+
   return (
     <li>
-      <Link
-        to={`/buildings/${building.id}`}
-        onClick={onNavigate}
+      <div
         className={cn(
-          'group flex items-center gap-2 rounded-md px-2 py-1.5 text-sm transition-colors',
+          'group flex items-center gap-1 rounded-md pr-1 text-sm transition-colors',
           buildingActive
             ? 'bg-white/[0.06] text-white shadow-[inset_3px_0_0_0_var(--tw-shadow-color)] shadow-waymarks-gold'
             : 'text-white/85 hover:bg-white/5 hover:text-white'
         )}
       >
-        <Building2 size={14} aria-hidden className="text-white/50 group-hover:text-white/80" />
-        <span className="flex-1 truncate font-medium">{building.name}</span>
-        <ChevronRight size={12} aria-hidden className="text-white/40" />
-      </Link>
-      {floors && floors.length > 0 && (
+        <Link
+          to={`/buildings/${building.id}`}
+          onClick={onNavigate}
+          className="flex min-w-0 flex-1 items-center gap-2 rounded-md px-2 py-1.5"
+        >
+          <Building2 size={14} aria-hidden className="text-white/50 group-hover:text-white/80" />
+          <span className="flex-1 truncate font-medium">{building.name}</span>
+        </Link>
+        {hasFloors && (
+          <button
+            type="button"
+            onClick={() => setManualExpanded(!expanded)}
+            aria-label={expanded ? `Hide floors in ${building.name}` : `Show floors in ${building.name}`}
+            aria-expanded={expanded}
+            className="inline-flex h-6 w-6 shrink-0 items-center justify-center rounded text-white/40 hover:bg-white/10 hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-waymarks-gold"
+          >
+            <ChevronRight
+              size={12}
+              aria-hidden
+              className={cn('transition-transform', expanded && 'rotate-90')}
+            />
+          </button>
+        )}
+      </div>
+      {hasFloors && expanded && (
         <ul className="ml-4 mt-1 space-y-0.5">
-          {floors.map((f) => (
+          {floors!.map((f) => (
             <FloorItem key={f.id} floor={f} onNavigate={onNavigate} />
           ))}
         </ul>

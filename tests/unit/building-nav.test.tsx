@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from 'vitest';
-import { render, screen } from '@testing-library/react';
+import { render, screen, fireEvent } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { BuildingNav } from '@/components/waymarks/BuildingNav';
@@ -91,13 +91,21 @@ describe('BuildingNav', () => {
     expect(screen.getByText('161 Bay St.')).toBeInTheDocument();
   });
 
-  it('renders floors under their building', () => {
+  // Item 8: floors are hidden at the top level and revealed on drill-in.
+  it('hides floors until the building is expanded', () => {
     renderNav();
+    expect(screen.queryByText('Ground')).not.toBeInTheDocument();
+  });
+
+  it('renders floors under their building once expanded', () => {
+    renderNav();
+    fireEvent.click(screen.getByRole('button', { name: /show floors in 161 Bay St\./i }));
     expect(screen.getByText('Ground')).toBeInTheDocument();
   });
 
-  it('floor links point to /floors/:id', () => {
+  it('floor links point to /floors/:id once expanded', () => {
     renderNav();
+    fireEvent.click(screen.getByRole('button', { name: /show floors in 161 Bay St\./i }));
     const link = screen.getByRole('link', { name: /ground/i });
     expect(link).toHaveAttribute('href', '/floors/f-ground');
   });

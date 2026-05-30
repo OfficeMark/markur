@@ -9,6 +9,7 @@ import { useCreateAsset } from '@/hooks/useAssets';
 import { type AssetCategory } from '@/lib/queries/assets';
 import { addAssetPhoto, validateAssetPhotoFile } from '@/lib/queries/asset-photos';
 import { useAssetTypes, useCreateAssetType } from '@/hooks/useAssetTypes';
+import { useTheme } from '@/components/waymarks/theme-context';
 import { cn } from '@/lib/utils';
 import type { Asset } from '@/types/database';
 
@@ -447,9 +448,17 @@ function Field({
  * the form's space-y-4 cadence stays clean.
  */
 function SectionDivider({ label }: { label: string }) {
+  // Item 5: Add Asset section headings use Markur orange (waymarks-gold) in
+  // the light theme only. Dark-theme headings stay faint to preserve contrast.
+  const { theme } = useTheme();
   return (
     <div className="border-t border-black/10 pt-3 dark:border-white/10">
-      <p className="text-[11px] font-medium uppercase tracking-[0.18em] text-text-faint">
+      <p
+        className={cn(
+          'text-[11px] font-medium uppercase tracking-[0.18em]',
+          theme === 'light' ? 'text-waymarks-gold' : 'text-text-faint'
+        )}
+      >
         {label}
       </p>
     </div>
