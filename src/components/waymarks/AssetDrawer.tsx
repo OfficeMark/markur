@@ -163,6 +163,7 @@ export function AssetDrawer({
             ) : editing ? (
               <EditPanel
                 asset={asset}
+                buildingId={buildingId}
                 saving={update.isPending}
                 onCancel={() => setEditing(false)}
                 onSave={async (patch) => {
@@ -214,7 +215,7 @@ export function AssetDrawer({
                   pinValue={asset.room_number?.trim() || asset.name}
                 />
                 <OrderSignsRow asset={asset} />
-                <DetailsSection asset={asset} canEdit={canEdit} />
+                <DetailsSection asset={asset} canEdit={canEdit} buildingId={buildingId} />
                 <StatusRow asset={asset} flagCount={asset.status === 'flagged' ? 1 : 0} />
                 <AssetAttachmentsPanel assetId={asset.id} canEdit={canEdit} />
                 <AuditVideosPanel
@@ -523,11 +524,13 @@ function variantClasses(status: AssetStatus, state: 'active' | 'idle'): string {
 
 function EditPanel({
   asset,
+  buildingId,
   saving,
   onCancel,
   onSave,
 }: {
   asset: Asset;
+  buildingId: string;
   saving: boolean;
   onCancel: () => void;
   onSave: (patch: {
@@ -543,6 +546,10 @@ function EditPanel({
 }) {
   const { signage: signageTypes, facility: facilityTypes } = useAssetTypes();
   const contacts = useContacts();
+  // M34b: only this building's contacts plus org-wide shared ones.
+  const contactsInScope = contacts.list.filter(
+    (c) => c.building_id === null || c.building_id === buildingId
+  );
   const [name, setName] = useState(asset.name);
   const [type, setType] = useState(asset.type);
   const [notes, setNotes] = useState(asset.location_notes ?? '');
@@ -708,11 +715,11 @@ function EditPanel({
           className="h-10 w-full rounded-md border border-black/10 bg-surface px-3 text-sm text-text outline-none focus:border-waymarks-gold focus:ring-2 focus:ring-waymarks-gold dark:border-white/10"
         >
           <option value="">— None —</option>
-          {/* Keep the current contact selectable even if it's been removed from the directory. */}
-          {asset.contact_id && !contacts.list.some((c) => c.id === asset.contact_id) && (
+          {/* Keep the current contact selectable even if it's out of scope or removed. */}
+          {asset.contact_id && !contactsInScope.some((c) => c.id === asset.contact_id) && (
             <option value={asset.contact_id}>(previously selected contact)</option>
           )}
-          {contacts.list.map((c) => (
+          {contactsInScope.map((c) => (
             <option key={c.id} value={c.id}>
               {c.label}
               {c.email ? ` · ${c.email}` : ''}
@@ -1026,7 +1033,15 @@ function ThumbButton({
   );
 }
 
-function DetailsSection({ asset, canEdit }: { asset: Asset; canEdit: boolean }) {
+function DetailsSection({
+  asset,
+  canEdit,
+  buildingId,
+}: {
+  asset: Asset;
+  canEdit: boolean;
+  buildingId: string;
+}) {
   const pinLabel = formatPinNumber(asset.pin_number);
   return (
     <div className="space-y-2.5">
@@ -1057,7 +1072,7 @@ function DetailsSection({ asset, canEdit }: { asset: Asset; canEdit: boolean }) 
           <p className="whitespace-pre-wrap text-sm text-text">{asset.notes}</p>
         </div>
       )}
-      <VendorPanel asset={asset} canEdit={canEdit} />
+      <VendorPanel asset={asset} canEdit={canEdit} buildingId={buildingId} />
     </div>
   );
 }
@@ -1079,7 +1094,15 @@ function vendorUrlHref(raw: string): string {
  * Supersedes the old single `vendor_contact` JSON blob (that column is kept in
  * the DB but no longer read/written here; legacy data was migrated forward).
  */
-function VendorPanel({ asset, canEdit }: { asset: Asset; canEdit: boolean }) {
+function VendorPanel({
+  asset,
+  canEdit,
+  buildingId,
+}: {
+  asset: Asset;
+  canEdit: boolean;
+  buildingId: string;
+}) {
   const linked = useAssetVendors(asset.id);
   const directory = useVendors();
   const orgId = directory.orgId;
@@ -1097,7 +1120,10 @@ function VendorPanel({ asset, canEdit }: { asset: Asset; canEdit: boolean }) {
 
   const linkedVendors = linked.data ?? [];
   const linkedIds = new Set(linkedVendors.map((v) => v.id));
-  const available = directory.list.filter((v) => !linkedIds.has(v.id));
+  // M34b: pick from this building's vendors plus org-wide shared ones only.
+  const available = directory.list.filter(
+    (v) => !linkedIds.has(v.id) && (v.building_id === null || v.building_id === buildingId)
+  );
 
   function resetForms() {
     setMode('idle');
@@ -1132,6 +1158,9 @@ function VendorPanel({ asset, canEdit }: { asset: Asset; canEdit: boolean }) {
         name: newName,
         email: newEmail,
         url: newUrl,
+        // Inline-added from a pin → scope it to this building (a manager's own
+        // supplier). It can be promoted to org-wide later in Admin.
+        building_id: buildingId,
       });
       await addLink.mutateAsync({ vendorId: vendor.id, ownerOrgId: orgId });
       resetForms();

@@ -27,6 +27,8 @@ export type NewContactInput = {
   kind: ContactKind;
   label: string;
   email?: string | null;
+  /** M34b: NULL = org-wide/shared; a building id = scoped to that building. */
+  building_id?: string | null;
 };
 
 export async function createContact(input: NewContactInput): Promise<Contact> {
@@ -37,6 +39,7 @@ export async function createContact(input: NewContactInput): Promise<Contact> {
       kind: input.kind,
       label: input.label.trim(),
       email: input.email?.trim() || null,
+      building_id: input.building_id ?? null,
     })
     .select('*')
     .single();
@@ -48,6 +51,7 @@ export type UpdateContactPatch = Partial<{
   kind: ContactKind;
   label: string;
   email: string | null;
+  building_id: string | null;
 }>;
 
 export async function updateContact(id: string, patch: UpdateContactPatch): Promise<Contact> {

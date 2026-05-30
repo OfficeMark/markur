@@ -502,6 +502,7 @@ export type Database = {
       }
       contacts: {
         Row: {
+          building_id: string | null
           created_at: string
           deleted_at: string | null
           email: string | null
@@ -512,6 +513,7 @@ export type Database = {
           updated_at: string
         }
         Insert: {
+          building_id?: string | null
           created_at?: string
           deleted_at?: string | null
           email?: string | null
@@ -522,6 +524,7 @@ export type Database = {
           updated_at?: string
         }
         Update: {
+          building_id?: string | null
           created_at?: string
           deleted_at?: string | null
           email?: string | null
@@ -535,6 +538,7 @@ export type Database = {
       }
       vendors: {
         Row: {
+          building_id: string | null
           created_at: string
           deleted_at: string | null
           email: string | null
@@ -546,6 +550,7 @@ export type Database = {
           url: string | null
         }
         Insert: {
+          building_id?: string | null
           created_at?: string
           deleted_at?: string | null
           email?: string | null
@@ -557,6 +562,7 @@ export type Database = {
           url?: string | null
         }
         Update: {
+          building_id?: string | null
           created_at?: string
           deleted_at?: string | null
           email?: string | null

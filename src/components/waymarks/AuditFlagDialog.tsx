@@ -4,6 +4,7 @@ import { AlertCircle, Camera, FileImage, Flag, Trash2, X } from 'lucide-react';
 import { Button } from '@/components/ui/Button';
 import { FLAG_PHOTO_MAX, validateFlagPhotoFile } from '@/lib/queries/flags';
 import { useContacts } from '@/hooks/useContacts';
+import { useFloor } from '@/hooks/useFloors';
 import type { Asset } from '@/types/database';
 
 /**
@@ -32,6 +33,12 @@ export function AuditFlagDialog({
   onSubmit,
 }: AuditFlagDialogProps) {
   const contacts = useContacts();
+  // M34b: scope the contact list to this asset's building plus org-wide shared.
+  const { data: floor } = useFloor(asset?.floor_id);
+  const buildingId = floor?.building_id ?? null;
+  const contactsInScope = contacts.list.filter(
+    (c) => c.building_id === null || c.building_id === buildingId
+  );
   const [description, setDescription] = useState('');
   const [photos, setPhotos] = useState<File[]>([]);
   const [photoError, setPhotoError] = useState<string | null>(null);
@@ -132,7 +139,7 @@ export function AuditFlagDialog({
                 className="mt-1 h-10 w-full rounded-md border border-black/10 bg-surface px-3 text-sm text-text outline-none focus:border-waymarks-gold focus:ring-2 focus:ring-waymarks-gold dark:border-white/10"
               >
                 <option value="">— None —</option>
-                {contacts.list.map((c) => (
+                {contactsInScope.map((c) => (
                   <option key={c.id} value={c.id}>
                     {c.label}
                     {c.email ? ` · ${c.email}` : ''}

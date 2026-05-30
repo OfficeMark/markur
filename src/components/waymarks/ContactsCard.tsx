@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { AlertCircle, Building, Mail, Pencil, Plus, Trash2, User } from 'lucide-react';
 import { Button } from '@/components/ui/Button';
+import { useBuildings } from '@/hooks/useBuildings';
 import {
   useContacts,
   useCreateContact,
@@ -8,20 +9,25 @@ import {
   useUpdateContact,
 } from '@/hooks/useContacts';
 import type { ContactKind } from '@/lib/queries/contacts';
-import type { Contact } from '@/types/database';
+import type { Building as BuildingRow, Contact } from '@/types/database';
 
 /**
- * Contacts directory card (M34, Phase 0). Admin-managed people / departments
- * the org can attach to a pin or flag (item 1) and reuse for "Order signs".
- * Org-scoped; the /admin route already gates this to super_admin / building_admin.
+ * Contacts directory card (M34, Phase 0; M34b building scope). Admin-managed
+ * people / departments the org can attach to a pin or flag (item 1) and reuse
+ * for "Order signs". Each row is either org-wide (shared) or scoped to one
+ * building. Org-wide rows are visible everywhere; building rows only where the
+ * user can access that building. The /admin route gates this to admins.
  */
 
 const FIELD =
   'h-9 w-full rounded-md border border-black/10 bg-surface px-3 text-sm text-text outline-none focus:border-waymarks-gold focus:ring-2 focus:ring-waymarks-gold dark:border-white/10';
 
+const ORG_WIDE = 'org'; // scope-select sentinel for building_id = null
+
 export function ContactsCard() {
   const contacts = useContacts();
   const orgId = contacts.orgId;
+  const buildings = useBuildings().data ?? [];
   const create = useCreateContact();
   const update = useUpdateContact();
   const remove = useDeleteContact();
@@ -30,10 +36,20 @@ export function ContactsCard() {
   const [kind, setKind] = useState<ContactKind>('person');
   const [label, setLabel] = useState('');
   const [email, setEmail] = useState('');
+  const [scope, setScope] = useState<string>(ORG_WIDE);
   const [error, setError] = useState<string | null>(null);
 
   const [editingId, setEditingId] = useState<string | null>(null);
   const [pendingDelete, setPendingDelete] = useState<Contact | null>(null);
+
+  // List filter: 'all' | ORG_WIDE | <buildingId>. A building filter also shows
+  // org-wide rows (they apply everywhere).
+  const [filter, setFilter] = useState<string>('all');
+  const visible = contacts.list.filter((c) => {
+    if (filter === 'all') return true;
+    if (filter === ORG_WIDE) return c.building_id === null;
+    return c.building_id === filter || c.building_id === null;
+  });
 
   async function onAdd() {
     if (!orgId) return;
@@ -43,10 +59,17 @@ export function ContactsCard() {
     }
     setError(null);
     try {
-      await create.mutateAsync({ owner_org_id: orgId, kind, label, email });
+      await create.mutateAsync({
+        owner_org_id: orgId,
+        kind,
+        label,
+        email,
+        building_id: scope === ORG_WIDE ? null : scope,
+      });
       setLabel('');
       setEmail('');
       setKind('person');
+      setScope(ORG_WIDE);
       setAdding(false);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Could not save the contact.');
@@ -63,7 +86,7 @@ export function ContactsCard() {
           <h2 className="mt-1 font-semibold text-lg">People &amp; departments</h2>
           <p className="mt-1 text-xs text-text-muted">
             Reusable contacts you can attach to a pin or a flag, and reuse when
-            ordering signs.
+            ordering signs. Make them shared across the org or specific to one building.
           </p>
         </div>
         <Button
@@ -86,6 +109,28 @@ export function ContactsCard() {
           <AlertCircle size={12} aria-hidden className="mt-0.5 shrink-0" />
           <span>You don't have an organization yet. Create a building first.</span>
         </p>
+      )}
+
+      {buildings.length > 0 && (
+        <div className="mb-3 flex items-center gap-2">
+          <span className="text-[11px] font-medium uppercase tracking-[0.18em] text-text-faint">
+            Show
+          </span>
+          <select
+            value={filter}
+            onChange={(e) => setFilter(e.target.value)}
+            aria-label="Filter contacts by building"
+            className={FIELD + ' max-w-[16rem]'}
+          >
+            <option value="all">All</option>
+            <option value={ORG_WIDE}>Org-wide only</option>
+            {buildings.map((b) => (
+              <option key={b.id} value={b.id}>
+                {b.name} + org-wide
+              </option>
+            ))}
+          </select>
+        </div>
       )}
 
       {adding && orgId && (
@@ -116,6 +161,7 @@ export function ContactsCard() {
             maxLength={200}
             className={FIELD}
           />
+          <ScopeSelect buildings={buildings} value={scope} onChange={setScope} />
           {error && (
             <p className="flex items-start gap-2 text-xs text-danger">
               <AlertCircle size={12} aria-hidden className="mt-0.5 shrink-0" />
@@ -134,16 +180,17 @@ export function ContactsCard() {
       )}
 
       {contacts.isLoading && <p className="text-xs text-text-faint">Loading contacts…</p>}
-      {!contacts.isLoading && contacts.list.length === 0 && orgId && (
+      {!contacts.isLoading && visible.length === 0 && orgId && (
         <p className="text-xs text-text-faint">No contacts yet.</p>
       )}
 
       <ul className="space-y-1.5">
-        {contacts.list.map((c) =>
+        {visible.map((c) =>
           editingId === c.id ? (
             <EditRow
               key={c.id}
               contact={c}
+              buildings={buildings}
               busy={update.isPending}
               onCancel={() => setEditingId(null)}
               onSave={async (patch) => {
@@ -167,6 +214,7 @@ export function ContactsCard() {
                   </p>
                 )}
               </div>
+              <ScopeBadge buildingId={c.building_id} buildings={buildings} />
               <button
                 type="button"
                 onClick={() => setEditingId(c.id)}
@@ -204,15 +252,65 @@ export function ContactsCard() {
   );
 }
 
+function ScopeSelect({
+  buildings,
+  value,
+  onChange,
+}: {
+  buildings: BuildingRow[];
+  value: string;
+  onChange: (v: string) => void;
+}) {
+  return (
+    <select
+      value={value}
+      onChange={(e) => onChange(e.target.value)}
+      aria-label="Scope"
+      className={FIELD}
+    >
+      <option value={ORG_WIDE}>Org-wide (shared across all buildings)</option>
+      {buildings.map((b) => (
+        <option key={b.id} value={b.id}>
+          {b.name} only
+        </option>
+      ))}
+    </select>
+  );
+}
+
+function ScopeBadge({
+  buildingId,
+  buildings,
+}: {
+  buildingId: string | null;
+  buildings: BuildingRow[];
+}) {
+  const label = buildingId
+    ? buildings.find((b) => b.id === buildingId)?.name ?? 'Building'
+    : 'Org-wide';
+  return (
+    <span className="shrink-0 rounded-full border border-black/10 px-2 py-0.5 text-[10px] text-text-faint dark:border-white/10">
+      {label}
+    </span>
+  );
+}
+
 function EditRow(props: {
   contact: Contact;
+  buildings: BuildingRow[];
   busy: boolean;
   onCancel: () => void;
-  onSave: (patch: { kind: ContactKind; label: string; email: string | null }) => void | Promise<void>;
+  onSave: (patch: {
+    kind: ContactKind;
+    label: string;
+    email: string | null;
+    building_id: string | null;
+  }) => void | Promise<void>;
 }) {
   const [kind, setKind] = useState<ContactKind>(props.contact.kind as ContactKind);
   const [label, setLabel] = useState(props.contact.label);
   const [email, setEmail] = useState(props.contact.email ?? '');
+  const [scope, setScope] = useState<string>(props.contact.building_id ?? ORG_WIDE);
   return (
     <li className="space-y-2 rounded-md border border-waymarks-gold/40 bg-waymarks-gold-soft p-3">
       <div className="flex gap-2">
@@ -235,6 +333,7 @@ function EditRow(props: {
         maxLength={200}
         className={FIELD}
       />
+      <ScopeSelect buildings={props.buildings} value={scope} onChange={setScope} />
       <div className="flex justify-end gap-2 pt-1">
         <Button size="sm" variant="secondary" onClick={props.onCancel} disabled={props.busy}>
           Cancel
@@ -244,7 +343,12 @@ function EditRow(props: {
           variant="gold"
           loading={props.busy}
           onClick={() =>
-            void props.onSave({ kind, label: label.trim(), email: email.trim() || null })
+            void props.onSave({
+              kind,
+              label: label.trim(),
+              email: email.trim() || null,
+              building_id: scope === ORG_WIDE ? null : scope,
+            })
           }
           disabled={!label.trim()}
         >

@@ -27,6 +27,8 @@ export type NewVendorInput = {
   email?: string | null;
   url?: string | null;
   phone?: string | null;
+  /** M34b: NULL = org-wide/shared; a building id = scoped to that building. */
+  building_id?: string | null;
 };
 
 export async function createVendor(input: NewVendorInput): Promise<Vendor> {
@@ -38,6 +40,7 @@ export async function createVendor(input: NewVendorInput): Promise<Vendor> {
       email: input.email?.trim() || null,
       url: input.url?.trim() || null,
       phone: input.phone?.trim() || null,
+      building_id: input.building_id ?? null,
     })
     .select('*')
     .single();
@@ -50,6 +53,7 @@ export type UpdateVendorPatch = Partial<{
   email: string | null;
   url: string | null;
   phone: string | null;
+  building_id: string | null;
 }>;
 
 export async function updateVendor(id: string, patch: UpdateVendorPatch): Promise<Vendor> {

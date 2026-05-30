@@ -1,12 +1,12 @@
 -- =========================================================================
 -- M34 — Contacts + Vendors directory (Phase 0) and its consumers (items 1, 2, 4)
 --
--- ⚠️  RECORD ONLY. Do NOT `supabase db push` this file. Local migrations
+-- ⚠️  RECORD ONLY — already APPLIED to project `drclmnqlurvwqpnnpgzb` by Claude
+--     (chat). Do NOT `supabase db push` and do NOT re-apply. Local migrations
 --     0001–0030 do not match the remote `schema_migrations` timestamps, so a
---     push is unsafe. This exact SQL is pasted into the Supabase SQL Editor of
---     project `drclmnqlurvwqpnnpgzb` (the "markur" project) by Randy, in one go.
---     The whole script is idempotent (if-not-exists / or-replace / guarded
---     do-blocks) so it is safe to re-run.
+--     push is unsafe. This file records the applied M34 layer; the per-building
+--     M34b layer is in 0032_m34b_building_scope.sql. The script is idempotent
+--     (if-not-exists / or-replace / guarded do-blocks).
 --
 -- What it creates:
 --   * contacts  — people / departments (org-scoped), used by item 1.

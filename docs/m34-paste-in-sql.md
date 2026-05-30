@@ -1,21 +1,19 @@
-# M34 — Contacts + Vendors directory: paste-in SQL for Randy
+# M34 — Contacts + Vendors directory: applied-schema record
 
-**Project:** Supabase `drclmnqlurvwqpnnpgzb` (the **markur** project — the only correct one).
-**Why by hand:** local migrations 0001–0030 don't match the remote `schema_migrations`
-timestamps, so `supabase db push` is unsafe. Apply this in the **SQL Editor** instead. The
-matching record-only migration is `supabase/migrations/0031_m34_contacts_vendors_directory.sql`
-(identical SQL — do not push it).
+**Status (2026-05-30): ALREADY APPLIED to `drclmnqlurvwqpnnpgzb` by Claude (chat).** Nobody
+needs to paste this in. This file is kept as a human-readable record of the M34 layer; the
+canonical record is the migration files:
 
-## How to run
+- `supabase/migrations/0031_m34_contacts_vendors_directory.sql` — M34 (tables, RLS, data migration).
+- `supabase/migrations/0032_m34b_building_scope.sql` — **M34b**: adds nullable `building_id` to
+  `contacts`/`vendors` (NULL = org-wide/shared, set = building-specific), the `user_in_building`
+  helper, and widened SELECT/WRITE policies.
 
-1. Open the Supabase dashboard → project **drclmnqlurvwqpnnpgzb** → **SQL Editor** → **New query**.
-2. Copy the **entire** block below and paste it in.
-3. Click **Run**. The whole script is idempotent (safe to re-run) and ends with a one-time data
-   migration of any existing per-asset vendor info into the new tables.
-4. Run the verification queries at the bottom to confirm.
+These are **record-only** — do NOT `supabase db push` and do NOT re-apply them. The app code on
+`feat/markur-schema-pass` is built against this live schema; just run the app against the DB.
 
-> After this runs, the app code on branch `feat/markur-schema-pass` works end to end. No app
-> redeploy is required for local testing — just run the app against this database.
+> The SQL below is the M34 layer only (for reference). The live DB also has the M34b
+> building-scope layer from `0032_…`.
 
 ## The SQL
 

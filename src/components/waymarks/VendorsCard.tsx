@@ -1,26 +1,30 @@
 import { useState } from 'react';
 import { AlertCircle, ExternalLink, Mail, Pencil, Plus, Trash2, Truck } from 'lucide-react';
 import { Button } from '@/components/ui/Button';
+import { useBuildings } from '@/hooks/useBuildings';
 import {
   useCreateVendor,
   useDeleteVendor,
   useUpdateVendor,
   useVendors,
 } from '@/hooks/useVendors';
-import type { Vendor } from '@/types/database';
+import type { Building as BuildingRow, Vendor } from '@/types/database';
 
 /**
- * Vendors directory card (M34, Phase 0). Admin-managed suppliers an asset can
- * reference (item 2) and that "Order signs" targets (item 3). Org-scoped; the
- * /admin route gates this to super_admin / building_admin.
+ * Vendors directory card (M34, Phase 0; M34b building scope). Admin-managed
+ * suppliers an asset can reference (item 2) and that "Order signs" targets
+ * (item 3). Each row is org-wide (shared) or scoped to one building.
  */
 
 const FIELD =
   'h-9 w-full rounded-md border border-black/10 bg-surface px-3 text-sm text-text outline-none focus:border-waymarks-gold focus:ring-2 focus:ring-waymarks-gold dark:border-white/10';
 
+const ORG_WIDE = 'org';
+
 export function VendorsCard() {
   const vendors = useVendors();
   const orgId = vendors.orgId;
+  const buildings = useBuildings().data ?? [];
   const create = useCreateVendor();
   const update = useUpdateVendor();
   const remove = useDeleteVendor();
@@ -29,10 +33,18 @@ export function VendorsCard() {
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [url, setUrl] = useState('');
+  const [scope, setScope] = useState<string>(ORG_WIDE);
   const [error, setError] = useState<string | null>(null);
 
   const [editingId, setEditingId] = useState<string | null>(null);
   const [pendingDelete, setPendingDelete] = useState<Vendor | null>(null);
+
+  const [filter, setFilter] = useState<string>('all');
+  const visible = vendors.list.filter((v) => {
+    if (filter === 'all') return true;
+    if (filter === ORG_WIDE) return v.building_id === null;
+    return v.building_id === filter || v.building_id === null;
+  });
 
   async function onAdd() {
     if (!orgId) return;
@@ -42,10 +54,17 @@ export function VendorsCard() {
     }
     setError(null);
     try {
-      await create.mutateAsync({ owner_org_id: orgId, name, email, url });
+      await create.mutateAsync({
+        owner_org_id: orgId,
+        name,
+        email,
+        url,
+        building_id: scope === ORG_WIDE ? null : scope,
+      });
       setName('');
       setEmail('');
       setUrl('');
+      setScope(ORG_WIDE);
       setAdding(false);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Could not save the vendor.');
@@ -62,7 +81,8 @@ export function VendorsCard() {
           <h2 className="mt-1 font-semibold text-lg">Suppliers</h2>
           <p className="mt-1 text-xs text-text-muted">
             Suppliers you can attach to a pin (an asset can have more than one)
-            and reuse when ordering signs.
+            and reuse when ordering signs. Make them shared across the org or
+            specific to one building.
           </p>
         </div>
         <Button
@@ -85,6 +105,28 @@ export function VendorsCard() {
           <AlertCircle size={12} aria-hidden className="mt-0.5 shrink-0" />
           <span>You don't have an organization yet. Create a building first.</span>
         </p>
+      )}
+
+      {buildings.length > 0 && (
+        <div className="mb-3 flex items-center gap-2">
+          <span className="text-[11px] font-medium uppercase tracking-[0.18em] text-text-faint">
+            Show
+          </span>
+          <select
+            value={filter}
+            onChange={(e) => setFilter(e.target.value)}
+            aria-label="Filter vendors by building"
+            className={FIELD + ' max-w-[16rem]'}
+          >
+            <option value="all">All</option>
+            <option value={ORG_WIDE}>Org-wide only</option>
+            {buildings.map((b) => (
+              <option key={b.id} value={b.id}>
+                {b.name} + org-wide
+              </option>
+            ))}
+          </select>
+        </div>
       )}
 
       {adding && orgId && (
@@ -112,6 +154,7 @@ export function VendorsCard() {
             maxLength={500}
             className={FIELD}
           />
+          <ScopeSelect buildings={buildings} value={scope} onChange={setScope} />
           {error && (
             <p className="flex items-start gap-2 text-xs text-danger">
               <AlertCircle size={12} aria-hidden className="mt-0.5 shrink-0" />
@@ -130,16 +173,17 @@ export function VendorsCard() {
       )}
 
       {vendors.isLoading && <p className="text-xs text-text-faint">Loading vendors…</p>}
-      {!vendors.isLoading && vendors.list.length === 0 && orgId && (
+      {!vendors.isLoading && visible.length === 0 && orgId && (
         <p className="text-xs text-text-faint">No vendors yet.</p>
       )}
 
       <ul className="space-y-1.5">
-        {vendors.list.map((v) =>
+        {visible.map((v) =>
           editingId === v.id ? (
             <EditRow
               key={v.id}
               vendor={v}
+              buildings={buildings}
               busy={update.isPending}
               onCancel={() => setEditingId(null)}
               onSave={async (patch) => {
@@ -167,6 +211,7 @@ export function VendorsCard() {
                   )}
                 </div>
               </div>
+              <ScopeBadge buildingId={v.building_id} buildings={buildings} />
               <button
                 type="button"
                 onClick={() => setEditingId(v.id)}
@@ -204,15 +249,60 @@ export function VendorsCard() {
   );
 }
 
+function ScopeSelect({
+  buildings,
+  value,
+  onChange,
+}: {
+  buildings: BuildingRow[];
+  value: string;
+  onChange: (v: string) => void;
+}) {
+  return (
+    <select value={value} onChange={(e) => onChange(e.target.value)} aria-label="Scope" className={FIELD}>
+      <option value={ORG_WIDE}>Org-wide (shared across all buildings)</option>
+      {buildings.map((b) => (
+        <option key={b.id} value={b.id}>
+          {b.name} only
+        </option>
+      ))}
+    </select>
+  );
+}
+
+function ScopeBadge({
+  buildingId,
+  buildings,
+}: {
+  buildingId: string | null;
+  buildings: BuildingRow[];
+}) {
+  const label = buildingId
+    ? buildings.find((b) => b.id === buildingId)?.name ?? 'Building'
+    : 'Org-wide';
+  return (
+    <span className="shrink-0 rounded-full border border-black/10 px-2 py-0.5 text-[10px] text-text-faint dark:border-white/10">
+      {label}
+    </span>
+  );
+}
+
 function EditRow(props: {
   vendor: Vendor;
+  buildings: BuildingRow[];
   busy: boolean;
   onCancel: () => void;
-  onSave: (patch: { name: string; email: string | null; url: string | null }) => void | Promise<void>;
+  onSave: (patch: {
+    name: string;
+    email: string | null;
+    url: string | null;
+    building_id: string | null;
+  }) => void | Promise<void>;
 }) {
   const [name, setName] = useState(props.vendor.name);
   const [email, setEmail] = useState(props.vendor.email ?? '');
   const [url, setUrl] = useState(props.vendor.url ?? '');
+  const [scope, setScope] = useState<string>(props.vendor.building_id ?? ORG_WIDE);
   return (
     <li className="space-y-2 rounded-md border border-waymarks-gold/40 bg-waymarks-gold-soft p-3">
       <input value={name} onChange={(e) => setName(e.target.value)} maxLength={160} className={FIELD} />
@@ -232,6 +322,7 @@ function EditRow(props: {
         maxLength={500}
         className={FIELD}
       />
+      <ScopeSelect buildings={props.buildings} value={scope} onChange={setScope} />
       <div className="flex justify-end gap-2 pt-1">
         <Button size="sm" variant="secondary" onClick={props.onCancel} disabled={props.busy}>
           Cancel
@@ -246,6 +337,7 @@ function EditRow(props: {
               name: name.trim(),
               email: email.trim() || null,
               url: url.trim() || null,
+              building_id: scope === ORG_WIDE ? null : scope,
             })
           }
         >

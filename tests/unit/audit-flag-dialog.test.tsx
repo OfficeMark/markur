@@ -10,6 +10,12 @@ vi.mock('@/hooks/useContacts', () => ({
   useContacts: () => ({ list: [], orgId: null, isLoading: false }),
 }));
 
+// The dialog resolves the asset's building via useFloor to scope contacts;
+// stub it so no QueryClient is needed.
+vi.mock('@/hooks/useFloors', () => ({
+  useFloor: () => ({ data: null }),
+}));
+
 // The dialog only reads asset.name; a minimal cast keeps the fixture small.
 const fakeAsset = { id: 'a1', name: 'Lobby directory' } as Asset;
 
