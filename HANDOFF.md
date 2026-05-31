@@ -168,8 +168,11 @@ Newest first. Each entry is something you can see/use in the live app at https:/
   Each floor gets its **own independent copy** of the pin — editing one doesn't change the
   others. If a floor already has a pin in that exact spot, it's skipped and you're told which.
 
+### 2026-05-31 — Account security
+
+- **Two-factor authentication (2FA) enabled** on Supabase and GitHub (manual, owner task).
+  Keep the recovery codes somewhere safe and separate from the laptop.
+
 ### Still on your plate (not code)
 
-- **Two-factor authentication (2FA)** for Supabase and GitHub — turn it on in each account's
-  security settings and store the recovery codes somewhere safe and separate from the laptop.
-  Ask Claude Code for the exact click-path if you want it.
+- Nothing outstanding from the 2026-05-30 change brief — all nine items shipped and 2FA is on.
