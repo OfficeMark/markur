@@ -124,3 +124,52 @@ Tell Claude Code in plain language. Examples:
 > Someone uploaded a 200MB PDF and now the page is slow. Find a fix.
 
 It can read logs, check the database, deploy fixes, and roll back. You don't need to know how — just describe the problem clearly.
+
+---
+
+## What's shipped (changelog)
+
+Newest first. Each entry is something you can see/use in the live app at https://markur.ca.
+
+### 2026-05-31 — "Record video" in Add Asset
+
+- **Record video button in the Add Asset window**, sitting right beside "Take photo". You can
+  record a clip live or pick one from your camera roll, and it attaches to the new pin the
+  same way a photo does (including when you place the pin on several floors at once). It's the
+  same recorder that was already in the pin-detail window — that window is unchanged.
+
+### 2026-05-30 — Change brief (items 1–9)
+
+**Look & feel (no database changes):**
+
+- **Add Asset section headings** now show in Markur orange in the light theme (dark theme
+  unchanged).
+- **Floor-plan upload** help text now lists **WebP** alongside PDF/PNG/JPG/SVG (those formats
+  were already accepted; this just makes the wording match).
+- **Building list** shows only the **building name** at the top level; the floors appear when
+  you click to expand a building, keeping the list clean.
+- **"Order signs"** is now an action button: it emails the chosen vendor/contact (a prefilled
+  draft) or opens the supplier's website, instead of just linking to the Officemark login.
+- **ViewMark visualizer** recolored to Markur orange (`#ED7E2C`); the blue measurement dots
+  were left as-is on purpose.
+
+**Contacts & Vendors directory + the features that use it (database changes, already applied):**
+
+- **New Admin section "Contacts & Vendors"** (under Admin). Two address-book-style lists you
+  manage: **Contacts** (people or departments + email) and **Vendors** (suppliers + email
+  and/or order link). Each entry is either **shared org-wide** or **scoped to one building** —
+  a building's manager sees their own building's entries plus the shared ones, never another
+  building's private entries.
+- **Pins and flags can be tagged with a contact** — a dropdown on the pin-edit window and the
+  flag window, filled from the directory.
+- **A pin can list multiple vendors** (chosen from the directory; admins can add a new one on
+  the spot). "Order signs" points at those vendors.
+- **Add Asset can place a pin on multiple floors at once** (pick a range or individual floors).
+  Each floor gets its **own independent copy** of the pin — editing one doesn't change the
+  others. If a floor already has a pin in that exact spot, it's skipped and you're told which.
+
+### Still on your plate (not code)
+
+- **Two-factor authentication (2FA)** for Supabase and GitHub — turn it on in each account's
+  security settings and store the recovery codes somewhere safe and separate from the laptop.
+  Ask Claude Code for the exact click-path if you want it.
