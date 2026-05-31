@@ -3,12 +3,17 @@ import * as Dialog from '@radix-ui/react-dialog';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
-import { Camera, FileImage, X, AlertCircle, Trash2, Check, Layers } from 'lucide-react';
+import { Camera, FileImage, X, AlertCircle, Trash2, Check, Layers, Video } from 'lucide-react';
 import { Button } from '@/components/ui/Button';
 import { useCreateAsset } from '@/hooks/useAssets';
 import { useFloors } from '@/hooks/useFloors';
+import { useAddAuditVideo } from '@/hooks/useAuditVideos';
 import { listAssetsByFloor, type AssetCategory } from '@/lib/queries/assets';
 import { addAssetPhoto, validateAssetPhotoFile } from '@/lib/queries/asset-photos';
+import {
+  AuditVideoRecorderDialog,
+  type CapturedVideo,
+} from '@/components/waymarks/AuditVideoRecorderDialog';
 import { useAssetTypes, useCreateAssetType } from '@/hooks/useAssetTypes';
 import { useTheme } from '@/components/waymarks/theme-context';
 import { cn } from '@/lib/utils';
@@ -52,6 +57,7 @@ export function NewAssetDialog({
   onCreated,
 }: NewAssetDialogProps) {
   const create = useCreateAsset();
+  const addVideo = useAddAuditVideo();
   const { signage: signageTypes, facility: facilityTypes, list: allTypes, orgId } = useAssetTypes();
   const createAssetType = useCreateAssetType();
 
@@ -83,6 +89,10 @@ export function NewAssetDialog({
     ? facilityTypes.filter((t) => t.label.toLowerCase().includes(typeQuery.toLowerCase()))
     : facilityTypes;
   const [photos, setPhotos] = useState<File[]>([]);
+  // Item: videos are deferred-captured the same way photos are — collected
+  // here, then attached to the new asset(s) after create.
+  const [videos, setVideos] = useState<CapturedVideo[]>([]);
+  const [videoOpen, setVideoOpen] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [photoErrors, setPhotoErrors] = useState<string[]>([]);
 
@@ -214,6 +224,18 @@ export function NewAssetDialog({
         for (const f of photos) {
           await addAssetPhoto(asset.id, f);
         }
+
+        // Attach any recorded clips the same deferred way — through the same
+        // useAddAuditVideo path the pin-detail recorder uses.
+        for (const v of videos) {
+          await addVideo.mutateAsync({
+            buildingId,
+            assetId: asset.id,
+            blob: v.blob,
+            durationSeconds: v.durationSeconds,
+            notes: v.notes,
+          });
+        }
       }
 
       // Refresh the current floor view if anything landed there.
@@ -223,6 +245,7 @@ export function NewAssetDialog({
         // Clean run — behave like the single-floor path: reset and close.
         reset();
         setPhotos([]);
+        setVideos([]);
         setPhotoErrors([]);
         onOpenChange(false);
       } else {
@@ -237,6 +260,7 @@ export function NewAssetDialog({
   function finish() {
     reset();
     setPhotos([]);
+    setVideos([]);
     setPhotoErrors([]);
     setResult(null);
     onOpenChange(false);
@@ -249,6 +273,7 @@ export function NewAssetDialog({
         if (!o) {
           reset();
           setPhotos([]);
+          setVideos([]);
           setPhotoErrors([]);
           setSubmitError(null);
           setResult(null);
@@ -489,6 +514,9 @@ export function NewAssetDialog({
               onAdd={appendFiles}
               onRemove={(i) => setPhotos((prev) => prev.filter((_, idx) => idx !== i))}
               errors={photoErrors}
+              videos={videos}
+              onRecord={() => setVideoOpen(true)}
+              onRemoveVideo={(i) => setVideos((prev) => prev.filter((_, idx) => idx !== i))}
             />
 
             <div className="flex justify-end gap-2">
@@ -509,6 +537,18 @@ export function NewAssetDialog({
           )}
         </Dialog.Content>
       </Dialog.Portal>
+
+      {/* Same recorder the pin-detail window uses, in deferred-capture mode:
+          it hands the clip back via onCapture (no asset_id yet) and we attach
+          it after the pin is created, exactly like photos. */}
+      <AuditVideoRecorderDialog
+        open={videoOpen}
+        onOpenChange={setVideoOpen}
+        buildingId={buildingId}
+        assetId={null}
+        scopeLabel="the new pin"
+        onCapture={(clip) => setVideos((prev) => [...prev, clip])}
+      />
     </Dialog.Root>
   );
 }
@@ -656,22 +696,50 @@ function PhotosPicker({
   onAdd,
   onRemove,
   errors,
+  videos,
+  onRecord,
+  onRemoveVideo,
 }: {
   files: File[];
   onAdd: (list: FileList | null) => void;
   onRemove: (index: number) => void;
   errors: string[];
+  videos: CapturedVideo[];
+  onRecord: () => void;
+  onRemoveVideo: (index: number) => void;
 }) {
   return (
     <div className="space-y-2">
       <p className="text-xs font-medium uppercase tracking-[0.18em] text-text-faint">
-        Photos (optional)
+        Photos &amp; video (optional)
       </p>
 
       {files.length > 0 && (
         <ul className="grid grid-cols-3 gap-2 sm:grid-cols-4">
           {files.map((f, i) => (
             <PhotoTile key={i} file={f} onRemove={() => onRemove(i)} />
+          ))}
+        </ul>
+      )}
+
+      {videos.length > 0 && (
+        <ul className="flex flex-wrap gap-2">
+          {videos.map((v, i) => (
+            <li
+              key={i}
+              className="inline-flex items-center gap-1.5 rounded-md border border-black/10 bg-bg px-2 py-1 text-xs dark:border-white/10"
+            >
+              <Video size={12} aria-hidden className="text-waymarks-gold" />
+              <span>Clip · {formatClipLength(v.durationSeconds)}</span>
+              <button
+                type="button"
+                onClick={() => onRemoveVideo(i)}
+                aria-label={`Remove clip ${i + 1}`}
+                className="rounded p-0.5 text-text-muted hover:bg-black/5 hover:text-danger dark:hover:bg-white/5"
+              >
+                <X size={11} aria-hidden />
+              </button>
+            </li>
           ))}
         </ul>
       )}
@@ -702,6 +770,14 @@ function PhotosPicker({
               }}
             />
           </label>
+          <button
+            type="button"
+            onClick={onRecord}
+            className="inline-flex h-8 cursor-pointer items-center gap-1 rounded-md border border-black/10 px-2 text-xs hover:bg-black/5 dark:border-white/10 dark:hover:bg-white/5"
+          >
+            <Video size={12} aria-hidden />
+            <span>Record video</span>
+          </button>
           <label className="inline-flex h-8 cursor-pointer items-center gap-1 rounded-md border border-black/10 px-2 text-xs hover:bg-black/5 dark:border-white/10 dark:hover:bg-white/5">
             <FileImage size={12} aria-hidden />
             <span>Choose files</span>
@@ -728,6 +804,12 @@ function PhotosPicker({
       )}
     </div>
   );
+}
+
+function formatClipLength(seconds: number): string {
+  const m = Math.floor(seconds / 60);
+  const s = Math.floor(seconds % 60);
+  return `${m}:${s.toString().padStart(2, '0')}`;
 }
 
 function PhotoTile({ file, onRemove }: { file: File; onRemove: () => void }) {

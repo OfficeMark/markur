@@ -29,6 +29,9 @@ import {
 
 type Stage = 'idle' | 'requesting' | 'recording' | 'preview' | 'uploading';
 
+/** A captured-but-not-yet-uploaded clip, handed back via `onCapture`. */
+export type CapturedVideo = { blob: Blob; durationSeconds: number; notes: string | null };
+
 export type AuditVideoRecorderDialogProps = {
   open: boolean;
   onOpenChange: (open: boolean) => void;
@@ -37,6 +40,14 @@ export type AuditVideoRecorderDialogProps = {
   assetId: string | null;
   /** Short label shown in the header, e.g. "Lobby directory" or "Building". */
   scopeLabel: string;
+  /**
+   * Deferred-capture mode. When provided, the recorder hands the finished clip
+   * back instead of uploading it immediately — used by the Add Asset window,
+   * which has no saved asset_id yet. This mirrors the photo picker: collect
+   * now, attach after the asset is created. Omit it (pin-detail) to upload
+   * straight to `assetId` as before.
+   */
+  onCapture?: (captured: CapturedVideo) => void;
 };
 
 function pickMime(): string {
@@ -68,6 +79,7 @@ export function AuditVideoRecorderDialog({
   buildingId,
   assetId,
   scopeLabel,
+  onCapture,
 }: AuditVideoRecorderDialogProps) {
   const addVideo = useAddAuditVideo();
   const liveVideoRef = useRef<HTMLVideoElement | null>(null);
@@ -301,6 +313,13 @@ export function AuditVideoRecorderDialog({
 
   const upload = useCallback(async () => {
     if (!blob) return;
+    // Deferred-capture mode (Add Asset): hand the clip back; the caller
+    // attaches it once the asset exists. No asset_id needed here.
+    if (onCapture) {
+      onCapture({ blob, durationSeconds: finalDuration, notes: notes.trim() ? notes.trim() : null });
+      onOpenChange(false);
+      return;
+    }
     setError(null);
     setStage('uploading');
     try {
@@ -316,7 +335,7 @@ export function AuditVideoRecorderDialog({
       setError(err instanceof Error ? err.message : 'Upload failed.');
       setStage('preview');
     }
-  }, [addVideo, assetId, blob, buildingId, finalDuration, notes, onOpenChange]);
+  }, [addVideo, assetId, blob, buildingId, finalDuration, notes, onOpenChange, onCapture]);
 
   const recorderUnsupported =
     typeof window !== 'undefined' &&
@@ -489,7 +508,7 @@ export function AuditVideoRecorderDialog({
                   onClick={() => void upload()}
                   iconLeft={<Upload size={14} aria-hidden />}
                 >
-                  {source === 'upload' ? 'Use this' : 'Upload'}
+                  {onCapture ? 'Use clip' : source === 'upload' ? 'Use this' : 'Upload'}
                 </Button>
               </>
             )}
