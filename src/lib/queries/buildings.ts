@@ -49,6 +49,27 @@ export async function createBuilding(input: NewBuildingInput): Promise<Building>
   return data as Building;
 }
 
+/**
+ * Insert a building WITHOUT a RETURNING read-back. The `.select()` in
+ * createBuilding re-reads the new row under the `buildings` SELECT policy, which
+ * a brand-new org admin can't satisfy at INSERT time — their building_admin
+ * grant is only minted by the AFTER-INSERT trigger, so the read-back raises an
+ * RLS violation even though the write itself succeeds. First-run onboarding
+ * uses this: the write lands (and the trigger grants access), and the caller
+ * refreshes grants + navigates without needing the returned row.
+ */
+export async function createBuildingNoReturn(input: NewBuildingInput): Promise<void> {
+  const { error } = await supabase.from('buildings').insert({
+    name: input.name,
+    address: input.address,
+    city: input.city,
+    region: input.region ?? null,
+    total_floors: 0,
+    owner_org_id: input.owner_org_id ?? null,
+  });
+  if (error) throw error;
+}
+
 const BUILDING_PHOTO_BUCKET = 'building-photos';
 
 function buildingPhotoPath(buildingId: string, file: File): string {

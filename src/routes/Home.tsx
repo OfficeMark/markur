@@ -32,8 +32,15 @@ export function Home() {
 
   const noGrants = !pLoading && grants.length === 0;
   // A brand-new org admin: provisioned with an organization-scope grant on
-  // signup but no buildings yet → first-run onboarding instead of an empty list.
-  const isNewOrgAdmin = !pLoading && grants.some((g) => g.scope_type === 'organization');
+  // signup but hasn't created a building yet (no building-scope grant) →
+  // first-run onboarding instead of an empty list. Keying on the grant rather
+  // than the buildings read means the gate doesn't re-show (and can't drive a
+  // duplicate create) once the first building exists, even if the list read is
+  // momentarily empty.
+  const isNewOrgAdmin =
+    !pLoading &&
+    grants.some((g) => g.scope_type === 'organization') &&
+    !grants.some((g) => g.scope_type === 'building');
 
   return (
     <AppShell withSidebar={!noGrants}>

@@ -5,7 +5,7 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { AlertCircle, Building2 } from 'lucide-react';
 import { Button } from '@/components/ui/Button';
-import { useCreateBuilding } from '@/hooks/useBuildings';
+import { useCreateBuildingNoReturn } from '@/hooks/useBuildings';
 import { usePermissions } from '@/lib/permissions-context';
 
 /**
@@ -36,7 +36,7 @@ type FormValues = z.infer<typeof schema>;
 export function FirstBuildingGate() {
   const { grants, refreshGrants } = usePermissions();
   const orgId = grants.find((g) => g.scope_type === 'organization')?.scope_id ?? null;
-  const create = useCreateBuilding();
+  const create = useCreateBuildingNoReturn();
   const navigate = useNavigate();
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
@@ -56,17 +56,20 @@ export function FirstBuildingGate() {
       return;
     }
     try {
-      const b = await create.mutateAsync({
+      // No RETURNING read-back: a brand-new admin can't read the row back under
+      // the buildings SELECT policy until the AFTER-INSERT trigger mints their
+      // building_admin grant. We insert, refresh grants (so the new grant lands
+      // + the buildings list re-fetches), and route to Home, which now shows the
+      // building — rather than relying on the returned row's id.
+      await create.mutateAsync({
         name: values.name.trim(),
         address: values.address.trim(),
         city: values.city.trim(),
         region: values.region?.trim() || null,
         owner_org_id: orgId,
       });
-      // The AFTER-INSERT trigger minted a building_admin grant on the new
-      // building — pull fresh grants in so canEdit etc. work without a reload.
       await refreshGrants();
-      navigate(`/buildings/${b.id}`);
+      navigate('/');
     } catch (err) {
       setErrorMessage(
         err instanceof Error ? err.message : 'Could not create the building. Try again.'

@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   createBuilding,
+  createBuildingNoReturn,
   getBuilding,
   listBuildings,
   removeBuildingPhoto,
@@ -42,6 +43,22 @@ export function useCreateBuilding() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: (input: NewBuildingInput) => createBuilding(input),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: buildingKeys.list() });
+      qc.invalidateQueries({ queryKey: accessKeys.all });
+    },
+  });
+}
+
+/**
+ * First-run onboarding variant: inserts without the RETURNING read-back that a
+ * brand-new org admin can't satisfy under the buildings SELECT policy. Same
+ * cache invalidation as useCreateBuilding.
+ */
+export function useCreateBuildingNoReturn() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (input: NewBuildingInput) => createBuildingNoReturn(input),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: buildingKeys.list() });
       qc.invalidateQueries({ queryKey: accessKeys.all });
