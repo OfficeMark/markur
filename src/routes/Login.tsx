@@ -3,7 +3,7 @@ import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { Link, useNavigate, useLocation } from 'react-router-dom';
-import { Mail, Lock, AlertCircle, User as UserIcon } from 'lucide-react';
+import { Mail, Lock, AlertCircle, User as UserIcon, Building2 } from 'lucide-react';
 import { Button } from '@/components/ui/Button';
 import { supabase } from '@/lib/supabase';
 import { cn } from '@/lib/utils';
@@ -15,9 +15,19 @@ const signInSchema = z.object({
   password: z.string().min(8, 'At least 8 characters'),
 });
 
-const signUpSchema = signInSchema.extend({
-  display_name: z.string().min(1, 'Your name helps us address you'),
-});
+const signUpSchema = signInSchema
+  .extend({
+    display_name: z.string().min(1, 'Your name helps us address you'),
+    // company drives the organization name (read by the handle_new_user
+    // trigger as raw_user_meta_data->>'company'); required so the new org
+    // isn't named "<name> Org" by fallback.
+    company: z.string().min(1, 'Your company or organization name'),
+    confirm_password: z.string().min(1, 'Re-enter your password'),
+  })
+  .refine((v) => v.password === v.confirm_password, {
+    message: 'Passwords do not match',
+    path: ['confirm_password'],
+  });
 
 type SignInValues = z.infer<typeof signInSchema>;
 type SignUpValues = z.infer<typeof signUpSchema>;
@@ -199,7 +209,9 @@ function SignUpForm({ onSwitchToSignIn }: { onSwitchToSignIn: () => void }) {
       email: values.email,
       password: values.password,
       options: {
-        data: { display_name: values.display_name },
+        // display_name → profile + naming fallback; company → org name.
+        // The handle_new_user trigger provisions profile + org + admin grant.
+        data: { display_name: values.display_name, company: values.company },
       },
     });
     if (error) {
@@ -243,6 +255,17 @@ function SignUpForm({ onSwitchToSignIn }: { onSwitchToSignIn: () => void }) {
         }}
       />
       <Field
+        label="Company"
+        icon={<Building2 size={14} aria-hidden />}
+        error={errors.company?.message}
+        inputProps={{
+          type: 'text',
+          autoComplete: 'organization',
+          placeholder: 'Acme Property Management',
+          ...register('company'),
+        }}
+      />
+      <Field
         label="Email"
         icon={<Mail size={14} aria-hidden />}
         error={errors.email?.message}
@@ -262,6 +285,17 @@ function SignUpForm({ onSwitchToSignIn }: { onSwitchToSignIn: () => void }) {
           autoComplete: 'new-password',
           placeholder: 'At least 8 characters',
           ...register('password'),
+        }}
+      />
+      <Field
+        label="Confirm password"
+        icon={<Lock size={14} aria-hidden />}
+        error={errors.confirm_password?.message}
+        inputProps={{
+          type: 'password',
+          autoComplete: 'new-password',
+          placeholder: 'Re-enter your password',
+          ...register('confirm_password'),
         }}
       />
       <Button type="submit" variant="gold" size="lg" fullWidth loading={isSubmitting}>

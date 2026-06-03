@@ -8,6 +8,7 @@ import { useBuildingPhotoUrl, useBuildings } from '@/hooks/useBuildings';
 import { useTenantRepRedirect } from '@/hooks/useTenantRepRedirect';
 import { ResumeAuditBanner } from '@/components/waymarks/ResumeAuditBanner';
 import { WelcomeCard } from '@/components/waymarks/WelcomeCard';
+import { FirstBuildingGate } from '@/components/waymarks/FirstBuildingGate';
 import type { Building } from '@/types/database';
 
 /**
@@ -30,6 +31,9 @@ export function Home() {
   if (redirectTo) return <Navigate to={redirectTo} replace />;
 
   const noGrants = !pLoading && grants.length === 0;
+  // A brand-new org admin: provisioned with an organization-scope grant on
+  // signup but no buildings yet → first-run onboarding instead of an empty list.
+  const isNewOrgAdmin = !pLoading && grants.some((g) => g.scope_type === 'organization');
 
   return (
     <AppShell withSidebar={!noGrants}>
@@ -56,11 +60,15 @@ export function Home() {
             description="You haven't been granted access to any buildings. Ask your admin to invite you, or contact support if this looks wrong."
           />
         ) : !buildings || buildings.length === 0 ? (
-          <EmptyState
-            icon={<Building2 size={32} aria-hidden />}
-            title="No buildings to show"
-            description="Your access is set up, but no buildings are visible. They may have been removed, or RLS is filtering them out."
-          />
+          isNewOrgAdmin ? (
+            <FirstBuildingGate />
+          ) : (
+            <EmptyState
+              icon={<Building2 size={32} aria-hidden />}
+              title="No buildings to show"
+              description="Your access is set up, but no buildings are visible. They may have been removed, or RLS is filtering them out."
+            />
+          )
         ) : (
           <ul className="grid grid-cols-1 gap-4 sm:grid-cols-2">
             {buildings.map((b) => (
