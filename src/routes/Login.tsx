@@ -272,6 +272,7 @@ function ForgotPasswordForm({ onBack }: { onBack: () => void }) {
 }
 
 function SignUpForm({ onSwitchToSignIn }: { onSwitchToSignIn: () => void }) {
+  const navigate = useNavigate();
   const [authError, setAuthError] = useState<string | null>(null);
   const [confirmation, setConfirmation] = useState<string | null>(null);
 
@@ -299,11 +300,14 @@ function SignUpForm({ onSwitchToSignIn }: { onSwitchToSignIn: () => void }) {
       return;
     }
     if (data.session) {
-      // Auto sign-in. The AuthProvider will pick this up via onAuthStateChange
-      // and the route guard in App.tsx will redirect us to /.
+      // Confirmation-off case: signUp returns an active session immediately, so
+      // the user is already signed in. /login isn't a protected route, so nothing
+      // redirects them off it automatically — navigate into the app explicitly,
+      // same destination as a successful sign-in / the first-building gate.
+      navigate('/', { replace: true });
       return;
     }
-    // Email confirmation required.
+    // Email confirmation required (data.session is null).
     setConfirmation(
       `Check ${values.email} for a confirmation link. Once confirmed, sign in.`
     );
