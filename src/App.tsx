@@ -23,6 +23,9 @@ const Building = lazy(() => import('@/routes/Building').then((m) => ({ default: 
 const Floor = lazy(() => import('@/routes/Floor').then((m) => ({ default: m.Floor })));
 const Report = lazy(() => import('@/routes/Report').then((m) => ({ default: m.Report })));
 const Login = lazy(() => import('@/routes/Login').then((m) => ({ default: m.Login })));
+const ResetPassword = lazy(() =>
+  import('@/routes/ResetPassword').then((m) => ({ default: m.ResetPassword }))
+);
 const Trash = lazy(() => import('@/routes/Trash').then((m) => ({ default: m.Trash })));
 const AcceptInvitation = lazy(() =>
   import('@/routes/AcceptInvitation').then((m) => ({ default: m.AcceptInvitation }))
@@ -134,6 +137,7 @@ export default function App() {
                   <Suspense fallback={<RouteFallback />}>
                     <Routes>
                   <Route path="/login" element={<Login />} />
+                  <Route path="/reset-password" element={<ResetPassword />} />
                   <Route
                     path="/"
                     element={

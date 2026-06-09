@@ -124,6 +124,7 @@ function SignInForm() {
   const redirectTo =
     (location.state as { from?: string } | null)?.from ?? params.get('next') ?? '/';
   const [authError, setAuthError] = useState<string | null>(null);
+  const [forgot, setForgot] = useState(false);
 
   const {
     register,
@@ -145,6 +146,10 @@ function SignInForm() {
       return;
     }
     navigate(redirectTo, { replace: true });
+  }
+
+  if (forgot) {
+    return <ForgotPasswordForm onBack={() => setForgot(false)} />;
   }
 
   return (
@@ -172,9 +177,96 @@ function SignInForm() {
           ...register('password'),
         }}
       />
+      <div className="flex justify-end">
+        <button
+          type="button"
+          onClick={() => setForgot(true)}
+          className="rounded text-xs font-medium text-text-muted underline-offset-2 hover:text-text hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-waymarks-gold dark:hover:text-white"
+        >
+          Forgot password?
+        </button>
+      </div>
       <Button type="submit" variant="gold" size="lg" fullWidth loading={isSubmitting}>
         Sign in
       </Button>
+    </form>
+  );
+}
+
+const forgotSchema = z.object({
+  email: z.string().min(1, 'Email is required').email('Enter a valid email'),
+});
+type ForgotValues = z.infer<typeof forgotSchema>;
+
+/**
+ * Email-only "forgot password" form. Sends a Supabase recovery email that lands
+ * on /reset-password. The confirmation is deliberately neutral — we never reveal
+ * whether an account exists for the address (avoids account enumeration), and we
+ * swallow the error state into the same message for the same reason.
+ */
+function ForgotPasswordForm({ onBack }: { onBack: () => void }) {
+  const [sent, setSent] = useState(false);
+  const {
+    register,
+    handleSubmit,
+    getValues,
+    formState: { errors, isSubmitting },
+  } = useForm<ForgotValues>({
+    resolver: zodResolver(forgotSchema),
+    mode: 'onTouched',
+  });
+
+  async function onSubmit(values: ForgotValues) {
+    // Fire-and-forget: we surface the same neutral message regardless of outcome.
+    await supabase.auth.resetPasswordForEmail(values.email, {
+      redirectTo: `${window.location.origin}/reset-password`,
+    });
+    setSent(true);
+  }
+
+  if (sent) {
+    return (
+      <div className="space-y-3 rounded-md border border-info/30 bg-info-bg p-4 text-sm text-info">
+        <p>
+          If an account exists for{' '}
+          <span className="font-medium">{getValues('email')}</span>, a reset link is on its
+          way. Check your inbox (and spam).
+        </p>
+        <Button variant="secondary" size="sm" onClick={onBack}>
+          Back to sign in
+        </Button>
+      </div>
+    );
+  }
+
+  return (
+    <form onSubmit={handleSubmit(onSubmit)} noValidate className="space-y-4">
+      <p className="text-sm text-text-muted">
+        Enter your email and we'll send a link to reset your password.
+      </p>
+      <Field
+        label="Email"
+        icon={<Mail size={14} aria-hidden />}
+        error={errors.email?.message}
+        inputProps={{
+          type: 'email',
+          autoComplete: 'email',
+          placeholder: 'you@example.com',
+          ...register('email'),
+        }}
+      />
+      <Button type="submit" variant="gold" size="lg" fullWidth loading={isSubmitting}>
+        Send reset link
+      </Button>
+      <div className="flex justify-center">
+        <button
+          type="button"
+          onClick={onBack}
+          className="rounded text-xs font-medium text-text-muted underline-offset-2 hover:text-text hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-waymarks-gold dark:hover:text-white"
+        >
+          Back to sign in
+        </button>
+      </div>
     </form>
   );
 }
