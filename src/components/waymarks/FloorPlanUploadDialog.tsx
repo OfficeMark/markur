@@ -1,7 +1,7 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import * as Dialog from '@radix-ui/react-dialog';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
-import { AlertTriangle, FileText, Image as ImageIcon, Upload, X } from 'lucide-react';
+import { AlertTriangle, FileText, Image as ImageIcon, Lock, Sparkles, Upload, X } from 'lucide-react';
 import { Button } from '@/components/ui/Button';
 import { supabase } from '@/lib/supabase';
 import {
@@ -14,10 +14,28 @@ import {
   PLAN_MAX_BYTES,
   PLAN_MIME_TYPES,
   formatBytes,
+  objectNameForFloor,
   uploadFloorPlan,
+  uploadPlanObject,
   validatePlanFile,
+  type PlanMime,
 } from '@/lib/upload';
-import { floorKeys } from '@/hooks/useFloors';
+import {
+  analyzePlan,
+  cropForKeys,
+  emitSvg,
+  keptPathCount,
+  producePlate,
+  type Bbox,
+  type FloorPlanMetadata,
+  type PlanPlate,
+  type PlanPrepAnalysis,
+  type PlanPrepRecipe,
+} from '@/lib/plan-prep';
+import { renderPdfFirstPage } from '@/lib/plan-prep/preview';
+import { floorKeys, useFloor } from '@/hooks/useFloors';
+import { useAssets } from '@/hooks/useAssets';
+import type { Json } from '@/types/database';
 import { cn } from '@/lib/utils';
 
 type FloorPlanUploadDialogProps = {
@@ -34,8 +52,14 @@ type Stage =
   | { kind: 'pick' }
   | { kind: 'analyzing'; file: File }
   | { kind: 'review'; file: File; metadata: PdfMetadata | null; warnings: MismatchWarning[] }
+  | { kind: 'prep'; file: File; analysis: PlanPrepAnalysis; beforeUrl: string }
   | { kind: 'uploading' }
   | { kind: 'error'; message: string };
+
+/** What the upload mutation should persist. */
+type UploadJob =
+  | { mode: 'original'; file: File }
+  | { mode: 'cleaned'; original: File; plate: PlanPlate; recipe: PlanPrepRecipe };
 
 export function FloorPlanUploadDialog({
   open,
@@ -50,21 +74,53 @@ export function FloorPlanUploadDialog({
   const inputRef = useRef<HTMLInputElement | null>(null);
   const queryClient = useQueryClient();
 
+  // Frame-lock inputs: a floor that already has pins must keep its plan's
+  // coordinate frame so normalized pins don't drift. Both queries are already
+  // warm (the Floor view populated them), so this adds no network round-trip.
+  const { data: floor } = useFloor(floorId);
+  const { data: assets } = useAssets(floorId);
+  const hasPins = (assets?.length ?? 0) > 0;
+  const priorRecipe =
+    (floor?.plan_metadata as FloorPlanMetadata | null)?.planPrep?.recipe ?? null;
+  const lockedCrop: Bbox | null = hasPins ? (priorRecipe?.crop ?? null) : null;
+  const forceFullPage = hasPins && !priorRecipe?.crop;
+
   // Reset state when the dialog opens / closes.
   useEffect(() => {
     if (!open) setStage({ kind: 'pick' });
   }, [open]);
 
   const upload = useMutation({
-    mutationFn: async (file: File) => {
-      await uploadFloorPlan(floorId, file);
-      const path = `${floorId}.${extFromMime(file.type)}`;
+    mutationFn: async (job: UploadJob) => {
+      if (job.mode === 'original') {
+        await uploadFloorPlan(floorId, job.file);
+        const path = objectNameForFloor(floorId, job.file.type as PlanMime);
+        const { error } = await supabase
+          .from('floors')
+          // Clear any stale Plan Prep metadata — this is a raw plan now.
+          .update({ plan_url: path, plan_metadata: null })
+          .eq('id', floorId);
+        if (error) throw error;
+        return;
+      }
+      // Cleaned: keep the original alongside the produced plate (non-destructive).
+      await uploadFloorPlan(floorId, job.original);
+      const cleaned = await uploadPlanObject(floorId, job.plate.blob, job.plate.ext, job.plate.mime);
+      const metadata: FloorPlanMetadata = {
+        planPrep: { version: 1, recipe: job.recipe, appliedAt: new Date().toISOString() },
+      };
       const { error } = await supabase
         .from('floors')
-        .update({ plan_url: path })
+        .update({
+          plan_url: cleaned.path,
+          // FloorPlanMetadata is JSON-shaped but TS won't infer Json from the
+          // interface; the cast is safe (only plain objects/arrays/primitives).
+          plan_metadata: metadata as unknown as Json,
+          width_px: job.plate.width,
+          height_px: job.plate.height,
+        })
         .eq('id', floorId);
       if (error) throw error;
-      return path;
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: floorKeys.detail(floorId) });
@@ -86,35 +142,40 @@ export function FloorPlanUploadDialog({
         return;
       }
       setStage({ kind: 'analyzing', file });
-      if (file.type === 'application/pdf') {
-        try {
-          const metadata = await readPdfMetadata(file);
-          const warnings = detectMismatch(metadata, {
-            buildingName,
-            floorLabel,
-          });
-          setStage({ kind: 'review', file, metadata, warnings });
-        } catch (err) {
-          setStage({
-            kind: 'error',
-            message:
-              err instanceof Error
-                ? `Couldn't parse this PDF: ${err.message}`
-                : "Couldn't parse this PDF.",
-          });
-        }
-      } else {
-        // Images skip metadata. Single-step review with no warnings.
+
+      if (file.type !== 'application/pdf') {
+        // Images skip Plan Prep — single-step review, current behavior.
         setStage({ kind: 'review', file, metadata: null, warnings: [] });
+        return;
+      }
+
+      try {
+        const buf = await file.arrayBuffer();
+        // getDocument consumes (detaches) the buffer, so clone per parse.
+        const analysis = await analyzePlan(buf.slice(0), { lockedCrop, forceFullPage });
+        if (analysis.kind === 'vector') {
+          const before = await renderPdfFirstPage(buf.slice(0), 600);
+          setStage({ kind: 'prep', file, analysis, beforeUrl: before.url });
+        } else {
+          // Raster/scanned PDF: nothing to clean — fall through to plain review.
+          const metadata = await readPdfMetadata(file);
+          const warnings = detectMismatch(metadata, { buildingName, floorLabel });
+          setStage({ kind: 'review', file, metadata, warnings });
+        }
+      } catch (err) {
+        setStage({
+          kind: 'error',
+          message:
+            err instanceof Error ? `Couldn't read this PDF: ${err.message}` : "Couldn't read this PDF.",
+        });
       }
     },
-    [buildingName, floorLabel]
+    [buildingName, floorLabel, lockedCrop, forceFullPage]
   );
 
   const onFileInput = (e: React.ChangeEvent<HTMLInputElement>) => {
     const f = e.target.files?.[0];
     if (f) void pickFile(f);
-    // Reset so picking the same file twice still triggers onChange.
     e.target.value = '';
   };
 
@@ -128,22 +189,31 @@ export function FloorPlanUploadDialog({
   const isReplace = !!existingPlanUrl;
   const title = isReplace ? `Replace floor plan for ${floorLabel}` : `Upload floor plan`;
   const description = isReplace
-    ? 'Replacing a plan keeps existing pins on the floor. Pin coordinates are normalized — they\'ll appear in the same relative position on the new plan.'
+    ? "Replacing a plan keeps existing pins on the floor. Pin coordinates are normalized — they'll appear in the same relative position on the new plan."
     : `Pick a PDF, PNG, JPG, WebP, or SVG of ${floorLabel}'s plan. Up to ${formatBytes(PLAN_MAX_BYTES)}.`;
+
+  const isPrep = stage.kind === 'prep';
 
   return (
     <Dialog.Root open={open} onOpenChange={onOpenChange}>
       <Dialog.Portal>
         <Dialog.Overlay className="fixed inset-0 z-50 bg-black/40 data-[state=open]:animate-in data-[state=open]:fade-in-0" />
         <Dialog.Content
-          className="fixed left-1/2 top-1/2 z-50 w-[min(92vw,520px)] -translate-x-1/2 -translate-y-1/2 rounded-xl border border-black/10 bg-surface p-5 text-text shadow-sheet outline-none dark:border-white/10"
+          className={cn(
+            'fixed left-1/2 top-1/2 z-50 -translate-x-1/2 -translate-y-1/2 rounded-xl border border-black/10 bg-surface p-5 text-text shadow-sheet outline-none dark:border-white/10',
+            isPrep ? 'w-[min(96vw,860px)]' : 'w-[min(92vw,520px)]'
+          )}
           aria-describedby="upload-dialog-desc"
         >
           <div className="flex items-start justify-between gap-3">
             <div>
-              <Dialog.Title className="font-semibold text-xl">{title}</Dialog.Title>
+              <Dialog.Title className="font-semibold text-xl">
+                {isPrep ? `Clean up ${floorLabel}'s plan` : title}
+              </Dialog.Title>
               <Dialog.Description id="upload-dialog-desc" className="mt-1 text-sm text-text-muted">
-                {description}
+                {isPrep
+                  ? 'We removed the legend, title block, and discipline clutter and cropped to the floor. Use the cleaned plan, or keep your original.'
+                  : description}
               </Dialog.Description>
             </div>
             <Dialog.Close asChild>
@@ -183,7 +253,45 @@ export function FloorPlanUploadDialog({
                 onCancel={() => setStage({ kind: 'pick' })}
                 onConfirm={() => {
                   setStage({ kind: 'uploading' });
-                  upload.mutate(stage.file);
+                  upload.mutate({ mode: 'original', file: stage.file });
+                }}
+              />
+            )}
+            {stage.kind === 'prep' && (
+              <PlanPrepPanel
+                analysis={stage.analysis}
+                beforeUrl={stage.beforeUrl}
+                pageWidth={stage.analysis.decompose.pageWidth}
+                pageHeight={stage.analysis.decompose.pageHeight}
+                busy={upload.isPending}
+                onCancel={() => setStage({ kind: 'pick' })}
+                onKeepOriginal={() => {
+                  setStage({ kind: 'uploading' });
+                  upload.mutate({ mode: 'original', file: stage.file });
+                }}
+                onAccept={async (selection) => {
+                  try {
+                    setStage({ kind: 'uploading' });
+                    const plate = await producePlate(stage.analysis.decompose, selection);
+                    const recipe: PlanPrepRecipe = {
+                      version: 1,
+                      keepKeys: selection.keepKeys,
+                      crop: selection.crop,
+                      format: selection.format,
+                      originalPath: objectNameForFloor(floorId, 'application/pdf'),
+                      outputWidth: plate.width,
+                      outputHeight: plate.height,
+                    };
+                    upload.mutate({ mode: 'cleaned', original: stage.file, plate, recipe });
+                  } catch (err) {
+                    setStage({
+                      kind: 'error',
+                      message:
+                        err instanceof Error
+                          ? `Couldn't produce the cleaned plan: ${err.message}`
+                          : "Couldn't produce the cleaned plan.",
+                    });
+                  }
                 }}
               />
             )}
@@ -204,6 +312,202 @@ export function FloorPlanUploadDialog({
       </Dialog.Portal>
     </Dialog.Root>
   );
+}
+
+function PlanPrepPanel(props: {
+  analysis: PlanPrepAnalysis;
+  beforeUrl: string;
+  pageWidth: number;
+  pageHeight: number;
+  busy: boolean;
+  onCancel: () => void;
+  onKeepOriginal: () => void;
+  onAccept: (selection: { keepKeys: string[]; crop: Bbox; format: 'svg' | 'png' }) => void;
+}) {
+  const { analysis, beforeUrl, pageWidth, pageHeight, busy } = props;
+  const groups = analysis.decompose.groups;
+
+  const [keepKeys, setKeepKeys] = useState<string[]>(() =>
+    analysis.autoArchKey ? [analysis.autoArchKey] : groups.map((g) => g.key)
+  );
+  const [showColors, setShowColors] = useState(false);
+
+  // When unlocked, the crop follows the kept groups; when locked, it's frozen.
+  const crop: Bbox = useMemo(() => {
+    if (analysis.cropLocked) return analysis.autoCrop;
+    return cropForKeys(groups, keepKeys, pageWidth, pageHeight);
+  }, [analysis.cropLocked, analysis.autoCrop, groups, keepKeys, pageWidth, pageHeight]);
+
+  const keptCount = useMemo(
+    () => keptPathCount({ groups, keepKeys, crop }),
+    [groups, keepKeys, crop]
+  );
+  const format: 'svg' | 'png' = keptCount > 20_000 ? 'png' : 'svg';
+
+  // Build the AFTER preview from the current selection (always vector SVG —
+  // cheap, regardless of the final output format).
+  const afterUrl = useObjectUrl(
+    useMemo(() => emitSvg({ groups, keepKeys, crop }), [groups, keepKeys, crop])
+  );
+
+  const toggleKey = (key: string) =>
+    setKeepKeys((cur) => (cur.includes(key) ? cur.filter((k) => k !== key) : [...cur, key]));
+
+  const canAccept = keptCount > 0 && !busy;
+
+  return (
+    <div className="space-y-4">
+      <div className="grid grid-cols-2 gap-3">
+        <ComparePane label="Original" badge={`${analysis.decompose.totalPaths.toLocaleString()} shapes`}>
+          <img src={beforeUrl} alt="Original uploaded plan" className="h-full w-full object-contain" />
+        </ComparePane>
+        <ComparePane
+          label="Cleaned"
+          badge={`${keptCount.toLocaleString()} shapes · ${format.toUpperCase()}`}
+          highlight
+        >
+          {afterUrl ? (
+            <img src={afterUrl} alt="Cleaned floor plate preview" className="h-full w-full object-contain" />
+          ) : (
+            <div className="flex h-full items-center justify-center text-xs text-text-faint">
+              Nothing kept — choose at least one color group.
+            </div>
+          )}
+        </ComparePane>
+      </div>
+
+      {analysis.cropLocked ? (
+        <p className="flex items-start gap-2 rounded-md border border-info/30 bg-info-bg p-3 text-xs text-info">
+          <Lock size={14} aria-hidden className="mt-0.5 shrink-0" />
+          <span>
+            This floor has pins, so the plan keeps its current frame. We can declutter and recolor,
+            but the crop is locked to keep every pin in place.
+          </span>
+        </p>
+      ) : analysis.autoArchKey === null ? (
+        <p className="flex items-start gap-2 rounded-md border border-warning/30 bg-warning-bg p-3 text-xs text-warning">
+          <AlertTriangle size={14} aria-hidden className="mt-0.5 shrink-0" />
+          <span>
+            We couldn't confidently spot the architectural layer. Pick which color groups to keep
+            below.
+          </span>
+        </p>
+      ) : null}
+
+      <button
+        type="button"
+        onClick={() => setShowColors((s) => !s)}
+        className="text-xs font-medium text-text-muted underline-offset-2 hover:text-text hover:underline dark:hover:text-white"
+      >
+        {showColors ? 'Hide color groups' : 'Adjust colors'}
+      </button>
+      {showColors && (
+        <ColorGroupPicker groups={groups} keepKeys={keepKeys} onToggle={toggleKey} />
+      )}
+
+      <div className="flex flex-wrap items-center justify-end gap-2 pt-1">
+        <Button variant="ghost" onClick={props.onCancel} disabled={busy}>
+          Pick a different file
+        </Button>
+        <Button variant="secondary" onClick={props.onKeepOriginal} disabled={busy}>
+          Keep original
+        </Button>
+        <Button
+          variant="gold"
+          loading={busy}
+          disabled={!canAccept}
+          iconLeft={<Sparkles size={14} aria-hidden />}
+          onClick={() => props.onAccept({ keepKeys, crop, format })}
+        >
+          Use cleaned plan
+        </Button>
+      </div>
+    </div>
+  );
+}
+
+function ComparePane({
+  label,
+  badge,
+  highlight,
+  children,
+}: {
+  label: string;
+  badge: string;
+  highlight?: boolean;
+  children: React.ReactNode;
+}) {
+  return (
+    <div
+      className={cn(
+        'overflow-hidden rounded-lg border bg-white',
+        highlight ? 'border-waymarks-gold' : 'border-black/10 dark:border-white/10'
+      )}
+    >
+      <div className="flex items-center justify-between border-b border-black/10 bg-surface px-3 py-1.5 text-xs dark:border-white/10">
+        <span className="font-medium text-text">{label}</span>
+        <span className="text-text-faint">{badge}</span>
+      </div>
+      <div className="h-56 p-2">{children}</div>
+    </div>
+  );
+}
+
+function ColorGroupPicker({
+  groups,
+  keepKeys,
+  onToggle,
+}: {
+  groups: PlanPrepAnalysis['decompose']['groups'];
+  keepKeys: string[];
+  onToggle: (key: string) => void;
+}) {
+  // Show the most significant groups; trivial buckets just add noise.
+  const shown = groups.filter((g) => g.pathCount >= 3).slice(0, 16);
+  return (
+    <ul className="grid max-h-44 grid-cols-2 gap-1.5 overflow-y-auto rounded-md border border-black/10 p-2 dark:border-white/10">
+      {shown.map((g) => {
+        const kept = keepKeys.includes(g.key);
+        return (
+          <li key={g.key}>
+            <button
+              type="button"
+              onClick={() => onToggle(g.key)}
+              aria-pressed={kept}
+              className={cn(
+                'flex w-full items-center gap-2 rounded-md border px-2 py-1.5 text-left text-xs transition-colors',
+                kept
+                  ? 'border-waymarks-gold bg-waymarks-gold-soft'
+                  : 'border-black/10 opacity-60 hover:opacity-100 dark:border-white/10'
+              )}
+            >
+              <span
+                aria-hidden
+                className="h-4 w-4 shrink-0 rounded border border-black/20"
+                style={{ backgroundColor: `rgb(${g.color[0]}, ${g.color[1]}, ${g.color[2]})` }}
+              />
+              <span className="min-w-0 flex-1">
+                <span className="block font-medium text-text">{kept ? 'Keep' : 'Drop'}</span>
+                <span className="text-text-faint">{g.pathCount.toLocaleString()} shapes</span>
+              </span>
+            </button>
+          </li>
+        );
+      })}
+    </ul>
+  );
+}
+
+/** Create an object URL for a string/blob and revoke it on change/unmount. */
+function useObjectUrl(svg: string): string | null {
+  const [url, setUrl] = useState<string | null>(null);
+  useEffect(() => {
+    const blob = new Blob([svg], { type: 'image/svg+xml' });
+    const u = URL.createObjectURL(blob);
+    setUrl(u);
+    return () => URL.revokeObjectURL(u);
+  }, [svg]);
+  return url;
 }
 
 function PickArea(props: {
@@ -373,11 +677,4 @@ function ErrorPanel({ message, onRetry }: { message: string; onRetry: () => void
       </div>
     </div>
   );
-}
-
-function extFromMime(mime: string): string {
-  if (mime === 'application/pdf') return 'pdf';
-  if (mime === 'image/png') return 'png';
-  if (mime === 'image/svg+xml') return 'svg';
-  return 'jpg';
 }

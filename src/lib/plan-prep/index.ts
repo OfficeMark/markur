@@ -11,6 +11,7 @@ export type {
   Bbox,
   ColorGroup,
   DecomposeResult,
+  FloorPlanMetadata,
   OutputFormat,
   PlanPlate,
   PlanPrepAnalysis,
@@ -23,9 +24,13 @@ export { SVG_PATH_LIMIT } from './detect';
 export { decomposePdf } from './decompose';
 
 export interface AnalyzeOptions {
-  /** When the floor already has pins, the crop frame is frozen to this bbox so
-   * normalized pin coordinates can't drift. */
+  /** When the floor was already Plan-Prepped and has pins, the crop frame is
+   * frozen to this exact bbox so normalized pin coordinates can't drift. */
   lockedCrop?: Bbox | null;
+  /** When the floor has pins but no prior Plan Prep frame (e.g. a raw plan that
+   * pins were placed on), we may declutter but must NOT crop — cropping would
+   * change the extent and shift every pin. */
+  forceFullPage?: boolean;
 }
 
 /**
@@ -51,11 +56,13 @@ export async function analyzePlan(
     };
   }
 
-  const cropLocked = !!opts.lockedCrop;
+  const cropLocked = !!opts.lockedCrop || !!opts.forceFullPage;
   const autoArchKey = pickArchBucket(groups);
-  const autoCrop: Bbox = cropLocked
-    ? (opts.lockedCrop as Bbox)
-    : cropForBucket(groups, autoArchKey, pageWidth, pageHeight);
+  const autoCrop: Bbox = opts.lockedCrop
+    ? opts.lockedCrop
+    : opts.forceFullPage
+      ? [0, 0, pageWidth, pageHeight]
+      : cropForBucket(groups, autoArchKey, pageWidth, pageHeight);
 
   const defaultKeep = defaultKeepKeys(decompose, autoArchKey);
   const count = keptPathCount({ groups, keepKeys: defaultKeep, crop: autoCrop });

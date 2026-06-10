@@ -63,6 +63,20 @@ export interface PlanPrepRecipe {
 
 export type OutputFormat = 'svg' | 'png';
 
+/**
+ * Shape stored in `floors.plan_metadata` (jsonb) when a plan has been
+ * Plan-Prepped. Absence means the plan is a raw upload. `recipe.crop` is the
+ * locked coordinate frame re-runs must reuse once the floor has pins.
+ */
+export interface FloorPlanMetadata {
+  planPrep?: {
+    version: 1;
+    recipe: PlanPrepRecipe;
+    /** ISO timestamp of when this plate was produced. */
+    appliedAt: string;
+  };
+}
+
 /** Result of analyzing an uploaded PDF before the user decides anything. */
 export interface PlanPrepAnalysis {
   /** 'raster' => no meaningful vector content; skip Plan Prep entirely. */

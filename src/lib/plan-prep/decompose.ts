@@ -65,18 +65,19 @@ function cmykToRgb(c: number, m: number, y: number, k: number): RGB {
 function colorNToRgb(args: unknown[]): RGB | null {
   const nums = args.filter((a): a is number => typeof a === 'number');
   if (nums.length === 1) {
-    const g = nums[0] <= 1 ? Math.round(nums[0] * 255) : Math.round(nums[0]);
+    const v = nums[0] as number;
+    const g = v <= 1 ? Math.round(v * 255) : Math.round(v);
     return [g, g, g];
   }
   if (nums.length === 3) {
-    const scale = nums.every((n) => n <= 1) ? 255 : 1;
-    return [
-      Math.round(nums[0] * scale),
-      Math.round(nums[1] * scale),
-      Math.round(nums[2] * scale),
-    ];
+    const [r, g, b] = nums as [number, number, number];
+    const scale = r <= 1 && g <= 1 && b <= 1 ? 255 : 1;
+    return [Math.round(r * scale), Math.round(g * scale), Math.round(b * scale)];
   }
-  if (nums.length === 4) return cmykToRgb(nums[0], nums[1], nums[2], nums[3]);
+  if (nums.length === 4) {
+    const [c, m, y, k] = nums as [number, number, number, number];
+    return cmykToRgb(c, m, y, k);
+  }
   return null; // pattern / unsupported
 }
 
@@ -116,9 +117,10 @@ class PathBuilder {
   }
 
   curveTo(m: Matrix, p: number[]) {
-    const [c1x, c1y] = apply(m, p[0], p[1]);
-    const [c2x, c2y] = apply(m, p[2], p[3]);
-    const [ex, ey] = apply(m, p[4], p[5]);
+    const [x1 = 0, y1 = 0, x2 = 0, y2 = 0, x3 = 0, y3 = 0] = p;
+    const [c1x, c1y] = apply(m, x1, y1);
+    const [c2x, c2y] = apply(m, x2, y2);
+    const [ex, ey] = apply(m, x3, y3);
     this.d += `C${fmt(c1x)} ${fmt(c1y)} ${fmt(c2x)} ${fmt(c2y)} ${fmt(ex)} ${fmt(ey)}`;
     this.curX = ex;
     this.curY = ey;
@@ -129,8 +131,9 @@ class PathBuilder {
 
   /** curveTo2 (PDF 'v'): first control point is the current point. */
   curveTo2(m: Matrix, p: number[]) {
-    const [c2x, c2y] = apply(m, p[0], p[1]);
-    const [ex, ey] = apply(m, p[2], p[3]);
+    const [x2 = 0, y2 = 0, x3 = 0, y3 = 0] = p;
+    const [c2x, c2y] = apply(m, x2, y2);
+    const [ex, ey] = apply(m, x3, y3);
     this.d += `C${fmt(this.curX)} ${fmt(this.curY)} ${fmt(c2x)} ${fmt(c2y)} ${fmt(ex)} ${fmt(ey)}`;
     this.curX = ex;
     this.curY = ey;
@@ -140,8 +143,9 @@ class PathBuilder {
 
   /** curveTo3 (PDF 'y'): second control point is the end point. */
   curveTo3(m: Matrix, p: number[]) {
-    const [c1x, c1y] = apply(m, p[0], p[1]);
-    const [ex, ey] = apply(m, p[2], p[3]);
+    const [x1 = 0, y1 = 0, x3 = 0, y3 = 0] = p;
+    const [c1x, c1y] = apply(m, x1, y1);
+    const [ex, ey] = apply(m, x3, y3);
     this.d += `C${fmt(c1x)} ${fmt(c1y)} ${fmt(ex)} ${fmt(ey)} ${fmt(ex)} ${fmt(ey)}`;
     this.curX = ex;
     this.curY = ey;
@@ -150,16 +154,14 @@ class PathBuilder {
   }
 
   rect(m: Matrix, x: number, y: number, w: number, h: number) {
-    const c = [
-      apply(m, x, y),
-      apply(m, x + w, y),
-      apply(m, x + w, y + h),
-      apply(m, x, y + h),
-    ];
-    this.d += `M${fmt(c[0][0])} ${fmt(c[0][1])}L${fmt(c[1][0])} ${fmt(c[1][1])}L${fmt(c[2][0])} ${fmt(c[2][1])}L${fmt(c[3][0])} ${fmt(c[3][1])}Z`;
-    for (const [px, py] of c) this.bump(px, py);
-    this.curX = c[0][0];
-    this.curY = c[0][1];
+    const p0 = apply(m, x, y);
+    const p1 = apply(m, x + w, y);
+    const p2 = apply(m, x + w, y + h);
+    const p3 = apply(m, x, y + h);
+    this.d += `M${fmt(p0[0])} ${fmt(p0[1])}L${fmt(p1[0])} ${fmt(p1[1])}L${fmt(p2[0])} ${fmt(p2[1])}L${fmt(p3[0])} ${fmt(p3[1])}Z`;
+    for (const [px, py] of [p0, p1, p2, p3]) this.bump(px, py);
+    this.curX = p0[0];
+    this.curY = p0[1];
   }
 
   close() {
@@ -292,25 +294,29 @@ function buildPath(pb: PathBuilder, m: Matrix, a: unknown[]) {
   const args = a[1] as number[];
   if (!ops || !args) return;
   let j = 0;
+  // The op stream guarantees a coordinate for each consumed slot, so the
+  // non-null assertions are safe (noUncheckedIndexedAccess otherwise widens
+  // every flat-array read to number | undefined).
+  const next = (): number => args[j++] ?? 0;
   for (let k = 0; k < ops.length; k++) {
     switch (ops[k]) {
       case OPS.moveTo:
-        pb.moveTo(m, args[j++], args[j++]);
+        pb.moveTo(m, next(), next());
         break;
       case OPS.lineTo:
-        pb.lineTo(m, args[j++], args[j++]);
+        pb.lineTo(m, next(), next());
         break;
       case OPS.curveTo:
-        pb.curveTo(m, [args[j++], args[j++], args[j++], args[j++], args[j++], args[j++]]);
+        pb.curveTo(m, [next(), next(), next(), next(), next(), next()]);
         break;
       case OPS.curveTo2:
-        pb.curveTo2(m, [args[j++], args[j++], args[j++], args[j++]]);
+        pb.curveTo2(m, [next(), next(), next(), next()]);
         break;
       case OPS.curveTo3:
-        pb.curveTo3(m, [args[j++], args[j++], args[j++], args[j++]]);
+        pb.curveTo3(m, [next(), next(), next(), next()]);
         break;
       case OPS.rectangle:
-        pb.rect(m, args[j++], args[j++], args[j++], args[j++]);
+        pb.rect(m, next(), next(), next(), next());
         break;
       case OPS.closePath:
         pb.close();
@@ -352,13 +358,14 @@ export async function decomposePdf(data: ArrayBuffer): Promise<DecomposeResult> 
   const doc = await getDocument({ data }).promise;
   try {
     const page = await doc.getPage(1);
-    const view = page.view; // [x0, y0, x1, y1] in page units
-    const pageWidth = view[2] - view[0];
-    const pageHeight = view[3] - view[1];
+    // page.view is [x0, y0, x1, y1] in page units.
+    const [vx0 = 0, vy0 = 0, vx1 = 0, vy1 = 0] = page.view;
+    const pageWidth = vx1 - vx0;
+    const pageHeight = vy1 - vy0;
     // Translate so the page origin sits at (0,0); rotation is ignored (plans are
     // upright). This keeps page-space coords positive and matches getViewport at
     // scale 1 / rotation 0 closely enough for cropping and re-rendering.
-    const base: Matrix = [1, 0, 0, 1, -view[0], -view[1]];
+    const base: Matrix = [1, 0, 0, 1, -vx0, -vy0];
     const opList = await page.getOperatorList();
     const buckets = bucketOperatorList(opList.fnArray, opList.argsArray, base);
 

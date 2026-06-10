@@ -80,6 +80,29 @@ export async function uploadFloorPlan(
 }
 
 /**
+ * Upload a produced object (e.g. a Plan Prep cleaned plate) to the floor's
+ * storage slot at `<floorId>.<ext>`. The original upload lives at a different
+ * extension (e.g. `<floorId>.pdf`), so both coexist — the RLS helper keys off
+ * the `<uuid>.` prefix, which matches either. `ext` must be a plan extension
+ * the bucket allows (svg requires the bucket MIME allowlist to include it).
+ */
+export async function uploadPlanObject(
+  floorId: string,
+  blob: Blob,
+  ext: string,
+  contentType: string
+): Promise<{ path: string }> {
+  const path = `${floorId}.${ext}`;
+  const { error } = await supabase.storage.from('floor-plans').upload(path, blob, {
+    contentType,
+    upsert: true,
+    cacheControl: '0',
+  });
+  if (error) throw error;
+  return { path };
+}
+
+/**
  * Get a short-lived signed URL for the floor's plan. Plans are private.
  */
 export async function signedUrlForPlan(path: string): Promise<string> {
