@@ -45,6 +45,19 @@ export async function analyzePlan(
   const decompose = await decomposePdf(data);
   const { pageWidth, pageHeight, groups } = decompose;
 
+  // Surface what the walker actually found, so a "Plan Prep silently skipped"
+  // is diagnosable rather than invisible. Dev-only (the :5180 demo runs in dev;
+  // the app.markur.ca production build strips this).
+  if (import.meta.env.DEV) {
+    console.info('[plan-prep] decompose', {
+      totalPaths: decompose.totalPaths,
+      buckets: groups.length,
+      page: [Math.round(pageWidth), Math.round(pageHeight)],
+      raster: isRaster(decompose),
+      topColors: groups.slice(0, 10).map((g) => `${g.key}×${g.pathCount}`),
+    });
+  }
+
   if (isRaster(decompose)) {
     return {
       kind: 'raster',

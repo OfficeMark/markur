@@ -100,6 +100,12 @@ export function FloorPlanCanvas({
   // Render whenever src or kind changes.
   useEffect(() => {
     let cancelled = false;
+    // The active PDF render task + document, so a fast src change (e.g. right
+    // after a Plan Prep upload swaps plan_url) cancels the in-flight render
+    // instead of starting a second render() on the same canvas — which throws
+    // "Cannot use the same canvas during multiple render() operations".
+    let renderTask: { cancel: () => void; promise: Promise<void> } | null = null;
+    let pdfDoc: { destroy: () => Promise<void> } | null = null;
     setStatus('loading');
     setErrorMsg(null);
     setZoom(1);
@@ -115,14 +121,19 @@ export function FloorPlanCanvas({
             if (!r.ok) throw new Error(`Failed to load PDF (${r.status})`);
             return r.arrayBuffer();
           });
+          if (cancelled) return;
           const doc = await getDocument({ data: buf }).promise;
+          pdfDoc = doc;
+          if (cancelled) return;
           const page = await doc.getPage(1);
+          if (cancelled) return;
           const viewport = page.getViewport({ scale });
           const ctx = canvas.getContext('2d');
           if (!ctx) throw new Error('Canvas 2D context unavailable');
           canvas.width = Math.floor(viewport.width);
           canvas.height = Math.floor(viewport.height);
-          await page.render({ canvasContext: ctx, viewport }).promise;
+          renderTask = page.render({ canvasContext: ctx, viewport });
+          await renderTask.promise;
           if (cancelled) return;
           setStatus('ready');
         } else {
@@ -156,6 +167,8 @@ export function FloorPlanCanvas({
           img.src = src;
         }
       } catch (err) {
+        // A cancelled render rejects here (RenderingCancelledException) — that's
+        // expected on src change, not a real error.
         if (cancelled) return;
         setErrorMsg(err instanceof Error ? err.message : 'Failed to render plan');
         setStatus('error');
@@ -164,6 +177,8 @@ export function FloorPlanCanvas({
 
     return () => {
       cancelled = true;
+      renderTask?.cancel();
+      void pdfDoc?.destroy();
     };
   }, [src, kind, scale]);
 

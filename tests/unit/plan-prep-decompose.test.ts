@@ -89,6 +89,25 @@ describe('bucketOperatorList', () => {
     expect(buckets.size).toBe(0);
   });
 
+  it('also handles path geometry emitted as individual ops (not batched)', () => {
+    const fns = [
+      OPS.setStrokeRGBColor,
+      OPS.moveTo,
+      OPS.lineTo,
+      OPS.stroke,
+    ];
+    const args = [
+      [0, 0, 0],
+      [10, 10],
+      [30, 40],
+      [],
+    ];
+    const buckets = bucketOperatorList(fns, args as unknown[][], IDENTITY);
+    const g = buckets.get('0,0,0');
+    expect(g?.pathCount).toBe(1);
+    expect(g?.bbox).toEqual([10, 10, 30, 40]);
+  });
+
   it('converts gray and CMYK color ops to RGB buckets', () => {
     const fns = [OPS.setFillGray, OPS.constructPath, OPS.fill];
     const args = [

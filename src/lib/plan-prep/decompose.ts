@@ -263,6 +263,29 @@ export function bucketOperatorList(
       case OPS.constructPath:
         buildPath(pb, gs.ctm, a);
         break;
+      // Some PDFs emit path construction as individual ops rather than a batched
+      // constructPath; handle both so no geometry is silently dropped.
+      case OPS.moveTo:
+        pb.moveTo(gs.ctm, num(a[0]), num(a[1]));
+        break;
+      case OPS.lineTo:
+        pb.lineTo(gs.ctm, num(a[0]), num(a[1]));
+        break;
+      case OPS.curveTo:
+        pb.curveTo(gs.ctm, a as number[]);
+        break;
+      case OPS.curveTo2:
+        pb.curveTo2(gs.ctm, a as number[]);
+        break;
+      case OPS.curveTo3:
+        pb.curveTo3(gs.ctm, a as number[]);
+        break;
+      case OPS.rectangle:
+        pb.rect(gs.ctm, num(a[0]), num(a[1]), num(a[2]), num(a[3]));
+        break;
+      case OPS.closePath:
+        pb.close();
+        break;
       // Paint ops commit the current path under the appropriate color.
       case OPS.stroke:
       case OPS.closeStroke:
@@ -325,6 +348,10 @@ function buildPath(pb: PathBuilder, m: Matrix, a: unknown[]) {
         break;
     }
   }
+}
+
+function num(v: unknown): number {
+  return typeof v === 'number' ? v : 0;
 }
 
 function grayToRgb(g: number): RGB {
