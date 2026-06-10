@@ -8,10 +8,9 @@ export const PLAN_MAX_BYTES = 25 * 1024 * 1024; // 25 MB
 // for vector floor plans (markur-changes feature).
 //
 // Mirrored in the storage.buckets.allowed_mime_types for `floor-plans`
-// via migration 0028_m25_floor_fix.sql (pdf/png/jpeg/webp/heic/heif).
-// NOTE: image/svg+xml is in this client allowlist but the bucket allowlist
-// does not yet include it -- SVG uploads currently 400 at the storage
-// layer. Tracked as a separate fix (out of M25-floor-fix scope).
+// (pdf/png/jpeg/webp/heic/heif + image/svg+xml). SVG is now allowed at the
+// bucket layer, so uploads must set contentType explicitly: a Blob sent
+// without it goes up as application/octet-stream and the allowlist rejects it.
 export const PLAN_MIME_TYPES = [
   'application/pdf',
   'image/png',
