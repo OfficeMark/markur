@@ -6,8 +6,8 @@ import { z } from 'zod';
 import { AlertCircle, Layers, Upload, X } from 'lucide-react';
 import { Button } from '@/components/ui/Button';
 import { useCreateFloor } from '@/hooks/useFloors';
-import { uploadFloorPlan, validatePlanFile, floorErrorMessage } from '@/lib/upload';
-import { supabase } from '@/lib/supabase';
+import { validatePlanFile, floorErrorMessage } from '@/lib/upload';
+import { FloorPlanUploadDialog } from './FloorPlanUploadDialog';
 
 /**
  * Add a floor to a building (M17). Closes the gap left after M5 — there
@@ -17,10 +17,13 @@ import { supabase } from '@/lib/supabase';
  *
  * Behavior:
  *  - Required: label (e.g. "B2", "Ground", "Floor 14")
- *  - Optional: a floor-plan file (PDF / PNG / JPG / WebP / HEIC / SVG). If included, we create
- *    the floor first, then upload the plan, then update the floor row's
- *    plan_url. If the upload fails, the floor still exists — the user can
- *    upload a plan later via the Replace plan button on the floor view.
+ *  - Optional: a floor-plan file (PDF / PNG / JPG / WebP / HEIC / SVG). If
+ *    included, we create the floor first, then hand the file off to the shared
+ *    FloorPlanUploadDialog — the SAME path as the on-page Replace — so vector
+ *    PDFs go through Plan Prep (before/after) here too. The modal itself is
+ *    cramped, so the cleanup happens in the full-size upload dialog after
+ *    creation. If the floor is created but the plan handoff is cancelled, the
+ *    floor still exists and a plan can be added later from the floor view.
  *  - sort_order defaults to "highest existing + 10" so new floors land at
  *    the bottom of the list. Editable from a floor's settings later.
  */
@@ -40,8 +43,11 @@ export type NewFloorDialogProps = {
 type Stage =
   | { kind: 'form' }
   | { kind: 'creating' }
-  | { kind: 'uploading'; floorId: string }
   | { kind: 'error'; message: string };
+
+/** After the floor is created with a plan file, we hand off to the shared
+ * upload dialog (Plan Prep) for this new floor. */
+type Handoff = { floorId: string; label: string; file: File };
 
 export function NewFloorDialog({
   open,
@@ -53,6 +59,7 @@ export function NewFloorDialog({
   const [stage, setStage] = useState<Stage>({ kind: 'form' });
   const [planFile, setPlanFile] = useState<File | null>(null);
   const [fileError, setFileError] = useState<string | null>(null);
+  const [handoff, setHandoff] = useState<Handoff | null>(null);
   const fileInput = useRef<HTMLInputElement | null>(null);
 
   const {
@@ -71,6 +78,7 @@ export function NewFloorDialog({
       setStage({ kind: 'form' });
       setPlanFile(null);
       setFileError(null);
+      setHandoff(null);
     }
   }, [open, reset]);
 
@@ -89,10 +97,11 @@ export function NewFloorDialog({
   }
 
   async function onSubmit(values: FormValues) {
+    const label = values.label.trim();
     setStage({ kind: 'creating' });
     let floorId: string;
     try {
-      const floor = await create.mutateAsync({ label: values.label.trim() });
+      const floor = await create.mutateAsync({ label });
       floorId = floor.id;
     } catch (err) {
       setStage({
@@ -107,30 +116,16 @@ export function NewFloorDialog({
       return;
     }
 
-    // Upload plan in a second step; failure here doesn't undo the floor.
-    setStage({ kind: 'uploading', floorId });
-    try {
-      const { path } = await uploadFloorPlan(floorId, planFile);
-      // Persist the plan_url path on the floor row. Use the path the
-      // uploader returned so it always matches what landed in storage.
-      const { error } = await supabase
-        .from('floors')
-        .update({ plan_url: path })
-        .eq('id', floorId);
-      if (error) throw error;
-      onOpenChange(false);
-    } catch (err) {
-      setStage({
-        kind: 'error',
-        message: floorErrorMessage(err, 'upload'),
-      });
-    }
+    // Hand the file off to the shared upload dialog (Plan Prep) — the same path
+    // as the on-page Replace. The create form closes; the upload dialog opens.
+    setHandoff({ floorId, label, file: planFile });
   }
 
-  const busy = stage.kind === 'creating' || stage.kind === 'uploading' || isSubmitting;
+  const busy = stage.kind === 'creating' || isSubmitting;
 
   return (
-    <Dialog.Root open={open} onOpenChange={onOpenChange}>
+    <>
+    <Dialog.Root open={open && !handoff} onOpenChange={onOpenChange}>
       <Dialog.Portal>
         <Dialog.Overlay className="fixed inset-0 z-40 bg-black/30 backdrop-blur-[2px]" />
         <Dialog.Content className="fixed left-1/2 top-1/2 z-50 w-[min(560px,calc(100vw-32px))] -translate-x-1/2 -translate-y-1/2 rounded-xl border border-black/10 bg-surface p-5 shadow-sheet">
@@ -243,13 +238,33 @@ export function NewFloorDialog({
                 variant="gold"
                 loading={busy}
               >
-                {stage.kind === 'uploading' ? 'Uploading plan...' : 'Add floor'}
+                {planFile ? 'Add floor & plan' : 'Add floor'}
               </Button>
             </div>
           </form>
         </Dialog.Content>
       </Dialog.Portal>
     </Dialog.Root>
+
+      {handoff && (
+        <FloorPlanUploadDialog
+          open
+          onOpenChange={(o) => {
+            if (!o) {
+              // Upload dialog closed (success or cancel). The floor already
+              // exists; close the whole Add-Floor flow.
+              setHandoff(null);
+              onOpenChange(false);
+            }
+          }}
+          floorId={handoff.floorId}
+          floorLabel={handoff.label}
+          buildingName={buildingName}
+          existingPlanUrl={null}
+          initialFile={handoff.file}
+        />
+      )}
+    </>
   );
 }
 

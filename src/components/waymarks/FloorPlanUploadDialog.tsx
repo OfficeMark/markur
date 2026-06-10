@@ -46,6 +46,10 @@ type FloorPlanUploadDialogProps = {
   buildingName: string;
   /** Current plan_url, if any — drives "replace" copy + diff confirmation. */
   existingPlanUrl: string | null;
+  /** When provided (e.g. handed off from the Add-Floor modal), the dialog
+   * auto-runs the shared upload handler on this file as soon as it opens, so
+   * every floor-plan entry point funnels through the same Plan Prep flow. */
+  initialFile?: File | null;
 };
 
 type Stage =
@@ -68,10 +72,12 @@ export function FloorPlanUploadDialog({
   floorLabel,
   buildingName,
   existingPlanUrl,
+  initialFile,
 }: FloorPlanUploadDialogProps) {
   const [stage, setStage] = useState<Stage>({ kind: 'pick' });
   const [dragOver, setDragOver] = useState(false);
   const inputRef = useRef<HTMLInputElement | null>(null);
+  const autoRanRef = useRef(false);
   const queryClient = useQueryClient();
 
   // Frame-lock inputs: a floor that already has pins must keep its plan's
@@ -136,6 +142,15 @@ export function FloorPlanUploadDialog({
 
   const pickFile = useCallback(
     async (file: File) => {
+      // Unmissable entry marker: if this never logs, the handler isn't running
+      // (stale bundle / wrong entry point) rather than Plan Prep being gated off.
+      console.log('[plan-prep] entry', {
+        type: file.type,
+        name: file.name,
+        size: file.size,
+        hasPins,
+        forceFullPage,
+      });
       const v = validatePlanFile(file);
       if (v) {
         setStage({ kind: 'error', message: v.message });
@@ -170,8 +185,22 @@ export function FloorPlanUploadDialog({
         });
       }
     },
-    [buildingName, floorLabel, lockedCrop, forceFullPage]
+    [buildingName, floorLabel, lockedCrop, forceFullPage, hasPins]
   );
+
+  // Handoff path (e.g. from the Add-Floor modal): auto-run the shared handler on
+  // the provided file once, when the dialog opens. Guarantees this entry point
+  // goes through the same Plan Prep flow as the on-page Replace.
+  useEffect(() => {
+    if (!open) {
+      autoRanRef.current = false;
+      return;
+    }
+    if (initialFile && !autoRanRef.current) {
+      autoRanRef.current = true;
+      void pickFile(initialFile);
+    }
+  }, [open, initialFile, pickFile]);
 
   const onFileInput = (e: React.ChangeEvent<HTMLInputElement>) => {
     const f = e.target.files?.[0];
