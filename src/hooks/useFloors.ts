@@ -22,11 +22,38 @@ export function useFloors(buildingId: string | undefined) {
   });
 }
 
+/**
+ * Thrown when a floor reads back empty right after it (or its parent building's
+ * grant) was created. Floors have no grant-minting insert trigger — access is
+ * inherited from the building grant — so a brand-new floor can momentarily read
+ * back empty while that grant becomes visible to RLS / through the read-after-
+ * write window. Same family of race as the building-create read-back. We throw
+ * (rather than return null) so the query retries and self-heals; a genuinely
+ * missing or no-access floor settles to "not found" after the retries.
+ */
+export class FloorNotReadyError extends Error {
+  constructor() {
+    super('Floor not visible yet');
+    this.name = 'FloorNotReadyError';
+  }
+}
+
 export function useFloor(id: string | undefined) {
   return useQuery({
     queryKey: id ? floorKeys.detail(id) : ['floors', 'detail', 'none'],
-    queryFn: () => (id ? getFloor(id) : Promise.resolve(null)),
+    queryFn: async () => {
+      if (!id) return null;
+      const floor = await getFloor(id);
+      if (floor === null) throw new FloorNotReadyError();
+      return floor;
+    },
     enabled: !!id,
+    // Retry only the transient "not visible yet" miss, briefly, so the first
+    // 60 seconds of a fresh signup (create building → create floor → open it)
+    // doesn't dead-end on a hard "floor not found".
+    retry: (failureCount, error) =>
+      error instanceof FloorNotReadyError && failureCount < 3,
+    retryDelay: (attempt) => Math.min(300 * 2 ** attempt, 1200),
   });
 }
 
