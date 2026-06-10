@@ -142,15 +142,18 @@ export function FloorPlanUploadDialog({
 
   const pickFile = useCallback(
     async (file: File) => {
-      // Unmissable entry marker: if this never logs, the handler isn't running
-      // (stale bundle / wrong entry point) rather than Plan Prep being gated off.
-      console.log('[plan-prep] entry', {
-        type: file.type,
-        name: file.name,
-        size: file.size,
-        hasPins,
-        forceFullPage,
-      });
+      // Entry marker: distinguishes "handler never ran" (stale bundle / wrong
+      // entry point) from "ran but gated off". Dev-only so the prod console
+      // stays clean; the entry-points regression test runs in dev mode.
+      if (import.meta.env.DEV) {
+        console.log('[plan-prep] entry', {
+          type: file.type,
+          name: file.name,
+          size: file.size,
+          hasPins,
+          forceFullPage,
+        });
+      }
       const v = validatePlanFile(file);
       if (v) {
         setStage({ kind: 'error', message: v.message });
