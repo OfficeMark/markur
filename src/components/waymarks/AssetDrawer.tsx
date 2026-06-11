@@ -76,6 +76,13 @@ export type AssetDrawerProps = {
    * capture form. Only wired when the user can run an audit on this floor.
    */
   onLogFlag?: (assetId: string) => void;
+  /**
+   * Guest viewer (building share link): hides the optional/internal surfaces a
+   * client shouldn't see — Visualize, Order Signs, vendor details, attachments,
+   * audit videos, and the activity timeline. Edit affordances are already
+   * suppressed via useCan (a viewer grant returns false for every write cap).
+   */
+  guest?: boolean;
 };
 
 const STATUS_OPTIONS: Array<{ value: AssetStatus; label: string; icon: typeof Check }> = [
@@ -96,6 +103,7 @@ export function AssetDrawer({
   onStartReposition,
   onStartDelete,
   onLogFlag,
+  guest = false,
 }: AssetDrawerProps) {
   const open = !!assetId;
   const { data: asset, isLoading } = useAsset(assetId ?? undefined);
@@ -209,23 +217,27 @@ export function AssetDrawer({
                   canAudit={canAudit}
                   onLogFlag={onLogFlag ? () => onLogFlag(asset.id) : undefined}
                 />
-                <VisualizeRow
-                  buildingName={building?.name ?? 'Building'}
-                  floorLabel={floor?.label ?? ''}
-                  pinValue={asset.room_number?.trim() || asset.name}
-                />
-                <OrderSignsRow asset={asset} />
-                <DetailsSection asset={asset} canEdit={canEdit} buildingId={buildingId} />
+                {!guest && (
+                  <VisualizeRow
+                    buildingName={building?.name ?? 'Building'}
+                    floorLabel={floor?.label ?? ''}
+                    pinValue={asset.room_number?.trim() || asset.name}
+                  />
+                )}
+                {!guest && <OrderSignsRow asset={asset} />}
+                <DetailsSection asset={asset} canEdit={canEdit} buildingId={buildingId} guest={guest} />
                 <StatusRow asset={asset} flagCount={asset.status === 'flagged' ? 1 : 0} />
-                <AssetAttachmentsPanel assetId={asset.id} canEdit={canEdit} />
-                <AuditVideosPanel
-                  buildingId={buildingId}
-                  assetId={asset.id}
-                  onRecordClick={canEdit ? () => setRecordOpen(true) : undefined}
-                />
+                {!guest && <AssetAttachmentsPanel assetId={asset.id} canEdit={canEdit} />}
+                {!guest && (
+                  <AuditVideosPanel
+                    buildingId={buildingId}
+                    assetId={asset.id}
+                    onRecordClick={canEdit ? () => setRecordOpen(true) : undefined}
+                  />
+                )}
                 <AttributesSection asset={asset} />
-                <ActivitySection items={activity} />
-                <PermissionsFooter />
+                {!guest && <ActivitySection items={activity} />}
+                {!guest && <PermissionsFooter />}
               </>
             )}
           </div>
@@ -1037,10 +1049,12 @@ function DetailsSection({
   asset,
   canEdit,
   buildingId,
+  guest = false,
 }: {
   asset: Asset;
   canEdit: boolean;
   buildingId: string;
+  guest?: boolean;
 }) {
   const pinLabel = formatPinNumber(asset.pin_number);
   return (
@@ -1072,7 +1086,7 @@ function DetailsSection({
           <p className="whitespace-pre-wrap text-sm text-text">{asset.notes}</p>
         </div>
       )}
-      <VendorPanel asset={asset} canEdit={canEdit} buildingId={buildingId} />
+      {!guest && <VendorPanel asset={asset} canEdit={canEdit} buildingId={buildingId} />}
     </div>
   );
 }

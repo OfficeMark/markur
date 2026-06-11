@@ -20,7 +20,7 @@ export type ResourceType = 'asset' | 'floor' | 'building' | 'tenant' | 'organiza
 
 export type Resource = { type: ResourceType; id?: string };
 
-export type Role = 'super_admin' | 'building_admin' | 'auditor' | 'tenant_rep';
+export type Role = 'super_admin' | 'building_admin' | 'editor' | 'auditor' | 'tenant_rep' | 'viewer';
 
 export type GrantScopeType = 'global' | 'organization' | 'building' | 'floor' | 'tenant';
 
@@ -56,6 +56,11 @@ const AUDITOR_CAPS: ReadonlySet<Capability> = new Set([
 ]);
 
 const TENANT_CAPS: ReadonlySet<Capability> = new Set(['view', 'flag', 'export']);
+
+// Guest viewer (building share link). Read-only: view the plans/pins/photos and
+// export the floor PDF catalogue — nothing else. Mirrors the `viewer` branch in
+// private.user_can (returns true only for 'view'/'export' on the shared building).
+const VIEWER_CAPS: ReadonlySet<Capability> = new Set(['view', 'export']);
 
 function isExpired(g: Grant, now: number): boolean {
   if (!g.expires_at) return false;
@@ -114,6 +119,14 @@ export function checkCapability(
     if (g.role === 'tenant_rep' && g.scope_type === 'tenant') {
       if (resource.type === 'tenant' && resource.id === g.scope_id) {
         if (TENANT_CAPS.has(capability)) return true;
+      }
+    }
+
+    if (g.role === 'viewer' && g.scope_type === 'building') {
+      // Guest viewer authority covers the shared building (callers resolve
+      // floor/asset/tenant to the parent building, same as building_admin).
+      if (resource.type === 'building' && resource.id === g.scope_id) {
+        if (VIEWER_CAPS.has(capability)) return true;
       }
     }
   }

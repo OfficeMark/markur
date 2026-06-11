@@ -27,9 +27,11 @@ export default defineConfig({
     },
   ],
   webServer: {
-    command: 'npm run build && npm run preview -- --port 4173',
+    // Build in DEMO mode so e2e (incl. the guest-share peek RPC) runs against
+    // the demo Supabase, never prod.
+    command: 'npm run build -- --mode demo && npm run preview -- --port 4173',
     port: PORT,
     reuseExistingServer: !process.env.CI,
-    timeout: 120_000,
+    timeout: 180_000,
   },
 });
