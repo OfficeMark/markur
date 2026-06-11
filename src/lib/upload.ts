@@ -8,10 +8,9 @@ export const PLAN_MAX_BYTES = 25 * 1024 * 1024; // 25 MB
 // for vector floor plans (markur-changes feature).
 //
 // Mirrored in the storage.buckets.allowed_mime_types for `floor-plans`
-// via migration 0028_m25_floor_fix.sql (pdf/png/jpeg/webp/heic/heif).
-// NOTE: image/svg+xml is in this client allowlist but the bucket allowlist
-// does not yet include it -- SVG uploads currently 400 at the storage
-// layer. Tracked as a separate fix (out of M25-floor-fix scope).
+// (pdf/png/jpeg/webp/heic/heif + image/svg+xml). SVG is now allowed at the
+// bucket layer, so uploads must set contentType explicitly: a Blob sent
+// without it goes up as application/octet-stream and the allowlist rejects it.
 export const PLAN_MIME_TYPES = [
   'application/pdf',
   'image/png',
@@ -75,6 +74,29 @@ export async function uploadFloorPlan(
       upsert: true,
       cacheControl: '0', // never cache -- we want replaces to take effect
     });
+  if (error) throw error;
+  return { path };
+}
+
+/**
+ * Upload a produced object (e.g. a Plan Prep cleaned plate) to the floor's
+ * storage slot at `<floorId>.<ext>`. The original upload lives at a different
+ * extension (e.g. `<floorId>.pdf`), so both coexist — the RLS helper keys off
+ * the `<uuid>.` prefix, which matches either. `ext` must be a plan extension
+ * the bucket allows (svg requires the bucket MIME allowlist to include it).
+ */
+export async function uploadPlanObject(
+  floorId: string,
+  blob: Blob,
+  ext: string,
+  contentType: string
+): Promise<{ path: string }> {
+  const path = `${floorId}.${ext}`;
+  const { error } = await supabase.storage.from('floor-plans').upload(path, blob, {
+    contentType,
+    upsert: true,
+    cacheControl: '0',
+  });
   if (error) throw error;
   return { path };
 }
