@@ -23,6 +23,27 @@ const ROUTES = [
 
 const WIDTHS = [390, 360];
 
+// The wordmark <img> carries width=1587 attributes; if its height constraint is
+// ever briefly unapplied (zero-cache first paint / broken load on iOS Safari) it
+// would size to that intrinsic width and blow the flex header past the viewport.
+// The max-w cap must hold it regardless. Simulate the failure by stripping the
+// height class and assert the page still doesn't scroll horizontally.
+for (const width of WIDTHS) {
+  test(`wordmark stays capped when unconstrained @ ${width}px`, async ({ page }) => {
+    await page.setViewportSize({ width, height: 800 });
+    await page.goto('/login', { waitUntil: 'networkidle' });
+    const overflow = await page.evaluate(() => {
+      for (const im of Array.from(document.querySelectorAll('img[alt="Markur, by Officemark"]'))) {
+        im.classList.remove('h-12', 'h-9');
+        (im as HTMLElement).style.height = 'auto';
+      }
+      const de = document.documentElement;
+      return de.scrollWidth - de.clientWidth;
+    });
+    expect(overflow, 'unconstrained wordmark must not overflow the viewport').toBeLessThanOrEqual(0);
+  });
+}
+
 for (const path of ROUTES) {
   for (const width of WIDTHS) {
     test(`no horizontal overflow: ${path} @ ${width}px`, async ({ page }) => {

@@ -23,7 +23,7 @@ export function GuestLayout({ title, children }: { title?: string | null; childr
             <img
               src="/icons/markur-wordmark-light.png"
               alt="Markur, by Officemark"
-              className="h-9 w-auto shrink-0"
+              className="h-9 w-auto max-w-[160px] shrink-0"
               width={1587}
               height={521}
             />

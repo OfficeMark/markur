@@ -38,7 +38,11 @@ export function AppShell({ children, withSidebar = true }: AppShellProps) {
               <img
                 src="/icons/markur-wordmark-light.png"
                 alt="Markur, by Officemark"
-                className="h-9 w-auto"
+                // max-w cap: the 1587px-wide source must never size to its
+                // intrinsic width if the height constraint is briefly unapplied
+                // (zero-cache first paint / broken-load on iOS Safari), or it
+                // blows the flex header — and the page — past the viewport.
+                className="h-9 w-auto max-w-[160px] shrink-0"
                 width={1587}
                 height={521}
               />
