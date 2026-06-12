@@ -17,6 +17,7 @@ import { useUpdateAsset } from '@/hooks/useAssets';
 import { createFlag } from '@/lib/queries/flags';
 import type { AssetStatus } from '@/lib/asset-status';
 import type { Asset, AuditSession } from '@/types/database';
+import { DEFAULT_PIN_SHAPE, DEFAULT_PIN_SIZE, type PinShape, type PinSize } from '@/lib/queries/branding';
 // PlanKind isn't exported as a named type yet; use the inline literal
 import type { AuditOutcome } from '@/lib/queries/audit-events';
 
@@ -39,6 +40,8 @@ export type AuditModeShellProps = {
   planKind: 'pdf' | 'image';
   /** Pin to pre-select on open (drawer "Log a flag" CTA); null = none. */
   initialAssetId?: string | null;
+  pinShape?: PinShape;
+  pinSize?: PinSize;
   onClose: () => void;
 };
 
@@ -50,6 +53,8 @@ export function AuditModeShell({
   planUrl,
   planKind,
   initialAssetId,
+  pinShape = DEFAULT_PIN_SHAPE,
+  pinSize = DEFAULT_PIN_SIZE,
   onClose,
 }: AuditModeShellProps) {
   const { data: events = [] } = useAuditEvents(session.id);
@@ -260,6 +265,8 @@ export function AuditModeShell({
               canMove={false}
               statusOverride={statusOverride}
               onSelectAsset={(a) => setCurrentId(a.id)}
+              pinShape={pinShape}
+              pinSize={pinSize}
             />
           }
         />

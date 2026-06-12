@@ -1,5 +1,36 @@
 import { supabase } from '@/lib/supabase';
-import type { Building } from '@/types/database';
+import type { Building, Json } from '@/types/database';
+import type { PinShape, PinSize } from '@/lib/queries/branding';
+
+/**
+ * Set the per-building pin shape/size in `buildings.settings` (jsonb). Read-
+ * modify-write so other settings keys are preserved. RLS gates this to admins
+ * with `configure` on the building.
+ */
+export async function setBuildingPinAppearance(
+  buildingId: string,
+  appearance: { pin_shape: PinShape; pin_size: PinSize }
+): Promise<Building> {
+  const { data: existing, error: readErr } = await supabase
+    .from('buildings')
+    .select('settings')
+    .eq('id', buildingId)
+    .single();
+  if (readErr) throw readErr;
+  const prev =
+    existing?.settings && typeof existing.settings === 'object' && !Array.isArray(existing.settings)
+      ? (existing.settings as Record<string, unknown>)
+      : {};
+  const settings = { ...prev, pin_shape: appearance.pin_shape, pin_size: appearance.pin_size };
+  const { data, error } = await supabase
+    .from('buildings')
+    .update({ settings: settings as unknown as Json })
+    .eq('id', buildingId)
+    .select('*')
+    .single();
+  if (error) throw error;
+  return data;
+}
 
 export async function listBuildings(): Promise<Building[]> {
   const { data, error } = await supabase

@@ -2,7 +2,7 @@ import { useRef, useState } from 'react';
 import type { Asset } from '@/types/database';
 import { PinMarker } from './PinMarker';
 import { computeStatus, type AssetStatus } from '@/lib/asset-status';
-import { useOrgBranding } from '@/hooks/useBranding';
+import { DEFAULT_PIN_SHAPE, DEFAULT_PIN_SIZE, type PinShape, type PinSize } from '@/lib/queries/branding';
 import { formatPinNumber } from '@/lib/pin-types';
 import { cn } from '@/lib/utils';
 
@@ -58,6 +58,11 @@ export type PinOverlayProps = {
    * no reposition is already in progress.
    */
   onLongPress?: (assetId: string) => void;
+
+  // Per-building pin appearance (resolved from buildings.settings by the
+  // parent). Defaults applied so the overlay renders before the building loads.
+  pinShape?: PinShape;
+  pinSize?: PinSize;
 };
 
 const LONG_PRESS_MS = 500;
@@ -95,9 +100,10 @@ export function PinOverlay({
   lastAuditByAsset,
   statusOverride,
   onLongPress,
+  pinShape = DEFAULT_PIN_SHAPE,
+  pinSize = DEFAULT_PIN_SIZE,
 }: PinOverlayProps) {
   const layerRef = useRef<HTMLDivElement | null>(null);
-  const { pinShape, pinSize } = useOrgBranding();
   // dragRef is always-current; the React state below is for visualization only.
   const dragRef = useRef<DragState | null>(null);
   // Used to suppress click-after-drag.
