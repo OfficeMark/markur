@@ -44,6 +44,28 @@ for (const width of WIDTHS) {
   });
 }
 
+// iOS Safari zooms the whole page when you focus a form control with font-size
+// < 16px, and the zoom persists across SPA navigation. Assert every text-entry
+// control is >=16px at phone widths (login = the guaranteed first tap). This
+// one doesn't get to come back.
+for (const width of WIDTHS) {
+  test(`form controls are >=16px (no iOS focus-zoom) @ ${width}px`, async ({ page }) => {
+    await page.setViewportSize({ width, height: 800 });
+    await page.goto('/login', { waitUntil: 'networkidle' });
+    const tooSmall = await page.evaluate(() => {
+      const out: Array<{ tag: string; type: string; px: number }> = [];
+      for (const el of Array.from(document.querySelectorAll('input, textarea, select'))) {
+        const type = (el as HTMLInputElement).type || '';
+        if (['checkbox', 'radio', 'range', 'file', 'hidden', 'submit', 'button'].includes(type)) continue;
+        const px = parseFloat(getComputedStyle(el).fontSize);
+        if (px < 16) out.push({ tag: el.tagName.toLowerCase(), type, px });
+      }
+      return out;
+    });
+    expect(tooSmall, `controls under 16px trigger iOS focus-zoom: ${JSON.stringify(tooSmall)}`).toEqual([]);
+  });
+}
+
 for (const path of ROUTES) {
   for (const width of WIDTHS) {
     test(`no horizontal overflow: ${path} @ ${width}px`, async ({ page }) => {
