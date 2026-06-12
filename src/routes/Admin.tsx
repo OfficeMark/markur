@@ -1,5 +1,5 @@
 import { Navigate, NavLink, Outlet } from 'react-router-dom';
-import { ArrowLeft, BookUser, Image, Lock, Mail, Tag, Users } from 'lucide-react';
+import { ArrowLeft, BookUser, Image, Lock, Mail, Tag, Trash2, Users } from 'lucide-react';
 import { AppShell } from '@/components/waymarks/AppShell';
 import { usePermissions } from '@/lib/permissions-context';
 
@@ -37,12 +37,15 @@ export function Admin() {
   if (loading) return null;
 
   const now = Date.now();
-  const isAdmin = grants.some(
-    (g) =>
-      (g.role === 'super_admin' || g.role === 'building_admin') &&
-      (!g.expires_at || new Date(g.expires_at).getTime() > now)
-  );
+  const active = grants.filter((g) => !g.expires_at || new Date(g.expires_at).getTime() > now);
+  const isAdmin = active.some((g) => g.role === 'super_admin' || g.role === 'building_admin');
+  const isSuper = active.some((g) => g.role === 'super_admin');
   if (!isAdmin) return <Navigate to="/settings" replace />;
+
+  // Deleted-buildings Trash is super-admin only (matches asset Trash).
+  const nav: NavItem[] = isSuper
+    ? [...NAV, { to: '/admin/deleted-buildings', label: 'Deleted buildings', icon: Trash2 }]
+    : NAV;
 
   return (
     <AppShell>
@@ -59,7 +62,7 @@ export function Admin() {
             Admin
           </p>
           <nav className="flex gap-1 overflow-x-auto sm:flex-col sm:gap-0.5 sm:overflow-visible">
-            {NAV.map((item) => (
+            {nav.map((item) => (
               <NavLink
                 key={item.to}
                 to={item.to}

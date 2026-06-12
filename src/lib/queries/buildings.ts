@@ -53,6 +53,56 @@ export async function getBuilding(id: string): Promise<Building | null> {
   return data;
 }
 
+/**
+ * Soft-delete a building (most destructive action; admin-gated + name-typed
+ * confirm in the UI). Models floor delete one level up: stamps `deleted_at` on
+ * the building AND cascades the SAME timestamp onto its live floors. Every read
+ * already filters `deleted_at` (buildings list/get, floors, assets via the floor
+ * join, reports), so the building and all its floors/pins/photos/flags vanish
+ * everywhere — lists, god view, exports, direct floor URLs, and guest shares
+ * (getBuilding returns null → the guest view shows "unavailable"). No storage
+ * purge; fully recoverable via restoreBuilding.
+ */
+export async function softDeleteBuilding(id: string): Promise<void> {
+  const deletedAt = new Date().toISOString();
+  const { error: fErr } = await supabase
+    .from('floors')
+    .update({ deleted_at: deletedAt })
+    .eq('building_id', id)
+    .is('deleted_at', null);
+  if (fErr) throw fErr;
+  const { error } = await supabase.from('buildings').update({ deleted_at: deletedAt }).eq('id', id);
+  if (error) throw error;
+}
+
+/**
+ * Restore a soft-deleted building and only the floors that were cascade-deleted
+ * WITH it (matching `deletedAt`), so floors deleted independently before the
+ * building stay deleted. Their pins/photos/flags reappear via the same
+ * visibility filters. Super-admin only (RLS).
+ */
+export async function restoreBuilding(id: string, deletedAt: string): Promise<void> {
+  const { error } = await supabase.from('buildings').update({ deleted_at: null }).eq('id', id);
+  if (error) throw error;
+  const { error: fErr } = await supabase
+    .from('floors')
+    .update({ deleted_at: null })
+    .eq('building_id', id)
+    .eq('deleted_at', deletedAt);
+  if (fErr) throw fErr;
+}
+
+/** Soft-deleted buildings, newest first. Super-admin only (RLS). */
+export async function listDeletedBuildings(): Promise<Building[]> {
+  const { data, error } = await supabase
+    .from('buildings')
+    .select('*')
+    .not('deleted_at', 'is', null)
+    .order('deleted_at', { ascending: false });
+  if (error) throw error;
+  return data ?? [];
+}
+
 export type NewBuildingInput = {
   name: string;
   address: string;

@@ -1,4 +1,4 @@
-import { Link, useParams } from 'react-router-dom';
+import { Link, useNavigate, useParams } from 'react-router-dom';
 import { useState } from 'react';
 import { ArrowLeft, MapPin, Layers, ImageOff, Trash2, Plus, FileDown, Share2 } from 'lucide-react';
 import { AppShell } from '@/components/waymarks/AppShell';
@@ -7,8 +7,9 @@ import { AccessManagementCard } from '@/components/waymarks/AccessManagementCard
 import { BuildingPhotoUpload } from '@/components/waymarks/BuildingPhotoUpload';
 import { NewFloorDialog } from '@/components/waymarks/NewFloorDialog';
 import { ShareBuildingDialog } from '@/components/waymarks/ShareBuildingDialog';
+import { StepUpDialog } from '@/components/waymarks/StepUpDialog';
 import { ResumeAuditBanner } from '@/components/waymarks/ResumeAuditBanner';
-import { useBuilding, useSetBuildingPinAppearance } from '@/hooks/useBuildings';
+import { useBuilding, useSetBuildingPinAppearance, useSoftDeleteBuilding } from '@/hooks/useBuildings';
 import { useFloors } from '@/hooks/useFloors';
 import { useCan, useIsSuperAdmin } from '@/lib/permissions-context';
 import { PinAppearanceControl } from '@/components/waymarks/PinAppearanceControl';
@@ -17,15 +18,20 @@ import type { Floor } from '@/types/database';
 
 export function Building() {
   const { id } = useParams<{ id: string }>();
+  const navigate = useNavigate();
   const { data: building, isLoading: bLoading, error: bError } = useBuilding(id);
   const { data: floors = [], isLoading: fLoading } = useFloors(id);
   const [newFloorOpen, setNewFloorOpen] = useState(false);
   const [shareOpen, setShareOpen] = useState(false);
+  const [deleteOpen, setDeleteOpen] = useState(false);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
   const isSuperAdmin = useIsSuperAdmin();
   const canManageAccess = useCan('manage_access', { type: 'building', id: id ?? '' });
   const canConfigure = useCan('configure', { type: 'building', id: id ?? '' });
   const canEdit = useCan('edit', { type: 'building', id: id ?? '' });
+  const canDeleteBuilding = useCan('delete', { type: 'building', id: id ?? '' });
   const setPins = useSetBuildingPinAppearance(id);
+  const softDeleteBuilding = useSoftDeleteBuilding();
 
   if (bLoading) return <Skeleton />;
 
@@ -198,6 +204,32 @@ export function Building() {
             <AccessManagementCard buildingId={building.id} />
           </section>
         )}
+
+        {canDeleteBuilding && (
+          <section className="mt-10 rounded-lg border border-danger/30 bg-danger-bg/40 p-5 dark:bg-white/5">
+            <p className="mb-2 text-[11px] font-medium uppercase tracking-[0.22em] text-danger">
+              Danger zone
+            </p>
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <p className="max-w-xl text-sm text-text-muted">
+                Delete this building and everything in it — all floors, pins, photos, and flags. It
+                disappears for everyone, including guest share links and reports. A super admin can
+                restore it.
+              </p>
+              <button
+                type="button"
+                onClick={() => {
+                  setDeleteError(null);
+                  setDeleteOpen(true);
+                }}
+                className="inline-flex h-9 shrink-0 items-center gap-1.5 rounded-md border border-danger/40 bg-surface px-3 text-xs font-medium text-danger hover:bg-danger-bg dark:bg-white/5"
+              >
+                <Trash2 size={12} aria-hidden />
+                Delete building
+              </button>
+            </div>
+          </section>
+        )}
       </div>
       {building && (
         <NewFloorDialog
@@ -213,6 +245,39 @@ export function Building() {
           onOpenChange={setShareOpen}
           buildingId={building.id}
           buildingName={building.name}
+        />
+      )}
+      {building && canDeleteBuilding && (
+        <StepUpDialog
+          open={deleteOpen}
+          onOpenChange={(o) => {
+            if (!softDeleteBuilding.isPending) setDeleteOpen(o);
+          }}
+          title={`Delete ${building.name}?`}
+          description={
+            `This soft-deletes the building and everything in it — ` +
+            (floors.length === 0
+              ? 'no floors yet'
+              : floors.length === 1
+                ? '1 floor'
+                : `${floors.length} floors`) +
+            ` and all their pins, photos, and flags. It vanishes everywhere — lists, the god view, reports, and guest share links. A super admin can restore it from Admin → Deleted buildings. Type the building's name to confirm.`
+          }
+          confirmWord={building.name}
+          confirmLabel="Delete building"
+          confirmVariant="danger"
+          confirmIcon={<Trash2 size={14} aria-hidden />}
+          busy={softDeleteBuilding.isPending}
+          errorMessage={deleteError}
+          onConfirm={async () => {
+            setDeleteError(null);
+            try {
+              await softDeleteBuilding.mutateAsync(building.id);
+              navigate('/');
+            } catch (err) {
+              setDeleteError(err instanceof Error ? err.message : 'Could not delete the building.');
+            }
+          }}
         />
       )}
     </AppShell>
