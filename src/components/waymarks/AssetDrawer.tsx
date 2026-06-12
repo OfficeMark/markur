@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useState } from 'react';
 import * as Dialog from '@radix-ui/react-dialog';
 import { format } from 'date-fns';
 import { Tooltip } from '@/components/ui/Tooltip';
@@ -14,7 +14,6 @@ import {
   Check,
   AlertTriangle,
   Flag,
-  Save,
   Lock,
   LockOpen,
   Move,
@@ -25,7 +24,6 @@ import {
 } from 'lucide-react';
 import { Chip } from '@/components/ui/Chip';
 import { MetricCard } from '@/components/ui/MetricCard';
-import { Button } from '@/components/ui/Button';
 import { useAsset, useUpdateAsset } from '@/hooks/useAssets';
 import { useBuilding } from '@/hooks/useBuildings';
 import { useFloor } from '@/hooks/useFloors';
@@ -44,8 +42,8 @@ import {
 import { ensureUploadableImage, PHOTO_ACCEPT } from '@/lib/heic';
 import { computeStatus, statusLabel, type AssetStatus } from '@/lib/asset-status';
 import { formatPinNumber } from '@/lib/pin-types';
-import { useAssetTypes } from '@/hooks/useAssetTypes';
 import { useContacts } from '@/hooks/useContacts';
+import { NewAssetDialog } from './NewAssetDialog';
 import { useAssetVendors, useAddAssetVendor, useRemoveAssetVendor } from '@/hooks/useAssetVendors';
 import { useVendors, useCreateVendor } from '@/hooks/useVendors';
 import { AssetAttachmentsPanel } from './AssetAttachmentsPanel';
@@ -169,17 +167,6 @@ export function AssetDrawer({
           <div className="flex-1 space-y-5 overflow-y-auto p-4">
             {isLoading || !asset ? (
               <Skeleton />
-            ) : editing ? (
-              <EditPanel
-                asset={asset}
-                buildingId={buildingId}
-                saving={update.isPending}
-                onCancel={() => setEditing(false)}
-                onSave={async (patch) => {
-                  await update.mutateAsync({ id: asset.id, patch });
-                  setEditing(false);
-                }}
-              />
             ) : (
               <>
                 {asset.status === 'flagged' && (
@@ -216,6 +203,8 @@ export function AssetDrawer({
                 <QuickActions
                   asset={asset}
                   canAudit={canAudit}
+                  canEdit={canEdit}
+                  onSetStatus={(status) => update.mutate({ id: asset.id, patch: { status } })}
                   onLogFlag={onLogFlag ? () => onLogFlag(asset.id) : undefined}
                 />
                 {!guest && (
@@ -251,6 +240,17 @@ export function AssetDrawer({
           buildingId={buildingId}
           assetId={asset.id}
           scopeLabel={asset.name?.trim() || 'this asset'}
+        />
+      )}
+      {asset && canEdit && (
+        // Add/Edit parity: the same banded dialog edits this pin in place.
+        <NewAssetDialog
+          open={editing}
+          onOpenChange={setEditing}
+          asset={asset}
+          floorId={floorId}
+          buildingId={buildingId}
+          position={null}
         />
       )}
     </Dialog.Root>
@@ -323,10 +323,14 @@ function LockBar({
 function QuickActions({
   asset,
   canAudit,
+  canEdit,
+  onSetStatus,
   onLogFlag,
 }: {
   asset: Asset;
   canAudit: boolean;
+  canEdit: boolean;
+  onSetStatus: (status: AssetStatus) => void;
   onLogFlag?: () => void;
 }) {
   const current = asset.status as AssetStatus;
@@ -339,21 +343,38 @@ function QuickActions({
         {STATUS_OPTIONS.map((opt) => {
           const Icon = opt.icon;
           const active = current === opt.value;
+          const base = cn(
+            'inline-flex h-8 items-center gap-1.5 rounded-full border px-3 text-xs font-medium',
+            active
+              ? variantClasses(opt.value, 'active')
+              : 'border-black/15 bg-surface text-text-muted dark:border-white/15'
+          );
+          // Read-only (e.g. guest / no edit right): static chips, current marked.
+          if (!canEdit) {
+            return (
+              <span
+                key={opt.value}
+                aria-current={active ? 'true' : undefined}
+                className={cn(base, 'select-none', !active && 'opacity-60')}
+              >
+                <Icon size={12} aria-hidden />
+                <span>{opt.label}</span>
+                {active && <span className="ml-0.5 text-[10px] uppercase tracking-wide">· current</span>}
+              </span>
+            );
+          }
+          // Editable: the top-of-window status control (click to set).
           return (
-            <span
+            <button
               key={opt.value}
-              aria-current={active ? 'true' : undefined}
-              className={cn(
-                'inline-flex h-8 select-none items-center gap-1.5 rounded-full border px-3 text-xs font-medium',
-                active
-                  ? variantClasses(opt.value, 'active')
-                  : 'border-black/15 bg-surface text-text-muted opacity-60 dark:border-white/15'
-              )}
+              type="button"
+              onClick={() => onSetStatus(opt.value)}
+              aria-pressed={active}
+              className={cn(base, 'transition-colors', !active && 'opacity-70 hover:opacity-100')}
             >
               <Icon size={12} aria-hidden />
               <span>{opt.label}</span>
-              {active && <span className="ml-0.5 text-[10px] uppercase tracking-wide">· current</span>}
-            </span>
+            </button>
           );
         })}
       </div>
@@ -533,264 +554,6 @@ function variantClasses(status: AssetStatus, state: 'active' | 'idle'): string {
     return 'border-danger/30 bg-danger-bg text-danger';
   }
   return 'border-black/15 bg-surface text-waymarks-ink-muted hover:border-black/25 hover:text-text dark:border-white/15';
-}
-
-function EditPanel({
-  asset,
-  buildingId,
-  saving,
-  onCancel,
-  onSave,
-}: {
-  asset: Asset;
-  buildingId: string;
-  saving: boolean;
-  onCancel: () => void;
-  onSave: (patch: {
-    name: string;
-    type: string;
-    location_notes: string | null;
-    manufacturer: string | null;
-    installed_at: string | null;
-    audit_cycle_days: number | null;
-    status: AssetStatus;
-    contact_id: string | null;
-  }) => Promise<void>;
-}) {
-  const { signage: signageTypes, facility: facilityTypes } = useAssetTypes();
-  const contacts = useContacts();
-  // M34b: only this building's contacts plus org-wide shared ones.
-  const contactsInScope = contacts.list.filter(
-    (c) => c.building_id === null || c.building_id === buildingId
-  );
-  const [name, setName] = useState(asset.name);
-  const [type, setType] = useState(asset.type);
-  const [notes, setNotes] = useState(asset.location_notes ?? '');
-  const [manufacturer, setManufacturer] = useState(asset.manufacturer ?? '');
-  const [installed, setInstalled] = useState(asset.installed_at ?? '');
-  const [cycle, setCycle] = useState<string>(
-    asset.audit_cycle_days != null ? String(asset.audit_cycle_days) : ''
-  );
-  const [status, setStatus] = useState<AssetStatus>(asset.status as AssetStatus);
-  const [contactId, setContactId] = useState(asset.contact_id ?? '');
-  const [error, setError] = useState<string | null>(null);
-
-  const dirty = useMemo(() => {
-    return (
-      name !== asset.name ||
-      type !== asset.type ||
-      (notes || '') !== (asset.location_notes || '') ||
-      (manufacturer || '') !== (asset.manufacturer || '') ||
-      (installed || '') !== (asset.installed_at || '') ||
-      (cycle || '') !== (asset.audit_cycle_days != null ? String(asset.audit_cycle_days) : '') ||
-      status !== asset.status ||
-      (contactId || '') !== (asset.contact_id || '')
-    );
-  }, [name, type, notes, manufacturer, installed, cycle, status, contactId, asset]);
-
-  async function submit() {
-    setError(null);
-    if (name.trim().length === 0) {
-      setError('Name is required.');
-      return;
-    }
-    if (name.trim().length > 80) {
-      setError('Name must be 80 characters or fewer.');
-      return;
-    }
-    let cycleNum: number | null = null;
-    if (cycle !== '') {
-      const n = Number(cycle);
-      if (!Number.isFinite(n) || n < 0 || !Number.isInteger(n)) {
-        setError('Audit cycle must be a positive whole number of days.');
-        return;
-      }
-      cycleNum = n;
-    }
-    try {
-      await onSave({
-        name: name.trim(),
-        type,
-        location_notes: notes.trim() === '' ? null : notes.trim(),
-        manufacturer: manufacturer.trim() === '' ? null : manufacturer.trim(),
-        installed_at: installed === '' ? null : installed,
-        audit_cycle_days: cycleNum,
-        status,
-        contact_id: contactId === '' ? null : contactId,
-      });
-    } catch (e) {
-      setError(e instanceof Error ? e.message : 'Save failed.');
-    }
-  }
-
-  return (
-    <form
-      onSubmit={(e) => {
-        e.preventDefault();
-        void submit();
-      }}
-      className="space-y-4"
-    >
-      {error && (
-        <div className="rounded-md border border-danger/30 bg-danger-bg px-3 py-2 text-sm text-danger">
-          {error}
-        </div>
-      )}
-
-      <FieldLabel label="Status">
-        <div className="flex flex-wrap gap-1.5">
-          {STATUS_OPTIONS.map((opt) => {
-            const Icon = opt.icon;
-            const active = status === opt.value;
-            return (
-              <button
-                key={opt.value}
-                type="button"
-                onClick={() => setStatus(opt.value)}
-                aria-pressed={active}
-                className={cn(
-                  'inline-flex h-8 items-center gap-1.5 rounded-full border px-3 text-xs font-medium transition-colors',
-                  active
-                    ? variantClasses(opt.value, 'active')
-                    : variantClasses(opt.value, 'idle')
-                )}
-              >
-                <Icon size={12} aria-hidden />
-                <span>{opt.label}</span>
-              </button>
-            );
-          })}
-        </div>
-      </FieldLabel>
-
-      <FieldLabel label="Name">
-        <input
-          value={name}
-          onChange={(e) => setName(e.target.value)}
-          className="h-10 w-full rounded-md border border-black/10 bg-surface px-3 text-sm text-text outline-none focus:border-waymarks-gold focus:ring-2 focus:ring-waymarks-gold dark:border-white/10"
-        />
-      </FieldLabel>
-
-      <FieldLabel label="Type">
-        <select
-          value={type}
-          onChange={(e) => setType(e.target.value)}
-          className="h-10 w-full rounded-md border border-black/10 bg-surface px-3 text-sm text-text outline-none focus:border-waymarks-gold focus:ring-2 focus:ring-waymarks-gold dark:border-white/10"
-        >
-          <optgroup label="Signage">
-            {signageTypes.map((t) => (
-              <option key={t.id} value={t.key}>
-                {t.label}
-              </option>
-            ))}
-          </optgroup>
-          <optgroup label="Facility">
-            {facilityTypes.map((t) => (
-              <option key={t.id} value={t.key}>
-                {t.label}
-              </option>
-            ))}
-          </optgroup>
-        </select>
-      </FieldLabel>
-
-      {/* M32 Step 3: this field maps to `location_notes` (the state variable
-          is misleadingly named `notes` — pre-existing). Renaming the label
-          to match the NewAssetDialog ("Where on the floor") so users see the
-          same wording everywhere. DB column unchanged. The dedicated
-          `notes` and `room_number` columns aren't editable here yet — flagged
-          as a follow-up for the drawer's edit view. */}
-      <FieldLabel label="Where on the floor">
-        <textarea
-          rows={3}
-          value={notes}
-          onChange={(e) => setNotes(e.target.value)}
-          placeholder='e.g. "East elevator lobby, mounted at 5′"'
-          className="w-full rounded-md border border-black/10 bg-surface p-3 text-sm text-text outline-none focus:border-waymarks-gold focus:ring-2 focus:ring-waymarks-gold dark:border-white/10"
-        />
-      </FieldLabel>
-
-      <FieldLabel label="Manufacturer">
-        <input
-          value={manufacturer}
-          onChange={(e) => setManufacturer(e.target.value)}
-          placeholder="Vendor"
-          className="h-10 w-full rounded-md border border-black/10 bg-surface px-3 text-sm text-text outline-none focus:border-waymarks-gold focus:ring-2 focus:ring-waymarks-gold dark:border-white/10"
-        />
-      </FieldLabel>
-
-      {/* M34 item 1: associate a directory contact (person/department) with
-          this pin. Managed in Admin → Contacts & Vendors. */}
-      <FieldLabel label="Contact">
-        <select
-          value={contactId}
-          onChange={(e) => setContactId(e.target.value)}
-          className="h-10 w-full rounded-md border border-black/10 bg-surface px-3 text-sm text-text outline-none focus:border-waymarks-gold focus:ring-2 focus:ring-waymarks-gold dark:border-white/10"
-        >
-          <option value="">— None —</option>
-          {/* Keep the current contact selectable even if it's out of scope or removed. */}
-          {asset.contact_id && !contactsInScope.some((c) => c.id === asset.contact_id) && (
-            <option value={asset.contact_id}>(previously selected contact)</option>
-          )}
-          {contactsInScope.map((c) => (
-            <option key={c.id} value={c.id}>
-              {c.label}
-              {c.email ? ` · ${c.email}` : ''}
-            </option>
-          ))}
-        </select>
-      </FieldLabel>
-
-      <div className="grid grid-cols-2 gap-2">
-        <FieldLabel label="Installed">
-          <input
-            type="date"
-            value={installed ?? ''}
-            onChange={(e) => setInstalled(e.target.value)}
-            className="h-10 w-full rounded-md border border-black/10 bg-surface px-3 text-sm text-text outline-none focus:border-waymarks-gold focus:ring-2 focus:ring-waymarks-gold dark:border-white/10"
-          />
-        </FieldLabel>
-
-        <FieldLabel label="Audit cycle (days)">
-          <input
-            type="number"
-            min={0}
-            step={1}
-            value={cycle}
-            onChange={(e) => setCycle(e.target.value)}
-            placeholder="default 90"
-            className="h-10 w-full rounded-md border border-black/10 bg-surface px-3 text-sm text-text outline-none focus:border-waymarks-gold focus:ring-2 focus:ring-waymarks-gold dark:border-white/10"
-          />
-        </FieldLabel>
-      </div>
-
-      <div className="sticky bottom-0 -mx-4 flex justify-end gap-2 border-t border-black/10 bg-surface px-4 py-3 dark:border-white/10">
-        <Button variant="secondary" onClick={onCancel} disabled={saving}>
-          Cancel
-        </Button>
-        <Button
-          type="submit"
-          variant="gold"
-          loading={saving}
-          disabled={!dirty || saving}
-          iconLeft={<Save size={14} aria-hidden />}
-        >
-          Save
-        </Button>
-      </div>
-    </form>
-  );
-}
-
-function FieldLabel({ label, children }: { label: string; children: React.ReactNode }) {
-  return (
-    <label className="block space-y-1.5">
-      <span className="block text-xs font-medium uppercase tracking-[0.18em] text-text-faint">
-        {label}
-      </span>
-      {children}
-    </label>
-  );
 }
 
 function PhotoGallery({

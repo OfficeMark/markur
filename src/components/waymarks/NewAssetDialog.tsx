@@ -21,11 +21,12 @@ import {
   type LucideIcon,
 } from 'lucide-react';
 import { Button } from '@/components/ui/Button';
-import { useCreateAsset, useAssets } from '@/hooks/useAssets';
+import { useCreateAsset, useAssets, useUpdateAsset } from '@/hooks/useAssets';
 import { useFloors } from '@/hooks/useFloors';
 import { useContacts } from '@/hooks/useContacts';
 import { useAddAuditVideo } from '@/hooks/useAuditVideos';
 import { listAssetsByFloor, type AssetCategory } from '@/lib/queries/assets';
+import { formatPinNumber } from '@/lib/pin-types';
 import { addAssetPhoto, validateAssetPhotoFile } from '@/lib/queries/asset-photos';
 import {
   AuditVideoRecorderDialog,
@@ -60,8 +61,15 @@ export type NewAssetDialogProps = {
   floorId: string;
   /** Building the placement floor belongs to — drives the multi-floor picker (item 4). */
   buildingId: string;
-  position: { x: number; y: number } | null;
+  /** Placement coords — required in add mode, ignored in edit mode. */
+  position?: { x: number; y: number } | null;
   onCreated?: (asset: Asset) => void;
+  /**
+   * When supplied, the dialog is in EDIT mode: fields load from this asset,
+   * the footer reads "Save changes", and submit updates the row in place.
+   * Add/Edit parity — one component, every field editable in both.
+   */
+  asset?: Asset | null;
 };
 
 export function NewAssetDialog({
@@ -71,8 +79,11 @@ export function NewAssetDialog({
   buildingId,
   position,
   onCreated,
+  asset,
 }: NewAssetDialogProps) {
+  const isEdit = !!asset;
   const create = useCreateAsset();
+  const update = useUpdateAsset(floorId);
   const addVideo = useAddAuditVideo();
   const { signage: signageTypes, facility: facilityTypes, list: allTypes, orgId } = useAssetTypes();
   const createAssetType = useCreateAssetType();
@@ -168,6 +179,28 @@ export function NewAssetDialog({
     }
   }, [open, floorId]);
 
+  // Edit mode: hydrate the form from the asset each time the dialog opens.
+  // "Where on the floor" (location_notes) merges into the single Notes field;
+  // on save it's written back to `notes` and location_notes is cleared.
+  useEffect(() => {
+    if (!open || !asset) return;
+    const mergedNotes = [asset.location_notes, asset.notes]
+      .map((s) => s?.trim())
+      .filter(Boolean)
+      .join('\n\n');
+    reset({
+      type: asset.type,
+      name: asset.name ?? '',
+      room_number: asset.room_number ?? '',
+      notes: mergedNotes,
+    });
+    setZone(asset.zone ?? '');
+    setContactId(asset.contact_id ?? '');
+    setInstalled(asset.installed_at ?? '');
+    setCycle(asset.audit_cycle_days != null ? String(asset.audit_cycle_days) : '');
+    setTypeQuery('');
+  }, [open, asset, reset]);
+
   function slugify(label: string): string {
     return label
       .toLowerCase()
@@ -225,10 +258,6 @@ export function NewAssetDialog({
   }
 
   async function onSubmit(values: FormValues) {
-    if (!position) {
-      setSubmitError('No position set — click on the floor plan first.');
-      return;
-    }
     // Validate the optional audit cycle (positive whole number of days).
     let cycleNum: number | null = null;
     if (cycle.trim() !== '') {
@@ -239,16 +268,61 @@ export function NewAssetDialog({
       }
       cycleNum = n;
     }
+
+    // Type optional, fallback to seeded 'other' so the pin still has a
+    // renderable category.
+    const finalType = (values.type ?? '').trim() || 'other';
+    const finalCategory: AssetCategory =
+      (allTypes.find((t) => t.key === finalType)?.category as AssetCategory) ?? 'signage';
+    const mergedNotes = values.notes?.trim() || null;
+
+    // ----- EDIT: update the existing row in place -----
+    if (isEdit && asset) {
+      setSubmitError(null);
+      try {
+        await update.mutateAsync({
+          id: asset.id,
+          patch: {
+            name: values.name?.trim() || 'Untitled',
+            type: finalType,
+            category: finalCategory,
+            room_number: values.room_number?.trim() || null,
+            notes: mergedNotes,
+            location_notes: null,
+            contact_id: contactId || null,
+            installed_at: installed || null,
+            audit_cycle_days: cycleNum,
+            zone: zone.trim() || null,
+          },
+        });
+        // Attach any newly added photos / clips to the existing asset.
+        for (const f of photos) await addAssetPhoto(asset.id, f);
+        for (const v of videos) {
+          await addVideo.mutateAsync({
+            buildingId,
+            assetId: asset.id,
+            blob: v.blob,
+            durationSeconds: v.durationSeconds,
+            notes: v.notes,
+          });
+        }
+        resetAll();
+        onOpenChange(false);
+      } catch (err) {
+        setSubmitError(err instanceof Error ? err.message : 'Failed to save changes.');
+      }
+      return;
+    }
+
+    // ----- ADD: place one pin per selected floor -----
+    if (!position) {
+      setSubmitError('No position set — click on the floor plan first.');
+      return;
+    }
     // Always include the floor the pin was placed on, even if the picker isn't shown.
     const targetIds = selectedFloorIds.size > 0 ? [...selectedFloorIds] : [floorId];
     setSubmitError(null);
     try {
-      // Type optional, fallback to seeded 'other' so the pin still has a
-      // renderable category.
-      const finalType = (values.type ?? '').trim() || 'other';
-      const finalCategory: AssetCategory =
-        (allTypes.find((t) => t.key === finalType)?.category as AssetCategory) ?? 'signage';
-
       // Item 4: create one independent asset per selected floor at the same
       // x/y. Skip any floor that already has a pin at that exact spot.
       const skipped: string[] = [];
@@ -274,7 +348,7 @@ export function NewAssetDialog({
           category: finalCategory,
           name: values.name?.trim() || null,
           room_number: values.room_number?.trim() || null,
-          notes: values.notes?.trim() || null,
+          notes: mergedNotes,
           contact_id: contactId || null,
           installed_at: installed || null,
           audit_cycle_days: cycleNum,
@@ -345,9 +419,13 @@ export function NewAssetDialog({
             <span aria-hidden className="absolute inset-y-0 left-0 w-1 bg-waymarks-gold" />
             <div className="flex items-start justify-between gap-3">
               <div>
-                <Dialog.Title className="font-semibold text-xl">Add asset</Dialog.Title>
+                <Dialog.Title className="font-semibold text-xl">
+                  {isEdit ? 'Edit asset' : 'Add asset'}
+                </Dialog.Title>
                 <Dialog.Description className="mt-0.5 text-sm text-white/70">
-                  Place a sign at the spot you clicked on the plan.
+                  {isEdit
+                    ? "Update this pin's details."
+                    : 'Place a sign at the spot you clicked on the plan.'}
                 </Dialog.Description>
               </div>
               <Dialog.Close asChild>
@@ -424,8 +502,23 @@ export function NewAssetDialog({
                     <input id="asset-room" {...register('room_number')} placeholder='e.g. "301"' className={inputClass} />
                   </Field>
 
-                  {/* Item 4: place the same pin on multiple floors at once. */}
-                  {floors.length > 1 && (
+                  {isEdit && asset && (
+                    <Field label="Pin number" htmlFor="asset-pin" hint="Assigned automatically — not editable.">
+                      <input
+                        id="asset-pin"
+                        readOnly
+                        value={
+                          formatPinNumber(asset.pin_number)
+                            ? `#${formatPinNumber(asset.pin_number)}`
+                            : 'Not yet assigned'
+                        }
+                        className={cn(inputClass, 'cursor-not-allowed bg-band-mist text-text-muted')}
+                      />
+                    </Field>
+                  )}
+
+                  {/* Item 4: place the same pin on multiple floors at once (add only). */}
+                  {!isEdit && floors.length > 1 && (
                     <div className="space-y-1.5">
                       <span className="block text-xs font-medium uppercase tracking-[0.18em] text-text-faint">
                         Floors
@@ -559,9 +652,13 @@ export function NewAssetDialog({
                   Cancel
                 </Button>
                 <Button type="submit" variant="gold" loading={isSubmitting}>
-                  {photos.length > 0
-                    ? `Place pin + ${photos.length} ${photos.length === 1 ? 'photo' : 'photos'}`
-                    : 'Place pin'}
+                  {isEdit
+                    ? photos.length > 0
+                      ? `Save + ${photos.length} ${photos.length === 1 ? 'photo' : 'photos'}`
+                      : 'Save changes'
+                    : photos.length > 0
+                      ? `Place pin + ${photos.length} ${photos.length === 1 ? 'photo' : 'photos'}`
+                      : 'Place pin'}
                 </Button>
               </div>
             </form>
