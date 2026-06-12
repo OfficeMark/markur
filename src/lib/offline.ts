@@ -51,6 +51,15 @@ export type MetaRow = {
   value: string;
 };
 
+/**
+ * After this many failed pushes we stop retrying an event and "park" it: the
+ * row stays in the queue (so the pending count still flags unsynced data) but
+ * the drain loop skips it instead of retrying forever. With the exponential
+ * backoff (capped at 10 min) that's roughly 40 min of retries before a poison
+ * event — one the server rejects every time — stops hammering the network.
+ */
+export const MAX_PENDING_ATTEMPTS = 8;
+
 class OfflineDB extends Dexie {
   buildings!: EntityTable<CachedBuilding, 'id'>;
   floors!: EntityTable<CachedFloor, 'id'>;
@@ -70,6 +79,16 @@ class OfflineDB extends Dexie {
       last_audit_by_asset: 'asset_id, floor_id',
       pending_audit_events: 'local_id, session_id, asset_id, floor_id, next_attempt_at',
       meta: 'key',
+    });
+    // v2: index `created_at`. `listPendingAuditEvents()` drains via
+    // `orderBy('created_at')`, but v1 never indexed that key — so every drain
+    // pass threw a Dexie SchemaError that the caller swallowed to `[]`. The
+    // upshot: queued offline audit events never replayed, and the 5s drain
+    // timer spun forever making no progress. Indexing it makes the drain work.
+    // (Dexie carries unchanged tables forward, so only the changed one is listed.)
+    this.version(2).stores({
+      pending_audit_events:
+        'local_id, session_id, asset_id, floor_id, next_attempt_at, created_at',
     });
   }
 }

@@ -21,9 +21,11 @@ import {
   listPendingAuditEvents,
   listPendingForSession,
   markPendingFailed,
+  MAX_PENDING_ATTEMPTS,
   pendingCount,
   putLastAudits,
   queueAuditEvent,
+  setMeta,
   type PendingAuditEvent,
 } from '@/lib/offline';
 import { useEffect, useState } from 'react';
@@ -148,10 +150,7 @@ export function useCreateAuditEvent(floorId: string | undefined) {
           created_at: new Date().toISOString(),
         };
         // Also: surface the failure as a meta entry the SyncChip can show.
-        void (async () => {
-          const { setMeta } = await import('@/lib/offline');
-          await setMeta('last-error', err instanceof Error ? err.message : String(err));
-        })();
+        void setMeta('last-error', err instanceof Error ? err.message : String(err));
         return synthetic;
       }
     },
@@ -228,7 +227,18 @@ export function useDrainPendingAuditEvents(online: boolean): void {
       if (cancelled) return;
       const queue: PendingAuditEvent[] = await listPendingAuditEvents().catch(() => []);
       const now = Date.now();
-      const eligible = queue.filter((e) => new Date(e.next_attempt_at).getTime() <= now);
+      // Events that have exhausted their retries are "parked": kept in the
+      // queue (so the pending count still flags unsynced data) but never
+      // retried again, so a poison event can't spin the loop forever.
+      const retryable = queue.filter((e) => e.attempts < MAX_PENDING_ATTEMPTS);
+      const parked = queue.length - retryable.length;
+      if (parked > 0) {
+        await setMeta(
+          'last-error',
+          `${parked} audit ${parked === 1 ? 'event' : 'events'} couldn't sync after ${MAX_PENDING_ATTEMPTS} attempts.`
+        ).catch(() => undefined);
+      }
+      const eligible = retryable.filter((e) => new Date(e.next_attempt_at).getTime() <= now);
       for (const e of eligible) {
         if (cancelled) return;
         try {
@@ -263,8 +273,14 @@ export function useDrainPendingAuditEvents(online: boolean): void {
         }
       }
       qc.invalidateQueries({ queryKey: ['audit', 'pending-count'] });
-      // Re-poll in 5s as long as queue may still have eligible entries.
-      timer = window.setTimeout(drain, 5_000);
+      // Keep polling only while retryable work remains. An empty queue — or one
+      // holding nothing but parked, retry-exhausted events — lets the loop go
+      // idle instead of spinning every 5s forever. A reconnect (the `online`
+      // dependency) or a fresh offline-queued event re-runs the effect and
+      // restarts the drain.
+      if (!cancelled && retryable.length > 0) {
+        timer = window.setTimeout(drain, 5_000);
+      }
     }
     void drain();
     return () => {

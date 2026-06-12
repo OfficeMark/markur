@@ -96,6 +96,8 @@ export type Database = {
           id: string
           path: string
           sort_order: number
+          superseded_at: string | null
+          superseded_by: string | null
         }
         Insert: {
           asset_id: string
@@ -104,6 +106,8 @@ export type Database = {
           id?: string
           path: string
           sort_order?: number
+          superseded_at?: string | null
+          superseded_by?: string | null
         }
         Update: {
           asset_id?: string
@@ -112,6 +116,8 @@ export type Database = {
           id?: string
           path?: string
           sort_order?: number
+          superseded_at?: string | null
+          superseded_by?: string | null
         }
         Relationships: [
           {
@@ -119,6 +125,59 @@ export type Database = {
             columns: ["asset_id"]
             isOneToOne: false
             referencedRelation: "assets"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "asset_photos_superseded_by_fkey"
+            columns: ["superseded_by"]
+            isOneToOne: false
+            referencedRelation: "asset_photos"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      asset_vendors: {
+        Row: {
+          asset_id: string
+          created_at: string
+          id: string
+          owner_org_id: string
+          vendor_id: string
+        }
+        Insert: {
+          asset_id: string
+          created_at?: string
+          id?: string
+          owner_org_id: string
+          vendor_id: string
+        }
+        Update: {
+          asset_id?: string
+          created_at?: string
+          id?: string
+          owner_org_id?: string
+          vendor_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "asset_vendors_asset_id_fkey"
+            columns: ["asset_id"]
+            isOneToOne: false
+            referencedRelation: "assets"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "asset_vendors_owner_org_id_fkey"
+            columns: ["owner_org_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "asset_vendors_vendor_id_fkey"
+            columns: ["vendor_id"]
+            isOneToOne: false
+            referencedRelation: "vendors"
             referencedColumns: ["id"]
           },
         ]
@@ -164,6 +223,7 @@ export type Database = {
           manufacturer?: string | null
           name: string
           notes?: string | null
+          pin_number?: number | null
           room_number?: string | null
           status?: string
           tenant_scope_id?: string | null
@@ -199,6 +259,13 @@ export type Database = {
           y?: number
         }
         Relationships: [
+          {
+            foreignKeyName: "assets_contact_id_fkey"
+            columns: ["contact_id"]
+            isOneToOne: false
+            referencedRelation: "contacts"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "assets_floor_id_fkey"
             columns: ["floor_id"]
@@ -394,6 +461,86 @@ export type Database = {
           },
         ]
       }
+      building_share_claims: {
+        Row: {
+          claimed_at: string
+          email: string
+          grant_id: string | null
+          id: string
+          share_id: string
+          user_id: string
+        }
+        Insert: {
+          claimed_at?: string
+          email: string
+          grant_id?: string | null
+          id?: string
+          share_id: string
+          user_id: string
+        }
+        Update: {
+          claimed_at?: string
+          email?: string
+          grant_id?: string | null
+          id?: string
+          share_id?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "building_share_claims_grant_id_fkey"
+            columns: ["grant_id"]
+            isOneToOne: false
+            referencedRelation: "access_grants"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "building_share_claims_share_id_fkey"
+            columns: ["share_id"]
+            isOneToOne: false
+            referencedRelation: "building_shares"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      building_shares: {
+        Row: {
+          building_id: string
+          created_at: string
+          created_by: string
+          expires_at: string
+          id: string
+          revoked_at: string | null
+          token_hash: string
+        }
+        Insert: {
+          building_id: string
+          created_at?: string
+          created_by: string
+          expires_at: string
+          id?: string
+          revoked_at?: string | null
+          token_hash: string
+        }
+        Update: {
+          building_id?: string
+          created_at?: string
+          created_by?: string
+          expires_at?: string
+          id?: string
+          revoked_at?: string | null
+          token_hash?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "building_shares_building_id_fkey"
+            columns: ["building_id"]
+            isOneToOne: false
+            referencedRelation: "buildings"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       buildings: {
         Row: {
           address: string
@@ -450,56 +597,6 @@ export type Database = {
           },
         ]
       }
-      flags: {
-        Row: {
-          asset_id: string
-          contact_id: string | null
-          created_at: string
-          description: string
-          id: string
-          photo_urls: Json
-          raised_by: string
-          resolved_at: string | null
-          resolved_by: string | null
-          severity: string
-          status: string
-        }
-        Insert: {
-          asset_id: string
-          contact_id?: string | null
-          created_at?: string
-          description: string
-          id?: string
-          photo_urls?: Json
-          raised_by: string
-          resolved_at?: string | null
-          resolved_by?: string | null
-          severity?: string
-          status?: string
-        }
-        Update: {
-          asset_id?: string
-          contact_id?: string | null
-          created_at?: string
-          description?: string
-          id?: string
-          photo_urls?: Json
-          raised_by?: string
-          resolved_at?: string | null
-          resolved_by?: string | null
-          severity?: string
-          status?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "flags_asset_id_fkey"
-            columns: ["asset_id"]
-            isOneToOne: false
-            referencedRelation: "assets"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
       contacts: {
         Row: {
           building_id: string | null
@@ -534,82 +631,131 @@ export type Database = {
           owner_org_id?: string
           updated_at?: string
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "contacts_building_id_fkey"
+            columns: ["building_id"]
+            isOneToOne: false
+            referencedRelation: "buildings"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "contacts_owner_org_id_fkey"
+            columns: ["owner_org_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
       }
-      vendors: {
+      feature_suggestions: {
         Row: {
+          body: string
           building_id: string | null
           created_at: string
-          deleted_at: string | null
-          email: string | null
           id: string
-          name: string
-          owner_org_id: string
-          phone: string | null
-          updated_at: string
-          url: string | null
+          org_id: string | null
+          status: string
+          submitted_by: string
         }
         Insert: {
+          body: string
           building_id?: string | null
           created_at?: string
-          deleted_at?: string | null
-          email?: string | null
           id?: string
-          name: string
-          owner_org_id: string
-          phone?: string | null
-          updated_at?: string
-          url?: string | null
+          org_id?: string | null
+          status?: string
+          submitted_by?: string
         }
         Update: {
+          body?: string
           building_id?: string | null
           created_at?: string
-          deleted_at?: string | null
-          email?: string | null
           id?: string
-          name?: string
-          owner_org_id?: string
-          phone?: string | null
-          updated_at?: string
-          url?: string | null
-        }
-        Relationships: []
-      }
-      asset_vendors: {
-        Row: {
-          asset_id: string
-          created_at: string
-          id: string
-          owner_org_id: string
-          vendor_id: string
-        }
-        Insert: {
-          asset_id: string
-          created_at?: string
-          id?: string
-          owner_org_id: string
-          vendor_id: string
-        }
-        Update: {
-          asset_id?: string
-          created_at?: string
-          id?: string
-          owner_org_id?: string
-          vendor_id?: string
+          org_id?: string | null
+          status?: string
+          submitted_by?: string
         }
         Relationships: [
           {
-            foreignKeyName: "asset_vendors_asset_id_fkey"
+            foreignKeyName: "feature_suggestions_building_id_fkey"
+            columns: ["building_id"]
+            isOneToOne: false
+            referencedRelation: "buildings"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "feature_suggestions_org_id_fkey"
+            columns: ["org_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "feature_suggestions_submitted_by_fkey"
+            columns: ["submitted_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      flags: {
+        Row: {
+          asset_id: string
+          contact_id: string | null
+          created_at: string
+          description: string
+          id: string
+          photo_urls: Json
+          raised_by: string
+          resolution_photo_urls: Json
+          resolved_at: string | null
+          resolved_by: string | null
+          severity: string
+          status: string
+        }
+        Insert: {
+          asset_id: string
+          contact_id?: string | null
+          created_at?: string
+          description: string
+          id?: string
+          photo_urls?: Json
+          raised_by: string
+          resolution_photo_urls?: Json
+          resolved_at?: string | null
+          resolved_by?: string | null
+          severity?: string
+          status?: string
+        }
+        Update: {
+          asset_id?: string
+          contact_id?: string | null
+          created_at?: string
+          description?: string
+          id?: string
+          photo_urls?: Json
+          raised_by?: string
+          resolution_photo_urls?: Json
+          resolved_at?: string | null
+          resolved_by?: string | null
+          severity?: string
+          status?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "flags_asset_id_fkey"
             columns: ["asset_id"]
             isOneToOne: false
             referencedRelation: "assets"
             referencedColumns: ["id"]
           },
           {
-            foreignKeyName: "asset_vendors_vendor_id_fkey"
-            columns: ["vendor_id"]
+            foreignKeyName: "flags_contact_id_fkey"
+            columns: ["contact_id"]
             isOneToOne: false
-            referencedRelation: "vendors"
+            referencedRelation: "contacts"
             referencedColumns: ["id"]
           },
         ]
@@ -663,6 +809,50 @@ export type Database = {
             columns: ["building_id"]
             isOneToOne: false
             referencedRelation: "buildings"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      org_asset_type_overrides: {
+        Row: {
+          color_override: string | null
+          created_at: string
+          global_key: string
+          hidden: boolean
+          id: string
+          label_override: string | null
+          org_id: string
+          sort_order_override: number | null
+          updated_at: string
+        }
+        Insert: {
+          color_override?: string | null
+          created_at?: string
+          global_key: string
+          hidden?: boolean
+          id?: string
+          label_override?: string | null
+          org_id: string
+          sort_order_override?: number | null
+          updated_at?: string
+        }
+        Update: {
+          color_override?: string | null
+          created_at?: string
+          global_key?: string
+          hidden?: boolean
+          id?: string
+          label_override?: string | null
+          org_id?: string
+          sort_order_override?: number | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "org_asset_type_overrides_org_id_fkey"
+            columns: ["org_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
             referencedColumns: ["id"]
           },
         ]
@@ -749,71 +939,42 @@ export type Database = {
           },
         ]
       }
-      org_asset_type_overrides: {
-        Row: {
-          color_override: string | null
-          created_at: string
-          global_key: string
-          hidden: boolean
-          id: string
-          label_override: string | null
-          org_id: string
-          sort_order_override: number | null
-          updated_at: string
-        }
-        Insert: {
-          color_override?: string | null
-          created_at?: string
-          global_key: string
-          hidden?: boolean
-          id?: string
-          label_override?: string | null
-          org_id: string
-          sort_order_override?: number | null
-          updated_at?: string
-        }
-        Update: {
-          color_override?: string | null
-          created_at?: string
-          global_key?: string
-          hidden?: boolean
-          id?: string
-          label_override?: string | null
-          org_id?: string
-          sort_order_override?: number | null
-          updated_at?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "org_asset_type_overrides_org_id_fkey"
-            columns: ["org_id"]
-            isOneToOne: false
-            referencedRelation: "organizations"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
       organizations: {
         Row: {
           created_at: string
+          current_period_end: string | null
           id: string
           name: string
           plan: string
           slug: string
+          stripe_customer_id: string | null
+          stripe_subscription_id: string | null
+          subscription_status: string
+          trial_ends_at: string | null
         }
         Insert: {
           created_at?: string
+          current_period_end?: string | null
           id?: string
           name: string
           plan?: string
           slug: string
+          stripe_customer_id?: string | null
+          stripe_subscription_id?: string | null
+          subscription_status?: string
+          trial_ends_at?: string | null
         }
         Update: {
           created_at?: string
+          current_period_end?: string | null
           id?: string
           name?: string
           plan?: string
           slug?: string
+          stripe_customer_id?: string | null
+          stripe_subscription_id?: string | null
+          subscription_status?: string
+          trial_ends_at?: string | null
         }
         Relationships: []
       }
@@ -853,64 +1014,6 @@ export type Database = {
           scope_id?: string | null
           scope_type?: string
           token?: string
-        }
-        Relationships: []
-      }
-      // guest_viewer_share_phase1 — added manually pending `supabase gen types` regen.
-      building_shares: {
-        Row: {
-          building_id: string
-          created_at: string
-          created_by: string
-          expires_at: string
-          id: string
-          revoked_at: string | null
-          token_hash: string
-        }
-        Insert: {
-          building_id: string
-          created_at?: string
-          created_by?: string
-          expires_at: string
-          id?: string
-          revoked_at?: string | null
-          token_hash: string
-        }
-        Update: {
-          building_id?: string
-          created_at?: string
-          created_by?: string
-          expires_at?: string
-          id?: string
-          revoked_at?: string | null
-          token_hash?: string
-        }
-        Relationships: []
-      }
-      building_share_claims: {
-        Row: {
-          claimed_at: string
-          email: string
-          grant_id: string | null
-          id: string
-          share_id: string
-          user_id: string
-        }
-        Insert: {
-          claimed_at?: string
-          email: string
-          grant_id?: string | null
-          id?: string
-          share_id: string
-          user_id: string
-        }
-        Update: {
-          claimed_at?: string
-          email?: string
-          grant_id?: string | null
-          id?: string
-          share_id?: string
-          user_id?: string
         }
         Relationships: []
       }
@@ -989,12 +1092,85 @@ export type Database = {
           },
         ]
       }
+      vendors: {
+        Row: {
+          building_id: string | null
+          created_at: string
+          deleted_at: string | null
+          email: string | null
+          id: string
+          name: string
+          owner_org_id: string
+          phone: string | null
+          updated_at: string
+          url: string | null
+        }
+        Insert: {
+          building_id?: string | null
+          created_at?: string
+          deleted_at?: string | null
+          email?: string | null
+          id?: string
+          name: string
+          owner_org_id: string
+          phone?: string | null
+          updated_at?: string
+          url?: string | null
+        }
+        Update: {
+          building_id?: string | null
+          created_at?: string
+          deleted_at?: string | null
+          email?: string | null
+          id?: string
+          name?: string
+          owner_org_id?: string
+          phone?: string | null
+          updated_at?: string
+          url?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "vendors_building_id_fkey"
+            columns: ["building_id"]
+            isOneToOne: false
+            referencedRelation: "buildings"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "vendors_owner_org_id_fkey"
+            columns: ["owner_org_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
     }
     Views: {
       [_ in never]: never
     }
     Functions: {
+      claim_building_share: { Args: { p_token: string }; Returns: string }
+      log_access: {
+        Args: { p_action: string; p_entity_id?: string; p_entity_type?: string }
+        Returns: undefined
+      }
+      org_slug: { Args: { input: string }; Returns: string }
+      peek_building_share: { Args: { p_token: string }; Returns: Json }
+      revoke_building_share: {
+        Args: { p_share_id: string }
+        Returns: undefined
+      }
+      storage_asset_attachment_asset_id: {
+        Args: { p_name: string }
+        Returns: string
+      }
       storage_asset_photo_asset_id: {
+        Args: { p_name: string }
+        Returns: string
+      }
+      storage_audit_video_building_id: {
         Args: { p_name: string }
         Returns: string
       }
@@ -1003,32 +1179,7 @@ export type Database = {
         Returns: string
       }
       storage_floor_plan_floor_id: { Args: { p_name: string }; Returns: string }
-      user_can: {
-        Args: { p_capability: string; p_scope_id: string; p_scope_type: string }
-        Returns: boolean
-      }
-      user_can_anything: { Args: { p_capability: string }; Returns: boolean }
-      user_can_view_asset: {
-        Args: { p_asset: Database["public"]["Tables"]["assets"]["Row"] }
-        Returns: boolean
-      }
-      log_access: {
-        Args: { p_action: string; p_entity_type?: string; p_entity_id?: string }
-        Returns: undefined
-      }
-      // guest_viewer_share_phase1 — added manually pending `supabase gen types` regen.
-      peek_building_share: {
-        Args: { p_token: string }
-        Returns: Json
-      }
-      claim_building_share: {
-        Args: { p_token: string }
-        Returns: string
-      }
-      revoke_building_share: {
-        Args: { p_share_id: string }
-        Returns: undefined
-      }
+      storage_org_logo_org_id: { Args: { p_name: string }; Returns: string }
     }
     Enums: {
       [_ in never]: never
@@ -1039,6 +1190,133 @@ export type Database = {
   }
 }
 
+type DatabaseWithoutInternals = Omit<Database, "__InternalSupabase">
+
+type DefaultSchema = DatabaseWithoutInternals[Extract<keyof Database, "public">]
+
+export type Tables<
+  DefaultSchemaTableNameOrOptions extends
+    | keyof (DefaultSchema["Tables"] & DefaultSchema["Views"])
+    | { schema: keyof DatabaseWithoutInternals },
+  TableName extends DefaultSchemaTableNameOrOptions extends {
+    schema: keyof DatabaseWithoutInternals
+  }
+    ? keyof (DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"] &
+        DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Views"])
+    : never = never,
+> = DefaultSchemaTableNameOrOptions extends {
+  schema: keyof DatabaseWithoutInternals
+}
+  ? (DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"] &
+      DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Views"])[TableName] extends {
+      Row: infer R
+    }
+    ? R
+    : never
+  : DefaultSchemaTableNameOrOptions extends keyof (DefaultSchema["Tables"] &
+        DefaultSchema["Views"])
+    ? (DefaultSchema["Tables"] &
+        DefaultSchema["Views"])[DefaultSchemaTableNameOrOptions] extends {
+        Row: infer R
+      }
+      ? R
+      : never
+    : never
+
+export type TablesInsert<
+  DefaultSchemaTableNameOrOptions extends
+    | keyof DefaultSchema["Tables"]
+    | { schema: keyof DatabaseWithoutInternals },
+  TableName extends DefaultSchemaTableNameOrOptions extends {
+    schema: keyof DatabaseWithoutInternals
+  }
+    ? keyof DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"]
+    : never = never,
+> = DefaultSchemaTableNameOrOptions extends {
+  schema: keyof DatabaseWithoutInternals
+}
+  ? DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"][TableName] extends {
+      Insert: infer I
+    }
+    ? I
+    : never
+  : DefaultSchemaTableNameOrOptions extends keyof DefaultSchema["Tables"]
+    ? DefaultSchema["Tables"][DefaultSchemaTableNameOrOptions] extends {
+        Insert: infer I
+      }
+      ? I
+      : never
+    : never
+
+export type TablesUpdate<
+  DefaultSchemaTableNameOrOptions extends
+    | keyof DefaultSchema["Tables"]
+    | { schema: keyof DatabaseWithoutInternals },
+  TableName extends DefaultSchemaTableNameOrOptions extends {
+    schema: keyof DatabaseWithoutInternals
+  }
+    ? keyof DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"]
+    : never = never,
+> = DefaultSchemaTableNameOrOptions extends {
+  schema: keyof DatabaseWithoutInternals
+}
+  ? DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"][TableName] extends {
+      Update: infer U
+    }
+    ? U
+    : never
+  : DefaultSchemaTableNameOrOptions extends keyof DefaultSchema["Tables"]
+    ? DefaultSchema["Tables"][DefaultSchemaTableNameOrOptions] extends {
+        Update: infer U
+      }
+      ? U
+      : never
+    : never
+
+export type Enums<
+  DefaultSchemaEnumNameOrOptions extends
+    | keyof DefaultSchema["Enums"]
+    | { schema: keyof DatabaseWithoutInternals },
+  EnumName extends DefaultSchemaEnumNameOrOptions extends {
+    schema: keyof DatabaseWithoutInternals
+  }
+    ? keyof DatabaseWithoutInternals[DefaultSchemaEnumNameOrOptions["schema"]]["Enums"]
+    : never = never,
+> = DefaultSchemaEnumNameOrOptions extends {
+  schema: keyof DatabaseWithoutInternals
+}
+  ? DatabaseWithoutInternals[DefaultSchemaEnumNameOrOptions["schema"]]["Enums"][EnumName]
+  : DefaultSchemaEnumNameOrOptions extends keyof DefaultSchema["Enums"]
+    ? DefaultSchema["Enums"][DefaultSchemaEnumNameOrOptions]
+    : never
+
+export type CompositeTypes<
+  PublicCompositeTypeNameOrOptions extends
+    | keyof DefaultSchema["CompositeTypes"]
+    | { schema: keyof DatabaseWithoutInternals },
+  CompositeTypeName extends PublicCompositeTypeNameOrOptions extends {
+    schema: keyof DatabaseWithoutInternals
+  }
+    ? keyof DatabaseWithoutInternals[PublicCompositeTypeNameOrOptions["schema"]]["CompositeTypes"]
+    : never = never,
+> = PublicCompositeTypeNameOrOptions extends {
+  schema: keyof DatabaseWithoutInternals
+}
+  ? DatabaseWithoutInternals[PublicCompositeTypeNameOrOptions["schema"]]["CompositeTypes"][CompositeTypeName]
+  : PublicCompositeTypeNameOrOptions extends keyof DefaultSchema["CompositeTypes"]
+    ? DefaultSchema["CompositeTypes"][PublicCompositeTypeNameOrOptions]
+    : never
+
+export const Constants = {
+  public: {
+    Enums: {},
+  },
+} as const
+
+// ---------------------------------------------------------------------------
+// Convenience row aliases (hand-maintained — the Supabase type generator does
+// not emit these). Re-append after any regen of the block above.
+// ---------------------------------------------------------------------------
 type Tbl = Database['public']['Tables'];
 
 export type Profile = Tbl['profiles']['Row'];
