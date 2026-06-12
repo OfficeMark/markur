@@ -46,7 +46,7 @@ export function Login() {
             <img
               src="/icons/markur-wordmark.png"
               alt="Markur, by Officemark"
-              className="h-12 w-auto dark:hidden"
+              className="h-12 w-auto max-w-[200px] dark:hidden"
               width={1587}
               height={521}
             />
@@ -54,7 +54,7 @@ export function Login() {
               src="/icons/markur-wordmark-light.png"
               alt=""
               aria-hidden
-              className="hidden h-12 w-auto dark:block"
+              className="hidden h-12 w-auto max-w-[200px] dark:block"
               width={1587}
               height={521}
             />
