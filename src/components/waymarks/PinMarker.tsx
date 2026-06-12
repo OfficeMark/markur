@@ -93,14 +93,18 @@ export const PinMarker = forwardRef<HTMLButtonElement, PinMarkerProps>(function 
     : unlocked
       ? ', unlocked - drag to move'
       : '';
-  const resolvedFill = fillColor ?? colorForType(type);
+  // Flagged overrides the type color entirely: the WHOLE pin goes red so it's
+  // unmistakable even beside red-ish type colors (e.g. Capital One's #D6336C).
+  // Reverts to the type color automatically on resolve, since `status` is
+  // recomputed once the flag clears.
+  const flagged = status === 'flagged';
+  const resolvedFill = flagged ? 'rgb(var(--color-danger))' : (fillColor ?? colorForType(type));
   const ariaPrefix = pinLabel ? `Pin ${pinLabel}, ` : '';
-  const statusRingClass =
-    status === 'flagged'
-      ? 'ring-1 ring-danger'
-      : status === 'attention'
-        ? 'ring-1 ring-warning'
-        : '';
+  const statusRingClass = flagged
+    ? 'ring-2 ring-danger ring-offset-1 ring-offset-white'
+    : status === 'attention'
+      ? 'ring-1 ring-warning'
+      : '';
   const typeName = labelForType(type);
 
   const px = PIN_SIZE_PX[size];
@@ -167,14 +171,8 @@ export const PinMarker = forwardRef<HTMLButtonElement, PinMarkerProps>(function 
         className={cn('fill-white text-white', iconCounterRotate && '-rotate-45')}
         aria-hidden
       />
-      {/* Flagged pins get a loud red badge so they stand out on the plan
-          without opening the detail panel (M33). */}
-      {status === 'flagged' && (
-        <span
-          aria-hidden
-          className="absolute -right-1 -top-1 h-2.5 w-2.5 rounded-full border border-white bg-danger"
-        />
-      )}
+      {/* The top-right dot slot is no longer used for flag state (the whole pin
+          is red now). It's reserved for the attachments/video indicator. */}
     </button>
   );
 });
