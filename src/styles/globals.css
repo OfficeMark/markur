@@ -102,3 +102,20 @@
   --color-danger-bg: 60 30 30;
   --color-info-bg: 25 45 70;
 }
+
+/* iOS Safari zooms the WHOLE page in when you focus a form control whose
+   font-size is under 16px, and that zoom then persists across SPA navigation
+   (content reads as too big with clipping on every screen). The fix is the
+   font size itself — never a `maximum-scale` viewport band-aid, which breaks
+   pinch-to-zoom accessibility. Force every text-entry control to >=16px on
+   phones; desktop keeps the smaller text-sm design. `!important` so it always
+   wins over per-input Tailwind text-sm/text-xs utilities (one global rule
+   covers every input app-wide, including any added later — see the Playwright
+   guard in tests/e2e/overflow.spec.ts). */
+@media (max-width: 640px) {
+  input:not([type='checkbox']):not([type='radio']):not([type='range']),
+  textarea,
+  select {
+    font-size: 16px !important;
+  }
+}
