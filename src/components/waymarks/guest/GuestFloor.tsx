@@ -8,6 +8,7 @@ import { AssetDrawer } from '@/components/waymarks/AssetDrawer';
 import { useFloor } from '@/hooks/useFloors';
 import { useAssets } from '@/hooks/useAssets';
 import { planKindForPath, signedUrlForPlan } from '@/lib/upload';
+import { pinAppearanceFromSettings } from '@/lib/pin-appearance';
 import { logAccess } from '@/lib/queries/access-log';
 import { listFirstPhotoPaths, signedAssetPhotoUrl } from '@/lib/queries/asset-photos';
 import { photoToJpegDataUrl } from '@/lib/photo-to-data-url';
@@ -46,6 +47,7 @@ export function GuestFloor({
   const [catalogueError, setCatalogueError] = useState<string | null>(null);
 
   const planKind = useMemo(() => planKindForPath(floor?.plan_url), [floor?.plan_url]);
+  const pinAppearance = useMemo(() => pinAppearanceFromSettings(building.settings), [building.settings]);
 
   // Record the guest view.
   useEffect(() => {
@@ -181,6 +183,8 @@ export function GuestFloor({
               canMove={false}
               onSelectAsset={openAsset}
               lastAuditByAsset={null}
+              pinShape={pinAppearance.pinShape}
+              pinSize={pinAppearance.pinSize}
             />
           }
         />

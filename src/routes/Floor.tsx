@@ -29,6 +29,7 @@ import {
 import { useAuth } from '@/lib/auth-context';
 import { useCan } from '@/lib/permissions-context';
 import { planKindForPath, signedUrlForPlan } from '@/lib/upload';
+import { pinAppearanceFromSettings } from '@/lib/pin-appearance';
 import { pinNumberMatchesQuery } from '@/lib/pin-types';
 import { photoToJpegDataUrl } from '@/lib/photo-to-data-url';
 import { listFirstPhotoPaths, signedAssetPhotoUrl } from '@/lib/queries/asset-photos';
@@ -52,6 +53,10 @@ export function Floor() {
   const { id } = useParams<{ id: string }>();
   const { data: floor, isLoading: fLoading, error: fError } = useFloor(id);
   const { data: building } = useBuilding(floor?.building_id);
+  const pinAppearance = useMemo(
+    () => pinAppearanceFromSettings(building?.settings),
+    [building?.settings]
+  );
   const { data: assets = [] } = useAssets(id);
   const { user } = useAuth();
 
@@ -629,6 +634,8 @@ export function Floor() {
                     }
                     lastAuditByAsset={lastAuditByAsset ?? null}
                     onLongPress={canEdit ? startReposition : undefined}
+                    pinShape={pinAppearance.pinShape}
+                    pinSize={pinAppearance.pinSize}
                   />
                 }
               />
@@ -723,6 +730,8 @@ export function Floor() {
           planUrl={signedUrl}
           planKind={planKind}
           initialAssetId={auditInitialAssetId}
+          pinShape={pinAppearance.pinShape}
+          pinSize={pinAppearance.pinSize}
           onClose={() => setInAudit(false)}
         />
       )}

@@ -18,7 +18,8 @@ export const PIN_SIZES = ['small', 'medium', 'large'] as const;
 export type PinSize = typeof PIN_SIZES[number];
 
 export const DEFAULT_PIN_SHAPE: PinShape = 'circle';
-export const DEFAULT_PIN_SIZE: PinSize = 'medium';
+// Small by default: dense walls (multiple assets per wall) crowd at medium.
+export const DEFAULT_PIN_SIZE: PinSize = 'small';
 
 export function isPinShape(v: unknown): v is PinShape {
   return typeof v === 'string' && (PIN_SHAPES as readonly string[]).includes(v);

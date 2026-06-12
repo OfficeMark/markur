@@ -6,10 +6,12 @@ import {
   getBuilding,
   listBuildings,
   removeBuildingPhoto,
+  setBuildingPinAppearance,
   signedBuildingPhotoUrl,
   uploadBuildingPhoto,
   type NewBuildingInput,
 } from '@/lib/queries/buildings';
+import type { PinShape, PinSize } from '@/lib/queries/branding';
 import { accessKeys } from '@/hooks/useAccess';
 
 export const buildingKeys = {
@@ -94,6 +96,21 @@ export function useUploadBuildingPhoto(buildingId: string | undefined) {
     mutationFn: (file: File) => {
       if (!buildingId) throw new Error('No building selected');
       return uploadBuildingPhoto(buildingId, file);
+    },
+    onSuccess: (b) => {
+      qc.invalidateQueries({ queryKey: buildingKeys.detail(b.id) });
+      qc.invalidateQueries({ queryKey: buildingKeys.list() });
+    },
+  });
+}
+
+/** Save the per-building pin shape/size to buildings.settings. */
+export function useSetBuildingPinAppearance(buildingId: string | undefined) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (appearance: { pin_shape: PinShape; pin_size: PinSize }) => {
+      if (!buildingId) throw new Error('No building selected');
+      return setBuildingPinAppearance(buildingId, appearance);
     },
     onSuccess: (b) => {
       qc.invalidateQueries({ queryKey: buildingKeys.detail(b.id) });

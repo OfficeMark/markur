@@ -8,9 +8,11 @@ import { BuildingPhotoUpload } from '@/components/waymarks/BuildingPhotoUpload';
 import { NewFloorDialog } from '@/components/waymarks/NewFloorDialog';
 import { ShareBuildingDialog } from '@/components/waymarks/ShareBuildingDialog';
 import { ResumeAuditBanner } from '@/components/waymarks/ResumeAuditBanner';
-import { useBuilding } from '@/hooks/useBuildings';
+import { useBuilding, useSetBuildingPinAppearance } from '@/hooks/useBuildings';
 import { useFloors } from '@/hooks/useFloors';
 import { useCan, useIsSuperAdmin } from '@/lib/permissions-context';
+import { PinAppearanceControl } from '@/components/waymarks/PinAppearanceControl';
+import { pinAppearanceFromSettings } from '@/lib/pin-appearance';
 import type { Floor } from '@/types/database';
 
 export function Building() {
@@ -23,6 +25,7 @@ export function Building() {
   const canManageAccess = useCan('manage_access', { type: 'building', id: id ?? '' });
   const canConfigure = useCan('configure', { type: 'building', id: id ?? '' });
   const canEdit = useCan('edit', { type: 'building', id: id ?? '' });
+  const setPins = useSetBuildingPinAppearance(id);
 
   if (bLoading) return <Skeleton />;
 
@@ -166,6 +169,29 @@ export function Building() {
             </ul>
           )}
         </section>
+
+        {canConfigure && (
+          <section className="mt-10 rounded-lg border border-black/10 bg-surface p-5 dark:border-white/10">
+            <header className="mb-3">
+              <p className="text-[11px] font-medium uppercase tracking-[0.22em] text-text-faint">
+                Pin appearance
+              </p>
+              <p className="mt-1 text-sm text-text-muted">
+                Shape and size of every pin on this building's floor plans — everyone sees the same,
+                including clients viewing a share link. Status and type colors are unchanged.
+              </p>
+            </header>
+            <PinAppearanceControl
+              shape={pinAppearanceFromSettings(building.settings).pinShape}
+              size={pinAppearanceFromSettings(building.settings).pinSize}
+              disabled={setPins.isPending}
+              onChange={(next) => setPins.mutate(next)}
+            />
+            {setPins.isError && (
+              <p className="mt-2 text-xs text-danger">Couldn't save the pin appearance. Try again.</p>
+            )}
+          </section>
+        )}
 
         {canManageAccess && (
           <section className="mt-10">
