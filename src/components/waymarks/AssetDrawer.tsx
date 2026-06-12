@@ -714,7 +714,7 @@ function EditPanel({
         <input
           value={manufacturer}
           onChange={(e) => setManufacturer(e.target.value)}
-          placeholder="e.g. Officemark"
+          placeholder="Vendor"
           className="h-10 w-full rounded-md border border-black/10 bg-surface px-3 text-sm text-text outline-none focus:border-waymarks-gold focus:ring-2 focus:ring-waymarks-gold dark:border-white/10"
         />
       </FieldLabel>
