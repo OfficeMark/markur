@@ -41,6 +41,7 @@ import {
   signedAssetPhotoUrl,
   validateAssetPhotoFile,
 } from '@/lib/queries/asset-photos';
+import { ensureUploadableImage, PHOTO_ACCEPT } from '@/lib/heic';
 import { computeStatus, statusLabel, type AssetStatus } from '@/lib/asset-status';
 import { formatPinNumber } from '@/lib/pin-types';
 import { useAssetTypes } from '@/hooks/useAssetTypes';
@@ -806,6 +807,7 @@ function PhotoGallery({
   const add = useAddAssetPhoto(assetId);
   const del = useDeleteAssetPhoto(assetId);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
+  const [converting, setConverting] = useState(false);
 
   const safeActive = Math.min(active, Math.max(0, photos.length - 1));
   const current: AssetPhoto | undefined = photos[safeActive];
@@ -813,7 +815,17 @@ function PhotoGallery({
   async function onPickFiles(list: FileList | null) {
     if (!list) return;
     setErrorMsg(null);
-    for (const file of Array.from(list)) {
+    for (const raw of Array.from(list)) {
+      let file = raw;
+      try {
+        // HEIC/HEIF → JPEG before validate/upload (never store HEIC).
+        file = await ensureUploadableImage(raw, () => setConverting(true));
+      } catch {
+        setErrorMsg(`${raw.name}: couldn't convert this HEIC photo.`);
+        continue;
+      } finally {
+        setConverting(false);
+      }
       const v = validateAssetPhotoFile(file);
       if (v) {
         setErrorMsg(v);
@@ -877,7 +889,7 @@ function PhotoGallery({
         <div className="flex gap-1">
           <label className="inline-flex h-8 cursor-pointer items-center gap-1 rounded-md border border-black/10 px-2 text-xs hover:bg-black/5 dark:border-white/10 dark:hover:bg-white/5">
             <Plus size={12} aria-hidden />
-            <span>{add.isPending ? 'Uploading…' : 'Add photo'}</span>
+            <span>{converting ? 'Converting…' : add.isPending ? 'Uploading…' : 'Add photo'}</span>
             <input
               type="file"
               accept="image/*"
@@ -894,7 +906,7 @@ function PhotoGallery({
             <span>Choose files</span>
             <input
               type="file"
-              accept="image/png,image/jpeg,image/webp"
+              accept={PHOTO_ACCEPT}
               multiple
               className="sr-only"
               onChange={(e) => {

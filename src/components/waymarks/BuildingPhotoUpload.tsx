@@ -7,6 +7,7 @@ import {
   useUploadBuildingPhoto,
 } from '@/hooks/useBuildings';
 import { validateBuildingPhotoFile } from '@/lib/queries/buildings';
+import { ensureUploadableImage, PHOTO_ACCEPT } from '@/lib/heic';
 
 /**
  * Hero-photo manager for a building (M10b). Admins see a "Choose photo"
@@ -37,11 +38,22 @@ export function BuildingPhotoUpload({
   const remove = useRemoveBuildingPhoto(buildingId);
   const url = useBuildingPhotoUrl(photoPath);
   const [error, setError] = useState<string | null>(null);
+  const [converting, setConverting] = useState(false);
 
   async function onPick(list: FileList | null) {
     setError(null);
-    const file = list?.[0];
-    if (!file) return;
+    const picked = list?.[0];
+    if (!picked) return;
+    let file = picked;
+    try {
+      // HEIC/HEIF → JPEG before validate/upload (never store HEIC).
+      file = await ensureUploadableImage(picked, () => setConverting(true));
+    } catch {
+      setConverting(false);
+      setError("Couldn't convert this HEIC photo. Try a different image.");
+      return;
+    }
+    setConverting(false);
     const v = validateBuildingPhotoFile(file);
     if (v) {
       setError(
@@ -82,7 +94,11 @@ export function BuildingPhotoUpload({
         {canEdit && (
           <div className="absolute right-3 top-3 flex gap-1.5">
             <label className="inline-flex h-9 cursor-pointer items-center gap-1.5 rounded-md bg-waymarks-ink/80 px-3 text-xs font-medium text-white shadow-sm backdrop-blur hover:bg-waymarks-ink">
-              {url ? (
+              {converting ? (
+                'Converting…'
+              ) : upload.isPending ? (
+                'Uploading…'
+              ) : url ? (
                 <>
                   <Pencil size={12} aria-hidden /> Replace
                 </>
@@ -93,7 +109,7 @@ export function BuildingPhotoUpload({
               )}
               <input
                 type="file"
-                accept="image/png,image/jpeg,image/webp"
+                accept={PHOTO_ACCEPT}
                 className="sr-only"
                 onChange={(e) => {
                   void onPick(e.target.files);

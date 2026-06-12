@@ -3,6 +3,7 @@ import * as Dialog from '@radix-ui/react-dialog';
 import { AlertCircle, Camera, FileImage, Flag, Trash2, X } from 'lucide-react';
 import { Button } from '@/components/ui/Button';
 import { FLAG_PHOTO_MAX, validateFlagPhotoFile } from '@/lib/queries/flags';
+import { ensureUploadableImage, PHOTO_ACCEPT } from '@/lib/heic';
 import { useContacts } from '@/hooks/useContacts';
 import { useFloor } from '@/hooks/useFloors';
 import type { Asset } from '@/types/database';
@@ -43,6 +44,7 @@ export function AuditFlagDialog({
   const [photos, setPhotos] = useState<File[]>([]);
   const [photoError, setPhotoError] = useState<string | null>(null);
   const [contactId, setContactId] = useState('');
+  const [converting, setConverting] = useState(false);
 
   // Reset whenever the dialog (re)opens — possibly on a different pin.
   useEffect(() => {
@@ -51,18 +53,28 @@ export function AuditFlagDialog({
       setPhotos([]);
       setPhotoError(null);
       setContactId('');
+      setConverting(false);
     }
   }, [open, asset?.id]);
 
-  function addFiles(list: FileList | null) {
+  async function addFiles(list: FileList | null) {
     if (!list || list.length === 0) return;
     const accepted: File[] = [];
     let err: string | null = null;
-    for (const file of Array.from(list)) {
+    for (const raw of Array.from(list)) {
+      let file = raw;
+      try {
+        // HEIC/HEIF → JPEG before validate/stash (never store HEIC).
+        file = await ensureUploadableImage(raw, () => setConverting(true));
+      } catch {
+        err = `${raw.name}: couldn't convert this HEIC photo.`;
+        continue;
+      }
       const v = validateFlagPhotoFile(file);
       if (v) err = v;
       else accepted.push(file);
     }
+    setConverting(false);
     setPhotos((prev) => {
       const room = Math.max(0, FLAG_PHOTO_MAX - prev.length);
       if (accepted.length > room) err = `Up to ${FLAG_PHOTO_MAX} photos per flag.`;
@@ -126,6 +138,7 @@ export function AuditFlagDialog({
               onAdd={addFiles}
               onRemove={(i) => setPhotos((p) => p.filter((_, idx) => idx !== i))}
               error={photoError}
+              converting={converting}
             />
 
             {/* M34 item 1: notify / route to a directory contact. */}
@@ -184,11 +197,13 @@ function PhotoStrip({
   onAdd,
   onRemove,
   error,
+  converting,
 }: {
   photos: File[];
   onAdd: (list: FileList | null) => void;
   onRemove: (index: number) => void;
   error: string | null;
+  converting: boolean;
 }) {
   const full = photos.length >= FLAG_PHOTO_MAX;
   return (
@@ -224,7 +239,7 @@ function PhotoStrip({
             <span>Choose files</span>
             <input
               type="file"
-              accept="image/png,image/jpeg,image/webp"
+              accept={PHOTO_ACCEPT}
               multiple
               className="sr-only"
               onChange={(e) => {
@@ -235,6 +250,7 @@ function PhotoStrip({
           </label>
         </div>
       )}
+      {converting && <p className="text-xs text-text-muted">Converting…</p>}
       {error && <p className="text-xs text-danger">{error}</p>}
     </div>
   );
