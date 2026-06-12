@@ -42,14 +42,19 @@ export const assetTypeKeys = {
  * Side effect: pushes the merged map into pin-types runtime catalog so
  * colorForType() / labelForType() callers see effective values.
  */
-export function useAssetTypes() {
+export function useAssetTypes(orgIdOverride?: string | null) {
   const { data: buildings } = useBuildings();
 
-  const orgId = useMemo<string | null>(() => {
+  // Guests have a viewer grant but no session org, so useBuildings() returns []
+  // and the derived org is null — which would strip every org colour/label back
+  // to defaults (gray pins). The guest path passes the viewed building's
+  // owner_org_id explicitly so the catalogue resolves for that org instead.
+  const derivedOrgId = useMemo<string | null>(() => {
     if (!buildings) return null;
     const withOrg = buildings.find((b) => b.owner_org_id);
     return withOrg?.owner_org_id ?? null;
   }, [buildings]);
+  const orgId = orgIdOverride !== undefined ? orgIdOverride : derivedOrgId;
 
   const query = useQuery<ListEffectiveResult>({
     queryKey: assetTypeKeys.list(orgId),

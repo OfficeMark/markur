@@ -51,6 +51,13 @@ export type CreateAssetInput = {
   x: number;
   y: number;
   tenant_scope_id?: string | null;
+  // Asset-dialog redesign: these columns already existed (editable in the
+  // drawer) but weren't settable at placement. The unified add/edit dialog
+  // sets them in both modes, so the create path accepts them too (parity).
+  contact_id?: string | null;
+  installed_at?: string | null;
+  audit_cycle_days?: number | null;
+  zone?: string | null;
 };
 
 export async function createAsset(input: CreateAssetInput): Promise<Asset> {
@@ -76,6 +83,10 @@ export async function createAsset(input: CreateAssetInput): Promise<Asset> {
       x: input.x,
       y: input.y,
       tenant_scope_id: input.tenant_scope_id ?? null,
+      contact_id: input.contact_id ?? null,
+      installed_at: input.installed_at ?? null,
+      audit_cycle_days: input.audit_cycle_days ?? null,
+      zone: input.zone ?? null,
       created_by,
     })
     .select('*')
@@ -99,6 +110,7 @@ export type UpdateAssetInput = Partial<{
   is_locked: boolean;
   tenant_scope_id: string | null;
   contact_id: string | null;   // M34 item 1: associated directory contact
+  zone: string | null;
   x: number;
   y: number;
 }>;

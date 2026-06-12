@@ -7,6 +7,7 @@ import { PinOverlay } from '@/components/waymarks/PinOverlay';
 import { AssetDrawer } from '@/components/waymarks/AssetDrawer';
 import { useFloor } from '@/hooks/useFloors';
 import { useAssets } from '@/hooks/useAssets';
+import { useAssetTypes } from '@/hooks/useAssetTypes';
 import { planKindForPath, signedUrlForPlan } from '@/lib/upload';
 import { pinAppearanceFromSettings } from '@/lib/pin-appearance';
 import { logAccess } from '@/lib/queries/access-log';
@@ -40,6 +41,10 @@ export function GuestFloor({
 }) {
   const { data: floor, isLoading } = useFloor(floorId);
   const { data: assets = [] } = useAssets(floorId);
+  // Resolve the asset-type catalogue for the VIEWED building's org, not the
+  // (absent) guest session org — this populates the runtime colour/label map
+  // so pins, the pin detail, and the PDF catalogue match the admin view.
+  useAssetTypes(building.owner_org_id);
   const [signedUrl, setSignedUrl] = useState<string | null>(null);
   const [signedUrlError, setSignedUrlError] = useState<string | null>(null);
   const [selectedAssetId, setSelectedAssetId] = useState<string | null>(null);
