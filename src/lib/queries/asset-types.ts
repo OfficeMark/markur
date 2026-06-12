@@ -113,7 +113,11 @@ export async function listEffectiveAssetTypes(
   orgId: string | null
 ): Promise<ListEffectiveResult> {
   const rows = await listAssetTypes();
-  const overrides = orgId ? await listOverrides(orgId) : [];
+  // Overrides are best-effort: a guest viewer may be able to read the type
+  // catalogue (org_asset_types) but not the overrides table. Degrading to no
+  // overrides still gives org-specific types their own colours/labels, rather
+  // than throwing the whole catalogue back to gray defaults.
+  const overrides = orgId ? await listOverrides(orgId).catch(() => []) : [];
 
   const overrideByKey = new Map<string, OrgAssetTypeOverride>();
   for (const o of overrides) overrideByKey.set(o.global_key, o);
