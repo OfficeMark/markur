@@ -5,14 +5,18 @@ import {
   createBuildingNoReturn,
   getBuilding,
   listBuildings,
+  listDeletedBuildings,
   removeBuildingPhoto,
+  restoreBuilding,
   setBuildingPinAppearance,
   signedBuildingPhotoUrl,
+  softDeleteBuilding,
   uploadBuildingPhoto,
   type NewBuildingInput,
 } from '@/lib/queries/buildings';
 import type { PinShape, PinSize } from '@/lib/queries/branding';
 import { accessKeys } from '@/hooks/useAccess';
+import { floorKeys } from '@/hooks/useFloors';
 
 export const buildingKeys = {
   all: ['buildings'] as const,
@@ -100,6 +104,39 @@ export function useUploadBuildingPhoto(buildingId: string | undefined) {
     onSuccess: (b) => {
       qc.invalidateQueries({ queryKey: buildingKeys.detail(b.id) });
       qc.invalidateQueries({ queryKey: buildingKeys.list() });
+    },
+  });
+}
+
+/** Soft-deleted buildings (super-admin Trash). */
+export function useDeletedBuildings() {
+  return useQuery({
+    queryKey: [...buildingKeys.all, 'deleted'] as const,
+    queryFn: listDeletedBuildings,
+  });
+}
+
+/** Soft-delete a building + cascade its floors. Invalidates lists/floors/grants. */
+export function useSoftDeleteBuilding() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) => softDeleteBuilding(id),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: buildingKeys.all });
+      qc.invalidateQueries({ queryKey: floorKeys.all });
+      qc.invalidateQueries({ queryKey: accessKeys.all });
+    },
+  });
+}
+
+/** Restore a soft-deleted building + its cascade-deleted floors. */
+export function useRestoreBuilding() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (vars: { id: string; deletedAt: string }) => restoreBuilding(vars.id, vars.deletedAt),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: buildingKeys.all });
+      qc.invalidateQueries({ queryKey: floorKeys.all });
     },
   });
 }

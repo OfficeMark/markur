@@ -48,6 +48,7 @@ const AdminInvitationsPane = lazy(() => import('@/components/waymarks/admin/Admi
 const AdminSecurityPane = lazy(() => import('@/components/waymarks/admin/AdminSecurityPane').then((m) => ({ default: m.AdminSecurityPane })));
 const AdminBrandingPane = lazy(() => import('@/components/waymarks/admin/AdminBrandingPane').then((m) => ({ default: m.AdminBrandingPane })));
 const AdminDirectoryPane = lazy(() => import('@/components/waymarks/admin/AdminDirectoryPane').then((m) => ({ default: m.AdminDirectoryPane })));
+const AdminDeletedBuildingsPane = lazy(() => import('@/components/waymarks/admin/AdminDeletedBuildingsPane').then((m) => ({ default: m.AdminDeletedBuildingsPane })));
 
 function RouteFallback() {
   return (
@@ -212,6 +213,7 @@ export default function App() {
                     <Route path="invitations" element={<AdminInvitationsPane />} />
                     <Route path="security" element={<AdminSecurityPane />} />
                     <Route path="branding" element={<AdminBrandingPane />} />
+                    <Route path="deleted-buildings" element={<AdminDeletedBuildingsPane />} />
                   </Route>
                   <Route path="/accept/:token" element={<AcceptInvitation />} />
                   <Route path="/share/:token" element={<BuildingShare />} />
