@@ -8,7 +8,13 @@ import { useEffect, useState } from 'react';
  * with no Internet (captive portals, dropped routes). We use it as the
  * primary signal but back it up with a slow lightweight ping every 30s when
  * the page is visible. The ping target is the Supabase project's REST root,
- * which returns 401 quickly and cheaply if the network is alive.
+ * which answers quickly and cheaply if the network is alive — we only care
+ * that *something* responds, not what it says.
+ *
+ * We send the (public, already-bundled) anon apikey so the root answers 200
+ * instead of 401. The 401 worked just as well for liveness — fetch resolves on
+ * any HTTP status — but a recurring 401 every 30s is console/network noise that
+ * reads like an auth bug to anyone watching devtools or error monitoring.
  */
 
 const PING_INTERVAL_MS = 30_000;
@@ -37,6 +43,7 @@ export function useOnline(): OnlineState {
 
     // Slow ping fallback. Avoids the captive-portal false positive.
     const supabaseUrl = (import.meta.env.VITE_SUPABASE_URL ?? '').replace(/\/$/, '');
+    const anonKey = import.meta.env.VITE_SUPABASE_ANON_KEY ?? '';
     async function ping() {
       if (document.hidden) return; // don't ping in background tabs
       if (!supabaseUrl) return;
@@ -48,7 +55,9 @@ export function useOnline(): OnlineState {
           mode: 'cors',
           credentials: 'omit',
           signal: ctrl.signal,
-          // No apikey on purpose — we only care that *something* responds.
+          // Public anon key (already shipped in the bundle) so the root answers
+          // 200 rather than a noisy recurring 401. Liveness only needs a reply.
+          headers: anonKey ? { apikey: anonKey } : undefined,
         });
         window.clearTimeout(t);
         setState({ online: true, lastSeen: Date.now() });
