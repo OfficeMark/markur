@@ -58,7 +58,7 @@ export function BuildingPhotoUpload({
     if (v) {
       setError(
         v === 'invalid-type'
-          ? 'Use a PNG, JPG, or WebP image.'
+          ? 'Use a photo or image file (JPG, PNG, WebP — iPhone photos work too).'
           : v === 'too-large'
             ? 'Image must be under 10 MB.'
             : 'Could not read that file.'

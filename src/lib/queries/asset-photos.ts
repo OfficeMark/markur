@@ -16,7 +16,7 @@ export function validateAssetPhotoFile(file: File): string | null {
     return `${file.name}: too large (limit 8 MB).`;
   }
   if (!(ASSET_PHOTO_MIMES as readonly string[]).includes(file.type)) {
-    return `${file.name}: unsupported type. Use PNG, JPG, or WebP.`;
+    return `${file.name}: unsupported type. Use a JPG, PNG, or WebP — iPhone photos work too.`;
   }
   return null;
 }
