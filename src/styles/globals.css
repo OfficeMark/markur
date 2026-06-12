@@ -28,6 +28,12 @@
     --color-surface: 255 255 255;
     --color-surface-soft: 247 245 238;
 
+    /* Banded form sections (asset add/edit dialog). Paper is the warm body
+       tint (#f5f3ee); Mist is the cooler header strip that carries the orange
+       bar + icon + label. White-body sections reuse --color-surface. */
+    --band-paper: 245 243 238;
+    --band-mist: 233 235 238;
+
     /* Pin sizing (M12 - single source of truth so future tweaks are one line).
        --pin-size-mobile applies < lg breakpoint (touch); --pin-size-desktop applies >= lg.
        Touch hit area is enlarged by a before:pseudo-element in PinMarker so the
@@ -95,6 +101,11 @@
   /* Surfaces — cards, sheets, modals, popovers */
   --color-surface: 31 38 48;         /* one step lighter than page bg */
   --color-surface-soft: 24 30 38;    /* nested surfaces */
+
+  /* Banded form sections — dark equivalents: paper a touch below surface,
+     mist a step above it so the header strip still reads as elevated. */
+  --band-paper: 26 31 39;
+  --band-mist: 37 45 56;
 
   /* Status backgrounds — dimmed for dark mode */
   --color-success-bg: 28 50 40;
