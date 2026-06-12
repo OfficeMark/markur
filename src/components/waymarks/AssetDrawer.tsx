@@ -808,27 +808,37 @@ function PhotoGallery({
   const del = useDeleteAssetPhoto(assetId);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [converting, setConverting] = useState(false);
+  // Tracks an in-flight upload batch ({done, total}). Uploads are sequential, so
+  // a slow batch (esp. HEIC conversion) used to look stuck — picking again while
+  // it ran started a SECOND batch and piled extra photos onto the pin. We now
+  // ignore + disable new picks until the batch finishes, and show its progress.
+  const [batch, setBatch] = useState<{ done: number; total: number } | null>(null);
 
   const safeActive = Math.min(active, Math.max(0, photos.length - 1));
   const current: AssetPhoto | undefined = photos[safeActive];
 
   async function onPickFiles(list: FileList | null) {
-    if (!list) return;
+    if (!list || batch) return;
     setErrorMsg(null);
-    for (const raw of Array.from(list)) {
+    const files = Array.from(list);
+    setBatch({ done: 0, total: files.length });
+    let done = 0;
+    for (const raw of files) {
       let file = raw;
       try {
         // HEIC/HEIF → JPEG before validate/upload (never store HEIC).
         file = await ensureUploadableImage(raw, () => setConverting(true));
-      } catch {
-        setErrorMsg(`${raw.name}: couldn't convert this HEIC photo.`);
-        continue;
-      } finally {
         setConverting(false);
+      } catch {
+        setConverting(false);
+        setErrorMsg(`${raw.name}: couldn't convert this HEIC photo.`);
+        setBatch({ done: (done += 1), total: files.length });
+        continue;
       }
       const v = validateAssetPhotoFile(file);
       if (v) {
         setErrorMsg(v);
+        setBatch({ done: (done += 1), total: files.length });
         continue;
       }
       try {
@@ -836,7 +846,9 @@ function PhotoGallery({
       } catch (e) {
         setErrorMsg(e instanceof Error ? e.message : 'Upload failed.');
       }
+      setBatch({ done: (done += 1), total: files.length });
     }
+    setBatch(null);
   }
 
   async function onDelete(p: AssetPhoto) {
@@ -887,21 +899,36 @@ function PhotoGallery({
 
       {canEdit && (
         <div className="flex gap-1">
-          <label className="inline-flex h-8 cursor-pointer items-center gap-1 rounded-md border border-black/10 px-2 text-xs hover:bg-black/5 dark:border-white/10 dark:hover:bg-white/5">
+          <label
+            className={
+              'inline-flex h-8 items-center gap-1 rounded-md border border-black/10 px-2 text-xs dark:border-white/10 ' +
+              (batch ? 'pointer-events-none opacity-60' : 'cursor-pointer hover:bg-black/5 dark:hover:bg-white/5')
+            }
+          >
             <Plus size={12} aria-hidden />
-            <span>{converting ? 'Converting…' : add.isPending ? 'Uploading…' : 'Add photo'}</span>
+            <span>
+              {batch
+                ? `${converting ? 'Converting' : 'Uploading'} ${Math.min(batch.done + 1, batch.total)} of ${batch.total}…`
+                : 'Add photo'}
+            </span>
             <input
               type="file"
               accept="image/*"
               capture="environment"
               className="sr-only"
+              disabled={!!batch}
               onChange={(e) => {
                 void onPickFiles(e.target.files);
                 e.target.value = '';
               }}
             />
           </label>
-          <label className="inline-flex h-8 cursor-pointer items-center gap-1 rounded-md border border-black/10 px-2 text-xs hover:bg-black/5 dark:border-white/10 dark:hover:bg-white/5">
+          <label
+            className={
+              'inline-flex h-8 items-center gap-1 rounded-md border border-black/10 px-2 text-xs dark:border-white/10 ' +
+              (batch ? 'pointer-events-none opacity-60' : 'cursor-pointer hover:bg-black/5 dark:hover:bg-white/5')
+            }
+          >
             <Pencil size={12} aria-hidden />
             <span>Choose files</span>
             <input
@@ -909,6 +936,7 @@ function PhotoGallery({
               accept={PHOTO_ACCEPT}
               multiple
               className="sr-only"
+              disabled={!!batch}
               onChange={(e) => {
                 void onPickFiles(e.target.files);
                 e.target.value = '';
