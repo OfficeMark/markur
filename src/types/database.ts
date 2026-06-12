@@ -856,6 +856,64 @@ export type Database = {
         }
         Relationships: []
       }
+      // guest_viewer_share_phase1 — added manually pending `supabase gen types` regen.
+      building_shares: {
+        Row: {
+          building_id: string
+          created_at: string
+          created_by: string
+          expires_at: string
+          id: string
+          revoked_at: string | null
+          token_hash: string
+        }
+        Insert: {
+          building_id: string
+          created_at?: string
+          created_by?: string
+          expires_at: string
+          id?: string
+          revoked_at?: string | null
+          token_hash: string
+        }
+        Update: {
+          building_id?: string
+          created_at?: string
+          created_by?: string
+          expires_at?: string
+          id?: string
+          revoked_at?: string | null
+          token_hash?: string
+        }
+        Relationships: []
+      }
+      building_share_claims: {
+        Row: {
+          claimed_at: string
+          email: string
+          grant_id: string | null
+          id: string
+          share_id: string
+          user_id: string
+        }
+        Insert: {
+          claimed_at?: string
+          email: string
+          grant_id?: string | null
+          id?: string
+          share_id: string
+          user_id: string
+        }
+        Update: {
+          claimed_at?: string
+          email?: string
+          grant_id?: string | null
+          id?: string
+          share_id?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       profiles: {
         Row: {
           avatar_url: string | null
@@ -953,6 +1011,23 @@ export type Database = {
       user_can_view_asset: {
         Args: { p_asset: Database["public"]["Tables"]["assets"]["Row"] }
         Returns: boolean
+      }
+      log_access: {
+        Args: { p_action: string; p_entity_type?: string; p_entity_id?: string }
+        Returns: undefined
+      }
+      // guest_viewer_share_phase1 — added manually pending `supabase gen types` regen.
+      peek_building_share: {
+        Args: { p_token: string }
+        Returns: Json
+      }
+      claim_building_share: {
+        Args: { p_token: string }
+        Returns: string
+      }
+      revoke_building_share: {
+        Args: { p_share_id: string }
+        Returns: undefined
       }
     }
     Enums: {

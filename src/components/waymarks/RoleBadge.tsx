@@ -1,6 +1,6 @@
 import { cn } from '@/lib/utils';
 
-export type Role = 'super_admin' | 'building_admin' | 'auditor' | 'tenant_rep';
+export type Role = 'super_admin' | 'building_admin' | 'editor' | 'auditor' | 'tenant_rep' | 'viewer';
 
 export type RoleBadgeProps = {
   role: Role;
@@ -17,6 +17,10 @@ const ROLE_VISUALS: Record<Role, { label: string; className: string }> = {
     label: 'Manager',
     className: 'border-info/30 bg-info-bg text-info',
   },
+  editor: {
+    label: 'Editor',
+    className: 'border-info/30 bg-info-bg text-info',
+  },
   auditor: {
     label: 'Auditor',
     className: 'border-success/30 bg-success-bg text-success',
@@ -24,6 +28,10 @@ const ROLE_VISUALS: Record<Role, { label: string; className: string }> = {
   tenant_rep: {
     label: 'Facilities',
     className: 'border-black/15 bg-waymarks-gold-soft text-text dark:border-white/15 dark:bg-white/5 dark:text-white',
+  },
+  viewer: {
+    label: 'Guest viewer',
+    className: 'border-black/15 bg-surface-soft text-text-muted dark:border-white/15 dark:bg-white/5 dark:text-white/80',
   },
 };
 

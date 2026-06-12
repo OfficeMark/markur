@@ -15,7 +15,8 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "test:e2e": "playwright test",
-    "check": "npm run typecheck && npm run lint && npm run test",
+    "test:e2e:overflow": "playwright test --project=desktop-chromium overflow",
+    "check": "npm run typecheck && npm run lint && npm run test && npm run test:e2e:overflow",
     "db:types": "npx -y supabase gen types typescript --project-id drclmnqlurvwqpnnpgzb > src/types/database.ts",
     "prepare": "husky"
   },

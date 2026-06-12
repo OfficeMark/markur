@@ -1,11 +1,12 @@
 import { Link, useParams } from 'react-router-dom';
 import { useState } from 'react';
-import { ArrowLeft, MapPin, Layers, ImageOff, Trash2, Plus, FileDown } from 'lucide-react';
+import { ArrowLeft, MapPin, Layers, ImageOff, Trash2, Plus, FileDown, Share2 } from 'lucide-react';
 import { AppShell } from '@/components/waymarks/AppShell';
 import { Tooltip } from '@/components/ui/Tooltip';
 import { AccessManagementCard } from '@/components/waymarks/AccessManagementCard';
 import { BuildingPhotoUpload } from '@/components/waymarks/BuildingPhotoUpload';
 import { NewFloorDialog } from '@/components/waymarks/NewFloorDialog';
+import { ShareBuildingDialog } from '@/components/waymarks/ShareBuildingDialog';
 import { ResumeAuditBanner } from '@/components/waymarks/ResumeAuditBanner';
 import { useBuilding } from '@/hooks/useBuildings';
 import { useFloors } from '@/hooks/useFloors';
@@ -17,6 +18,7 @@ export function Building() {
   const { data: building, isLoading: bLoading, error: bError } = useBuilding(id);
   const { data: floors = [], isLoading: fLoading } = useFloors(id);
   const [newFloorOpen, setNewFloorOpen] = useState(false);
+  const [shareOpen, setShareOpen] = useState(false);
   const isSuperAdmin = useIsSuperAdmin();
   const canManageAccess = useCan('manage_access', { type: 'building', id: id ?? '' });
   const canConfigure = useCan('configure', { type: 'building', id: id ?? '' });
@@ -99,6 +101,18 @@ export function Building() {
               <span>Audit report</span>
             </Link>
           </Tooltip>
+          {canManageAccess && (
+            <Tooltip text="Create a view-only link to share this building with a client">
+              <button
+                type="button"
+                onClick={() => setShareOpen(true)}
+                className="inline-flex h-9 items-center gap-1.5 rounded-md border border-black/10 bg-surface px-3 text-xs font-medium text-text hover:border-black/20 dark:border-white/10 dark:hover:border-white/20"
+              >
+                <Share2 size={12} aria-hidden />
+                <span>Share building</span>
+              </button>
+            </Tooltip>
+          )}
           {isSuperAdmin && (
             <Link
               to={`/buildings/${building.id}/trash`}
@@ -163,6 +177,14 @@ export function Building() {
         <NewFloorDialog
           open={newFloorOpen}
           onOpenChange={setNewFloorOpen}
+          buildingId={building.id}
+          buildingName={building.name}
+        />
+      )}
+      {building && canManageAccess && (
+        <ShareBuildingDialog
+          open={shareOpen}
+          onOpenChange={setShareOpen}
           buildingId={building.id}
           buildingName={building.name}
         />
