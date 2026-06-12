@@ -8,6 +8,7 @@ import {
   Image as ImageIcon,
   MapPin,
   Plus,
+  Ruler,
   Share2,
   ShieldCheck,
   SlidersHorizontal,
@@ -32,7 +33,10 @@ type Section = {
   steps: { label: string; detail: string }[];
 };
 
-const SECTIONS: Section[] = [
+// Exported for a content test (the section data is the "feature" here). The
+// disable keeps Fast Refresh happy about a non-component export in a route file.
+// eslint-disable-next-line react-refresh/only-export-components
+export const SECTIONS: Section[] = [
   {
     id: 'building',
     icon: Building2,
@@ -54,6 +58,35 @@ const SECTIONS: Section[] = [
         label: 'Upload a floor plan',
         detail:
           "Click any floor with 'No plan yet'. Use 'Upload floor plan' — PDF works best (we read its title and warn you if it doesn't match the floor name).",
+      },
+    ],
+  },
+  {
+    id: 'floorplans',
+    icon: Ruler,
+    title: 'Preparing your floor plans',
+    intro:
+      "Markur works best when plans are clean, high-contrast, and consistently scaled. A few minutes prepping the file makes every pin land precisely — here's how to export from the common sources.",
+    steps: [
+      {
+        label: 'From a PDF (architect drawings)',
+        detail:
+          'Export at 300 DPI or higher, page size matching the original sheet. Flatten layers first. Avoid "compressed" or "web" PDF presets — they soften the linework and pin placement loses precision.',
+      },
+      {
+        label: 'From AutoCAD',
+        detail:
+          'Export to PDF with a monochrome plot style (monochrome.ctb). Turn off hatches, furniture, and electrical layers — keep walls, doors, room numbers, and room names. One floor per page.',
+      },
+      {
+        label: 'From a scan or photo',
+        detail:
+          'Workable but not ideal. Scan or export at 300 DPI, save at maximum quality, and crop tight to the floor edge. Avoid photographing a printed plan — perspective, lighting, and shadows distort it and need cleanup first.',
+      },
+      {
+        label: 'Naming & framing',
+        detail:
+          'One floor per file. Put the building and floor in the filename, e.g. "BAS-Tower-Floor-12.pdf". Keep north up, and keep title blocks and revision clouds outside the croppable area.',
       },
     ],
   },

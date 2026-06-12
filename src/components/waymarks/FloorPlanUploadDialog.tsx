@@ -615,6 +615,14 @@ function FloorplanExportTips() {
             </li>
           </ul>
         </section>
+        <a
+          href="/help#floorplans"
+          target="_blank"
+          rel="noopener noreferrer"
+          className="inline-flex items-center gap-1 text-xs font-medium text-waymarks-gold hover:underline"
+        >
+          Full guide to preparing floor plans →
+        </a>
       </div>
     </details>
   );
