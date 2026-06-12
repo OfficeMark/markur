@@ -96,12 +96,19 @@ type ShowSaveFilePicker = (opts: {
 
 /**
  * Where the finished catalogue PDF should be written:
- *  - `handle`    — the user picked a location via the OS Save dialog
- *  - `download`  — no Save dialog available (Firefox/Safari); use a plain download
+ *  - `handle`    — the user picked a location via the OS Save dialog (Chromium)
+ *  - `tab`       — no Save dialog (Safari/iOS/Firefox); show the PDF in a new
+ *                  browser tab. iOS Safari ignores `<a download>`, so a plain
+ *                  `doc.save()` there silently does nothing — opening a tab is
+ *                  the reliable delivery. The tab is opened up front (while the
+ *                  click's user activation is live) so a popup blocker can't
+ *                  kill it after the async build.
+ *  - `download`  — tab couldn't be opened (popup-blocked); plain download
  *  - `cancelled` — the user dismissed the Save dialog; do nothing
  */
 export type CatalogueSaveTarget =
   | { kind: 'handle'; handle: CatalogueFileHandle }
+  | { kind: 'tab'; win: Window }
   | { kind: 'download' }
   | { kind: 'cancelled' };
 
@@ -116,7 +123,23 @@ export async function pickCatalogueSaveTarget(
 ): Promise<CatalogueSaveTarget> {
   const picker = (window as unknown as { showSaveFilePicker?: ShowSaveFilePicker })
     .showSaveFilePicker;
-  if (typeof picker !== 'function') return { kind: 'download' };
+  if (typeof picker !== 'function') {
+    // No OS Save dialog (Safari/iOS/Firefox). Open a tab NOW, while the click's
+    // user activation is still live, so the popup blocker lets it through; we
+    // navigate it to the finished PDF in writeCatalogue. A placeholder keeps
+    // the tab from looking broken during the (slow) photo load.
+    const win = window.open('', '_blank');
+    if (win) {
+      win.document.write(
+        '<!doctype html><html><head><meta name="viewport" content="width=device-width,initial-scale=1"><title>Catalogue</title></head>' +
+          '<body style="margin:0;font:16px/1.5 system-ui,sans-serif;color:#1F2938;background:#f5f3ee;display:flex;align-items:center;justify-content:center;height:100vh">' +
+          'Generating your catalogue…</body></html>'
+      );
+      win.document.close();
+      return { kind: 'tab', win };
+    }
+    return { kind: 'download' };
+  }
   try {
     const handle = await picker({
       suggestedName,
@@ -154,7 +177,36 @@ export async function writeCatalogue(
       // Fall through to a plain download if the write fails.
     }
   }
+  if (target.kind === 'tab') {
+    try {
+      const url = URL.createObjectURL(doc.output('blob'));
+      target.win.location.href = url;
+      // Don't revoke immediately — the tab is now displaying this URL.
+      return;
+    } catch {
+      // Couldn't hand the blob to the tab; close it and fall back to download.
+      try {
+        target.win.close();
+      } catch {
+        /* ignore */
+      }
+    }
+  }
   doc.save(fallbackName);
+}
+
+/**
+ * Close a pre-opened catalogue tab (used by callers when the build fails before
+ * the PDF was handed over, so a stuck "Generating…" tab doesn't linger).
+ */
+export function abortCatalogueTarget(target: CatalogueSaveTarget): void {
+  if (target.kind === 'tab') {
+    try {
+      target.win.close();
+    } catch {
+      /* ignore */
+    }
+  }
 }
 
 export type BuildCatalogueParams = {

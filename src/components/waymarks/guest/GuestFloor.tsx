@@ -14,6 +14,7 @@ import { logAccess } from '@/lib/queries/access-log';
 import { listFirstPhotoPaths, signedAssetPhotoUrl } from '@/lib/queries/asset-photos';
 import { photoToJpegDataUrl } from '@/lib/photo-to-data-url';
 import {
+  abortCatalogueTarget,
   buildCatalogueDoc,
   catalogueDownloadName,
   pickCatalogueSaveTarget,
@@ -122,6 +123,7 @@ export function GuestFloor({
       await writeCatalogue(doc, target, fileName);
       setCatalogueState('idle');
     } catch (e) {
+      abortCatalogueTarget(target);
       setCatalogueError(e instanceof Error ? e.message : 'Could not build the catalogue.');
       setCatalogueState('error');
     }
