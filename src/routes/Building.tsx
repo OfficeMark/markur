@@ -9,7 +9,14 @@ import { NewFloorDialog } from '@/components/waymarks/NewFloorDialog';
 import { ShareBuildingDialog } from '@/components/waymarks/ShareBuildingDialog';
 import { StepUpDialog } from '@/components/waymarks/StepUpDialog';
 import { ResumeAuditBanner } from '@/components/waymarks/ResumeAuditBanner';
-import { useBuilding, useSetBuildingPinAppearance, useSoftDeleteBuilding } from '@/hooks/useBuildings';
+import {
+  useBuilding,
+  useSetBuildingExternalLink,
+  useSetBuildingPinAppearance,
+  useSoftDeleteBuilding,
+} from '@/hooks/useBuildings';
+import { buildingExternalLinkFromSettings } from '@/lib/building-settings';
+import { BuildingExternalLinkControl } from '@/components/waymarks/BuildingExternalLinkControl';
 import { useFloors } from '@/hooks/useFloors';
 import { useCan, useIsSuperAdmin } from '@/lib/permissions-context';
 import { PinAppearanceControl } from '@/components/waymarks/PinAppearanceControl';
@@ -31,6 +38,7 @@ export function Building() {
   const canEdit = useCan('edit', { type: 'building', id: id ?? '' });
   const canDeleteBuilding = useCan('delete', { type: 'building', id: id ?? '' });
   const setPins = useSetBuildingPinAppearance(id);
+  const setExtLink = useSetBuildingExternalLink(id);
   const softDeleteBuilding = useSoftDeleteBuilding();
 
   if (bLoading) return <Skeleton />;
@@ -195,6 +203,30 @@ export function Building() {
             />
             {setPins.isError && (
               <p className="mt-2 text-xs text-danger">Couldn't save the pin appearance. Try again.</p>
+            )}
+          </section>
+        )}
+
+        {canConfigure && (
+          <section className="mt-10 rounded-lg border border-black/10 bg-surface p-5 dark:border-white/10">
+            <header className="mb-3">
+              <p className="text-[11px] font-medium uppercase tracking-[0.22em] text-text-faint">
+                Order / external link
+              </p>
+              <p className="mt-1 text-sm text-text-muted">
+                The action button on each pin's details. Keep the default Officemark order page, point
+                it at your own portal, or hide it. A pin's own vendor or contact link still takes
+                priority; clients on a share link never see this button.
+              </p>
+            </header>
+            <BuildingExternalLinkControl
+              value={buildingExternalLinkFromSettings(building.settings)}
+              saving={setExtLink.isPending}
+              savedAt={setExtLink.isSuccess ? 1 : null}
+              onSave={(link) => setExtLink.mutate(link)}
+            />
+            {setExtLink.isError && (
+              <p className="mt-2 text-xs text-danger">Couldn't save the link. Try again.</p>
             )}
           </section>
         )}

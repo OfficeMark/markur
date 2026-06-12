@@ -181,6 +181,11 @@ const SECTIONS: Section[] = [
           "On the building page, the 'Pin appearance' panel (admins only) sets the shape and size of every pin on that building's plans. Everyone sees the same look — including clients on a share link. Status and type colors don't change.",
       },
       {
+        label: 'Set the order / external link',
+        detail:
+          "The 'Order / external link' panel (admins only) controls the action button on each pin's details. Keep the default Officemark order page, point it at your own portal with a custom label, or hide it. A pin's own vendor or contact link still takes priority, and clients on a share link never see this button.",
+      },
+      {
         label: 'Delete a floor',
         detail:
           "On a floor, click 'Delete floor' and type DELETE to confirm. The floor and its pins, photos, and audit history are hidden everywhere but kept in the database — support can restore it.",

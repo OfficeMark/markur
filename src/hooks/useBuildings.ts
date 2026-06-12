@@ -8,6 +8,7 @@ import {
   listDeletedBuildings,
   removeBuildingPhoto,
   restoreBuilding,
+  setBuildingExternalLink,
   setBuildingPinAppearance,
   signedBuildingPhotoUrl,
   softDeleteBuilding,
@@ -148,6 +149,21 @@ export function useSetBuildingPinAppearance(buildingId: string | undefined) {
     mutationFn: (appearance: { pin_shape: PinShape; pin_size: PinSize }) => {
       if (!buildingId) throw new Error('No building selected');
       return setBuildingPinAppearance(buildingId, appearance);
+    },
+    onSuccess: (b) => {
+      qc.invalidateQueries({ queryKey: buildingKeys.detail(b.id) });
+      qc.invalidateQueries({ queryKey: buildingKeys.list() });
+    },
+  });
+}
+
+/** Save the per-building external link config to buildings.settings. */
+export function useSetBuildingExternalLink(buildingId: string | undefined) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (link: { mode: 'default' | 'custom' | 'hidden'; label: string; url: string }) => {
+      if (!buildingId) throw new Error('No building selected');
+      return setBuildingExternalLink(buildingId, link);
     },
     onSuccess: (b) => {
       qc.invalidateQueries({ queryKey: buildingKeys.detail(b.id) });

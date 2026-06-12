@@ -32,6 +32,39 @@ export async function setBuildingPinAppearance(
   return data;
 }
 
+/**
+ * Set the per-building external link config in `buildings.settings` (jsonb)
+ * under `external_link`. Read-modify-write so pin appearance and other keys are
+ * preserved. RLS gates this to admins with `configure` on the building.
+ */
+export async function setBuildingExternalLink(
+  buildingId: string,
+  link: { mode: 'default' | 'custom' | 'hidden'; label: string; url: string }
+): Promise<Building> {
+  const { data: existing, error: readErr } = await supabase
+    .from('buildings')
+    .select('settings')
+    .eq('id', buildingId)
+    .single();
+  if (readErr) throw readErr;
+  const prev =
+    existing?.settings && typeof existing.settings === 'object' && !Array.isArray(existing.settings)
+      ? (existing.settings as Record<string, unknown>)
+      : {};
+  const settings = {
+    ...prev,
+    external_link: { mode: link.mode, label: link.label.trim(), url: link.url.trim() },
+  };
+  const { data, error } = await supabase
+    .from('buildings')
+    .update({ settings: settings as unknown as Json })
+    .eq('id', buildingId)
+    .select('*')
+    .single();
+  if (error) throw error;
+  return data;
+}
+
 export async function listBuildings(): Promise<Building[]> {
   const { data, error } = await supabase
     .from('buildings')
