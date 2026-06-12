@@ -49,6 +49,12 @@ pnpm-debug.log*
 supabase/.branches
 supabase/.temp
 
+# Netlify local state
+.netlify/
+
+# Owner briefing docs (local only)
+*.docx
+
 # Husky
 .husky/_
 
