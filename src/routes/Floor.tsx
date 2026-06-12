@@ -34,6 +34,7 @@ import { pinNumberMatchesQuery } from '@/lib/pin-types';
 import { photoToJpegDataUrl } from '@/lib/photo-to-data-url';
 import { listFirstPhotoPaths, signedAssetPhotoUrl } from '@/lib/queries/asset-photos';
 import {
+  abortCatalogueTarget,
   buildCatalogueDoc,
   catalogueDownloadName,
   pickCatalogueSaveTarget,
@@ -308,6 +309,7 @@ export function Floor() {
       await writeCatalogue(doc, target, fileName);
       setCatalogueState('idle');
     } catch (e) {
+      abortCatalogueTarget(target);
       setCatalogueError(e instanceof Error ? e.message : 'Could not build the catalogue.');
       setCatalogueState('error');
     }
