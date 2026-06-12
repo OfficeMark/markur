@@ -57,6 +57,7 @@ export type CreateAssetInput = {
   contact_id?: string | null;
   installed_at?: string | null;
   audit_cycle_days?: number | null;
+  zone?: string | null;
 };
 
 export async function createAsset(input: CreateAssetInput): Promise<Asset> {
@@ -85,6 +86,7 @@ export async function createAsset(input: CreateAssetInput): Promise<Asset> {
       contact_id: input.contact_id ?? null,
       installed_at: input.installed_at ?? null,
       audit_cycle_days: input.audit_cycle_days ?? null,
+      zone: input.zone ?? null,
       created_by,
     })
     .select('*')

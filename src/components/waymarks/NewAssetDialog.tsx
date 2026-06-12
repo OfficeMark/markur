@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import * as Dialog from '@radix-ui/react-dialog';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
@@ -21,7 +21,7 @@ import {
   type LucideIcon,
 } from 'lucide-react';
 import { Button } from '@/components/ui/Button';
-import { useCreateAsset } from '@/hooks/useAssets';
+import { useCreateAsset, useAssets } from '@/hooks/useAssets';
 import { useFloors } from '@/hooks/useFloors';
 import { useContacts } from '@/hooks/useContacts';
 import { useAddAuditVideo } from '@/hooks/useAuditVideos';
@@ -81,6 +81,18 @@ export function NewAssetDialog({
   const contactsInScope = contacts.list.filter(
     (c) => c.building_id === null || c.building_id === buildingId
   );
+
+  // Zone suggestions: distinct zones already used on this floor (free-text,
+  // so this just speeds re-entry of an existing zone — it doesn't constrain).
+  const { data: floorAssets = [] } = useAssets(floorId);
+  const zoneSuggestions = useMemo(() => {
+    const seen = new Set<string>();
+    for (const a of floorAssets) {
+      const z = a.zone?.trim();
+      if (z) seen.add(z);
+    }
+    return [...seen].sort((x, y) => x.localeCompare(y));
+  }, [floorAssets]);
 
   // Item 4: a pin can be placed on several floors of the same building at once.
   // Each selected floor gets an independent asset row at the same x/y.
@@ -266,8 +278,7 @@ export function NewAssetDialog({
           contact_id: contactId || null,
           installed_at: installed || null,
           audit_cycle_days: cycleNum,
-          // TODO(zone): include `zone: zone.trim() || null` once the
-          // assets.zone column is applied on demo and types regenerated.
+          zone: zone.trim() || null,
           x: position.x,
           y: position.y,
         });
@@ -397,9 +408,11 @@ export function NewAssetDialog({
                       placeholder="Enter a zone if applicable"
                       className={inputClass}
                     />
-                    {/* TODO(zone): populate from distinct zones already used on
-                        this floor once the assets.zone column lands. */}
-                    <datalist id="asset-zone-suggestions" />
+                    <datalist id="asset-zone-suggestions">
+                      {zoneSuggestions.map((z) => (
+                        <option key={z} value={z} />
+                      ))}
+                    </datalist>
                   </Field>
 
                   <Field
