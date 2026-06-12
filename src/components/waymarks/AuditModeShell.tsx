@@ -15,6 +15,7 @@ import { AuditFlagDialog } from '@/components/waymarks/AuditFlagDialog';
 import { useAuditEvents, useCreateAuditEvent, useEndAudit, summarizeSession } from '@/hooks/useAudit';
 import { useUpdateAsset } from '@/hooks/useAssets';
 import { createFlag } from '@/lib/queries/flags';
+import { nextPinInCycle, orderByPinNumber } from '@/lib/audit-cycle';
 import type { AssetStatus } from '@/lib/asset-status';
 import type { Asset, AuditSession } from '@/types/database';
 import { DEFAULT_PIN_SHAPE, DEFAULT_PIN_SIZE, type PinShape, type PinSize } from '@/lib/queries/branding';
@@ -93,10 +94,13 @@ export function AuditModeShell({
 
   const current = currentId ? assets.find((a) => a.id === currentId) ?? null : null;
 
-  // Auto-advance to the nearest unvisited asset.
+  // The walkthrough order is pin-number order; "Start audit here" picks the
+  // starting pin, and the cycle wraps from there to cover the whole floor.
+  const orderedAssets = useMemo(() => orderByPinNumber(assets), [assets]);
+
+  // Advance to the next unvisited pin in cycle order, wrapping past the end.
   function advanceToNext() {
-    const remaining = assets.filter((a) => !lastByAsset.has(a.id));
-    setCurrentId(remaining[0]?.id ?? null);
+    setCurrentId(nextPinInCycle(orderedAssets, currentId, (id) => lastByAsset.has(id)));
   }
 
   /**

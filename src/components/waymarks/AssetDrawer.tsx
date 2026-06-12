@@ -13,6 +13,7 @@ import {
   ImageOff,
   Check,
   AlertTriangle,
+  ClipboardList,
   Flag,
   Lock,
   LockOpen,
@@ -76,6 +77,12 @@ export type AssetDrawerProps = {
    */
   onLogFlag?: (assetId: string) => void;
   /**
+   * "Start audit here" — begins (or resumes) Audit Mode with this pin as the
+   * first stop; the walkthrough then proceeds in pin order from here, wrapping
+   * to cover the floor. Only wired when the user can run an audit.
+   */
+  onStartAuditHere?: (assetId: string) => void;
+  /**
    * Guest viewer (building share link): hides the optional/internal surfaces a
    * client shouldn't see — Visualize, Order Signs, vendor details, attachments,
    * audit videos, and the activity timeline. Edit affordances are already
@@ -102,6 +109,7 @@ export function AssetDrawer({
   onStartReposition,
   onStartDelete,
   onLogFlag,
+  onStartAuditHere,
   guest = false,
 }: AssetDrawerProps) {
   const open = !!assetId;
@@ -206,6 +214,9 @@ export function AssetDrawer({
                   canEdit={canEdit}
                   onSetStatus={(status) => update.mutate({ id: asset.id, patch: { status } })}
                   onLogFlag={onLogFlag ? () => onLogFlag(asset.id) : undefined}
+                  onStartAuditHere={
+                    onStartAuditHere ? () => onStartAuditHere(asset.id) : undefined
+                  }
                 />
                 {!guest && (
                   <VisualizeRow
@@ -326,12 +337,14 @@ function QuickActions({
   canEdit,
   onSetStatus,
   onLogFlag,
+  onStartAuditHere,
 }: {
   asset: Asset;
   canAudit: boolean;
   canEdit: boolean;
   onSetStatus: (status: AssetStatus) => void;
   onLogFlag?: () => void;
+  onStartAuditHere?: () => void;
 }) {
   const current = asset.status as AssetStatus;
   return (
@@ -378,15 +391,29 @@ function QuickActions({
           );
         })}
       </div>
-      {canAudit && onLogFlag && (
-        <button
-          type="button"
-          onClick={onLogFlag}
-          className="mt-2 inline-flex items-center gap-1.5 text-xs font-medium text-waymarks-gold hover:underline"
-        >
-          <Flag size={12} aria-hidden />
-          Log a flag in Audit Mode
-        </button>
+      {canAudit && (onStartAuditHere || onLogFlag) && (
+        <div className="mt-2 flex flex-wrap items-center gap-x-4 gap-y-1.5">
+          {onStartAuditHere && (
+            <button
+              type="button"
+              onClick={onStartAuditHere}
+              className="inline-flex items-center gap-1.5 text-xs font-medium text-waymarks-gold hover:underline"
+            >
+              <ClipboardList size={12} aria-hidden />
+              Start audit here
+            </button>
+          )}
+          {onLogFlag && (
+            <button
+              type="button"
+              onClick={onLogFlag}
+              className="inline-flex items-center gap-1.5 text-xs font-medium text-waymarks-gold hover:underline"
+            >
+              <Flag size={12} aria-hidden />
+              Log a flag in Audit Mode
+            </button>
+          )}
+        </div>
       )}
     </div>
   );
