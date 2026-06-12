@@ -8,7 +8,9 @@ import {
   Image as ImageIcon,
   MapPin,
   Plus,
+  Share2,
   ShieldCheck,
+  SlidersHorizontal,
   UserPlus,
 } from 'lucide-react';
 import { AppShell } from '@/components/waymarks/AppShell';
@@ -46,7 +48,7 @@ const SECTIONS: Section[] = [
       {
         label: 'Add a building photo',
         detail:
-          "Click 'Add photo' on the hero banner (admins only). PNG, JPG, or WebP, up to 10 MB. The photo shows on Home and on the building's hero.",
+          "Click 'Add photo' on the hero banner (admins only). PNG, JPG, WebP, or an iPhone HEIC photo — we convert HEIC to a regular JPEG for you — up to 10 MB. The photo shows on Home and on the building's hero.",
       },
       {
         label: 'Upload a floor plan',
@@ -75,7 +77,7 @@ const SECTIONS: Section[] = [
       {
         label: 'Add photos',
         detail:
-          "Click any pin to open its drawer. Tap 'Add photo' to use your camera, or 'Choose files' to upload existing images.",
+          "Click any pin to open its drawer. Tap 'Add photo' to shoot one with your camera, or 'Choose files' to pick several at once. iPhone HEIC photos are converted to JPEG automatically. While a batch uploads you'll see 'Uploading 3 of 8…' — let it finish before picking more.",
       },
       {
         label: 'Move a pin (deliberate)',
@@ -114,6 +116,35 @@ const SECTIONS: Section[] = [
     ],
   },
   {
+    id: 'share',
+    icon: Share2,
+    title: 'Share a building with a client',
+    intro:
+      "Send a client a view-only link to one building. They see floor plans, pins, photos, and can export the PDF catalogue — but can't edit anything. There's no account for you to set up: they just confirm their email by clicking a link we send them.",
+    steps: [
+      {
+        label: "Click 'Share building'",
+        detail:
+          "On the building page, click 'Share building' (admins only). It opens a panel where you create new links and manage existing ones.",
+      },
+      {
+        label: 'Pick how long it lasts',
+        detail:
+          "Choose 7, 30, or 90 days (30 is the default), then click 'Generate share link'. Each building can have up to 10 active links at a time.",
+      },
+      {
+        label: 'Copy the link — it shows once',
+        detail:
+          "The full link appears a single time, right after you create it. Copy it then and send it straight to your client (email, text). For security we only store a scrambled version, so we can't show it again — if you lose it, just generate a new one.",
+      },
+      {
+        label: 'Revoke anytime',
+        detail:
+          "Every active link is listed with its expiry date and a 'Revoke' button. Revoking cuts off access immediately — the client loses their view the moment you click it, even before the link would have expired.",
+      },
+    ],
+  },
+  {
     id: 'invitations',
     icon: UserPlus,
     title: 'Invite your team',
@@ -134,6 +165,35 @@ const SECTIONS: Section[] = [
         label: 'Copy the link',
         detail:
           "Click 'Create invitation'. The dialog shows a /accept/<token> URL. Copy it and send it however you'd like (email, Slack, text). The recipient signs in and clicks Accept.",
+      },
+    ],
+  },
+  {
+    id: 'manage',
+    icon: SlidersHorizontal,
+    title: 'Pin look, and deleting things',
+    intro:
+      "A couple of building-level controls live on the building page. Pin appearance is purely cosmetic. Deleting is the careful stuff — both floors and whole buildings can be removed, and brought back if you change your mind.",
+    steps: [
+      {
+        label: 'Set the pin shape & size',
+        detail:
+          "On the building page, the 'Pin appearance' panel (admins only) sets the shape and size of every pin on that building's plans. Everyone sees the same look — including clients on a share link. Status and type colors don't change.",
+      },
+      {
+        label: 'Delete a floor',
+        detail:
+          "On a floor, click 'Delete floor' and type DELETE to confirm. The floor and its pins, photos, and audit history are hidden everywhere but kept in the database — support can restore it.",
+      },
+      {
+        label: 'Delete a building',
+        detail:
+          "On the building page, the Danger zone has 'Delete building'. You type the building's name to confirm. It removes the building and all its floors, pins, photos, and flags — everywhere, including reports and any share links.",
+      },
+      {
+        label: 'Restore a building',
+        detail:
+          "Deleting is reversible. A super admin can bring a building back from Admin → Deleted buildings, along with the floors that were removed with it.",
       },
     ],
   },
