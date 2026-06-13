@@ -308,7 +308,12 @@ export function Floor() {
 
   return (
     <AppShell>
-      <div className="mx-auto w-full max-w-5xl px-4 py-4 sm:px-6 sm:py-5">
+      {/* Viewport-bounded flex column so the map fills the space left by the
+          toolbar rows instead of overflowing the screen on mobile (the toolbars
+          flex to their natural height; the map area flexes to fill the rest).
+          min-h (not fixed h) lets Grid view grow + scroll normally. 3.5rem =
+          the AppShell header height. */}
+      <div className="mx-auto flex min-h-[calc(100dvh-3.5rem)] w-full max-w-5xl flex-col px-4 py-4 sm:px-6 sm:py-5">
         {/* Row 1 - breadcrumb left, Map/Grid + Filter right.
             One row instead of three (was: back link + eyebrow + giant
             H1 + boxed toolbar). The big floor label is duplicative of
@@ -535,10 +540,11 @@ export function Floor() {
               assetsWithVideos={assetsWithVideos ?? null}
             />
           ) : (
-            <div className="relative">
+            <div className="relative flex-1 min-h-0">
               <FloorPlanCanvas
                 src={signedUrl}
                 kind={planKind}
+                fill
                 mode={placing ? 'placing' : 'view'}
                 onPlaceClick={(coords) => {
                   setPlacing(false);
