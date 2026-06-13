@@ -70,6 +70,15 @@ export async function softDeleteFloor(id: string): Promise<void> {
   if (error) throw error;
 }
 
+/** Set how this floor's plan was sourced (provenance label). RLS gates writes. */
+export async function setFloorProvenance(id: string, provenance: string): Promise<void> {
+  const { error } = await supabase
+    .from('floors')
+    .update({ plan_provenance: provenance })
+    .eq('id', id);
+  if (error) throw error;
+}
+
 /**
  * Suggest the next sort_order for a new floor in a building. Caller can
  * use this to default the form value so manually-added floors land at

@@ -6,6 +6,8 @@ import { EmptyState } from '@/components/ui/EmptyState';
 import { Button } from '@/components/ui/Button';
 import { Tooltip } from '@/components/ui/Tooltip';
 import { FloorPlanCanvas } from '@/components/waymarks/FloorPlanCanvas';
+import { PlanSettingsMenu } from '@/components/waymarks/PlanSettingsMenu';
+import { PlanProvenanceCaption } from '@/components/waymarks/PlanProvenanceCaption';
 import { FloorPlanUploadDialog } from '@/components/waymarks/FloorPlanUploadDialog';
 import { PinOverlay } from '@/components/waymarks/PinOverlay';
 import { NewAssetDialog } from '@/components/waymarks/NewAssetDialog';
@@ -466,6 +468,13 @@ export function Floor() {
               </button>
             </Tooltip>
           )}
+          {floor.plan_url && canUploadPlan && (
+            <PlanSettingsMenu
+              floorId={floor.id}
+              buildingId={floor.building_id}
+              provenance={floor.plan_provenance}
+            />
+          )}
           {/* M14c - Visualize in ViewMark. Gold outline so it reads as a
               brand-aligned secondary, distinct from the gold-filled
               Audit primary. */}
@@ -516,6 +525,10 @@ export function Floor() {
               Resume
             </Button>
           </div>
+        )}
+
+        {floor.plan_url && (
+          <PlanProvenanceCaption provenance={floor.plan_provenance} className="mb-2" />
         )}
 
         {floor.plan_url ? (

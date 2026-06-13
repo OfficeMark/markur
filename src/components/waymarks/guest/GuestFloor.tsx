@@ -5,6 +5,7 @@ import { EmptyState } from '@/components/ui/EmptyState';
 import { FloorPlanCanvas } from '@/components/waymarks/FloorPlanCanvas';
 import { PinOverlay } from '@/components/waymarks/PinOverlay';
 import { AssetDrawer } from '@/components/waymarks/AssetDrawer';
+import { PlanProvenanceCaption } from '@/components/waymarks/PlanProvenanceCaption';
 import { useFloor } from '@/hooks/useFloors';
 import { useAssets } from '@/hooks/useAssets';
 import { useAssetTypes } from '@/hooks/useAssetTypes';
@@ -112,6 +113,10 @@ export function GuestFloor({
           )}
         </div>
       </div>
+
+      {floor?.plan_url && (
+        <PlanProvenanceCaption provenance={floor.plan_provenance} className="mb-2" />
+      )}
 
       {isLoading ? (
         <div className="h-[60vh] animate-pulse rounded-xl border border-black/10 bg-surface dark:border-white/10" />

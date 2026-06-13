@@ -3,6 +3,7 @@ import {
   getFloor,
   listFloorsByBuilding,
   nextFloorSortOrder,
+  setFloorProvenance,
   softDeleteFloor,
   type NewFloorInput,
 } from '@/lib/queries/floors';
@@ -81,6 +82,21 @@ export function useSoftDeleteFloor(buildingId: string | undefined) {
       qc.invalidateQueries({ queryKey: floorKeys.detail(id) });
       if (buildingId) qc.invalidateQueries({ queryKey: floorKeys.byBuilding(buildingId) });
       qc.invalidateQueries({ queryKey: floorKeys.all });
+    },
+  });
+}
+
+/** Set the floor's plan provenance (the source label). */
+export function useSetFloorProvenance(floorId: string | undefined, buildingId?: string | undefined) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (provenance: string) => {
+      if (!floorId) throw new Error('No floor');
+      return setFloorProvenance(floorId, provenance);
+    },
+    onSuccess: () => {
+      if (floorId) qc.invalidateQueries({ queryKey: floorKeys.detail(floorId) });
+      if (buildingId) qc.invalidateQueries({ queryKey: floorKeys.byBuilding(buildingId) });
     },
   });
 }
