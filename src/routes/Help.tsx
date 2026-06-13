@@ -132,6 +132,11 @@ export const SECTIONS: Section[] = [
           "The whole screen flips to audit mode. Top bar shows progress (e.g. 3 of 12). Tap any pin to bring it up in the bottom action sheet.",
       },
       {
+        label: 'Start at a specific pin (optional)',
+        detail:
+          "Open any pin and tap 'Start audit here' to begin the walkthrough at that pin instead of the first one. The cycle then moves through the pins in order from there, wrapping around so you still cover the whole floor.",
+      },
+      {
         label: 'Confirm, Flag, or Skip',
         detail:
           "Confirm OK = sign is in good shape. Flag issue = something is wrong (creates an open flag). Skip = you couldn't find it or it's not relevant.",
