@@ -173,17 +173,22 @@ const SECTIONS: Section[] = [
     icon: SlidersHorizontal,
     title: 'Pin look, and deleting things',
     intro:
-      "A couple of building-level controls live on the building page. Pin appearance is purely cosmetic. Deleting is the careful stuff — both floors and whole buildings can be removed, and brought back if you change your mind.",
+      "Each building's set-once options live behind the Settings button on the building page. Pin appearance is purely cosmetic. Deleting is the careful stuff — both floors and whole buildings can be removed, and brought back if you change your mind.",
     steps: [
+      {
+        label: 'Open Building settings',
+        detail:
+          "On the building page, click 'Settings' (admins only). It opens the building's settings — pin appearance, the order/external link, and more to come — kept off the main page so it stays uncluttered.",
+      },
       {
         label: 'Set the pin shape & size',
         detail:
-          "On the building page, the 'Pin appearance' panel (admins only) sets the shape and size of every pin on that building's plans. Everyone sees the same look — including clients on a share link. Status and type colors don't change.",
+          "In Building settings, the 'Pin appearance' panel sets the shape and size of every pin on that building's plans. Everyone sees the same look — including clients on a share link. Status and type colors don't change.",
       },
       {
         label: 'Set the order / external link',
         detail:
-          "The 'Order / external link' panel (admins only) controls the action button on each pin's details. Keep the default Officemark order page, point it at your own portal with a custom label, or hide it. A pin's own vendor or contact link still takes priority, and clients on a share link never see this button.",
+          "Also in Building settings, the 'Order / external link' panel controls the action button on each pin's details. Keep the default Officemark order page, point it at your own portal with a custom label, or hide it. A pin's own vendor or contact link still takes priority, and clients on a share link never see this button.",
       },
       {
         label: 'Delete a floor',

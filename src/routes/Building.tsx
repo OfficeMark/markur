@@ -1,6 +1,6 @@
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { useState } from 'react';
-import { ArrowLeft, MapPin, Layers, ImageOff, Trash2, Plus, FileDown, Share2 } from 'lucide-react';
+import { ArrowLeft, MapPin, Layers, ImageOff, Trash2, Plus, FileDown, Share2, SlidersHorizontal } from 'lucide-react';
 import { AppShell } from '@/components/waymarks/AppShell';
 import { Tooltip } from '@/components/ui/Tooltip';
 import { AccessManagementCard } from '@/components/waymarks/AccessManagementCard';
@@ -9,18 +9,9 @@ import { NewFloorDialog } from '@/components/waymarks/NewFloorDialog';
 import { ShareBuildingDialog } from '@/components/waymarks/ShareBuildingDialog';
 import { StepUpDialog } from '@/components/waymarks/StepUpDialog';
 import { ResumeAuditBanner } from '@/components/waymarks/ResumeAuditBanner';
-import {
-  useBuilding,
-  useSetBuildingExternalLink,
-  useSetBuildingPinAppearance,
-  useSoftDeleteBuilding,
-} from '@/hooks/useBuildings';
-import { buildingExternalLinkFromSettings } from '@/lib/building-settings';
-import { BuildingExternalLinkControl } from '@/components/waymarks/BuildingExternalLinkControl';
+import { useBuilding, useSoftDeleteBuilding } from '@/hooks/useBuildings';
 import { useFloors } from '@/hooks/useFloors';
 import { useCan, useIsSuperAdmin } from '@/lib/permissions-context';
-import { PinAppearanceControl } from '@/components/waymarks/PinAppearanceControl';
-import { pinAppearanceFromSettings } from '@/lib/pin-appearance';
 import type { Floor } from '@/types/database';
 
 export function Building() {
@@ -37,8 +28,6 @@ export function Building() {
   const canConfigure = useCan('configure', { type: 'building', id: id ?? '' });
   const canEdit = useCan('edit', { type: 'building', id: id ?? '' });
   const canDeleteBuilding = useCan('delete', { type: 'building', id: id ?? '' });
-  const setPins = useSetBuildingPinAppearance(id);
-  const setExtLink = useSetBuildingExternalLink(id);
   const softDeleteBuilding = useSoftDeleteBuilding();
 
   if (bLoading) return <Skeleton />;
@@ -130,6 +119,17 @@ export function Building() {
               </button>
             </Tooltip>
           )}
+          {canConfigure && (
+            <Tooltip text="Pin appearance, the order/external link, and other building settings">
+              <Link
+                to={`/buildings/${building.id}/settings`}
+                className="inline-flex h-9 items-center gap-1.5 rounded-md border border-black/10 bg-surface px-3 text-xs font-medium text-text hover:border-black/20 dark:border-white/10 dark:hover:border-white/20"
+              >
+                <SlidersHorizontal size={12} aria-hidden />
+                <span>Settings</span>
+              </Link>
+            </Tooltip>
+          )}
           {isSuperAdmin && (
             <Link
               to={`/buildings/${building.id}/trash`}
@@ -183,53 +183,6 @@ export function Building() {
             </ul>
           )}
         </section>
-
-        {canConfigure && (
-          <section className="mt-10 rounded-lg border border-black/10 bg-surface p-5 dark:border-white/10">
-            <header className="mb-3">
-              <p className="text-[11px] font-medium uppercase tracking-[0.22em] text-text-faint">
-                Pin appearance
-              </p>
-              <p className="mt-1 text-sm text-text-muted">
-                Shape and size of every pin on this building's floor plans — everyone sees the same,
-                including clients viewing a share link. Status and type colors are unchanged.
-              </p>
-            </header>
-            <PinAppearanceControl
-              shape={pinAppearanceFromSettings(building.settings).pinShape}
-              size={pinAppearanceFromSettings(building.settings).pinSize}
-              disabled={setPins.isPending}
-              onChange={(next) => setPins.mutate(next)}
-            />
-            {setPins.isError && (
-              <p className="mt-2 text-xs text-danger">Couldn't save the pin appearance. Try again.</p>
-            )}
-          </section>
-        )}
-
-        {canConfigure && (
-          <section className="mt-10 rounded-lg border border-black/10 bg-surface p-5 dark:border-white/10">
-            <header className="mb-3">
-              <p className="text-[11px] font-medium uppercase tracking-[0.22em] text-text-faint">
-                Order / external link
-              </p>
-              <p className="mt-1 text-sm text-text-muted">
-                The action button on each pin's details. Keep the default Officemark order page, point
-                it at your own portal, or hide it. A pin's own vendor or contact link still takes
-                priority; clients on a share link never see this button.
-              </p>
-            </header>
-            <BuildingExternalLinkControl
-              value={buildingExternalLinkFromSettings(building.settings)}
-              saving={setExtLink.isPending}
-              savedAt={setExtLink.isSuccess ? 1 : null}
-              onSave={(link) => setExtLink.mutate(link)}
-            />
-            {setExtLink.isError && (
-              <p className="mt-2 text-xs text-danger">Couldn't save the link. Try again.</p>
-            )}
-          </section>
-        )}
 
         {canManageAccess && (
           <section className="mt-10">
