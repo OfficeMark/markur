@@ -30,7 +30,6 @@ import { useAuth } from '@/lib/auth-context';
 import { useCan } from '@/lib/permissions-context';
 import { planKindForPath, signedUrlForPlan } from '@/lib/upload';
 import { pinAppearanceFromSettings } from '@/lib/pin-appearance';
-import { useOrgBranding } from '@/hooks/useBranding';
 import { pinNumberMatchesQuery } from '@/lib/pin-types';
 import {
   putAssetsForFloor,
@@ -48,7 +47,6 @@ export function Floor() {
     () => pinAppearanceFromSettings(building?.settings),
     [building?.settings]
   );
-  const { logoUrl: pinLogoUrl } = useOrgBranding();
   const { data: assets = [] } = useAssets(id);
   const { user } = useAuth();
 
@@ -565,7 +563,6 @@ export function Floor() {
                     onLongPress={canEdit ? startReposition : undefined}
                     pinShape={pinAppearance.pinShape}
                     pinSize={pinAppearance.pinSize}
-                    pinLogoUrl={pinLogoUrl}
                   />
                 }
               />

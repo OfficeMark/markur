@@ -1,13 +1,12 @@
-import { Image as ImageIcon, MapPin } from 'lucide-react';
+import { MapPin } from 'lucide-react';
 import { PinMarker } from '@/components/waymarks/PinMarker';
 import { PIN_SHAPES, PIN_SIZES, type PinShape, type PinSize } from '@/lib/queries/branding';
-import { useOrgBranding } from '@/hooks/useBranding';
 
 /**
- * Pin shape (circle/square/diamond) + size (small/medium/large) picker with a
- * live preview. Salvaged from the old org-level /admin/branding control (M26)
- * and relocated to per-building settings. Each pick fires `onChange` with the
- * full appearance, so the parent can persist immediately to buildings.settings.
+ * Pin shape (circle / square / diamond / teardrop) + size (small/medium/large)
+ * picker with a live preview. Salvaged from the old org-level /admin/branding
+ * control (M26) and relocated to per-building settings. Each pick fires
+ * `onChange` with the full appearance, so the parent persists immediately.
  */
 export type PinAppearanceControlProps = {
   shape: PinShape;
@@ -20,8 +19,11 @@ const BTN_BASE = 'inline-flex items-center gap-2 rounded-md border px-3 py-1.5 t
 const BTN_ON = 'border-waymarks-ink bg-waymarks-ink/5 dark:border-white dark:bg-white/10';
 const BTN_OFF = 'border-black/10 hover:bg-black/5 dark:border-white/15 dark:hover:bg-white/5';
 
+// Markur map-pin silhouette with a hollow centre (shared by the swatch + pin).
+const TEARDROP_PATH =
+  'M12 1.75a7.25 7.25 0 0 0-7.25 7.25c0 5.4 6.2 12.1 6.78 12.72a.64.64 0 0 0 .94 0c.58-.62 6.78-7.32 6.78-12.72A7.25 7.25 0 0 0 12 1.75Zm0 4.6a2.65 2.65 0 1 0 0 5.3 2.65 2.65 0 0 0 0-5.3Z';
+
 export function PinAppearanceControl({ shape, size, onChange, disabled }: PinAppearanceControlProps) {
-  const { logoUrl } = useOrgBranding();
   return (
     <div className="grid gap-4 sm:grid-cols-[1fr_auto] sm:items-start">
       <div className="space-y-3">
@@ -39,16 +41,11 @@ export function PinAppearanceControl({ shape, size, onChange, disabled }: PinApp
                 aria-pressed={shape === s}
                 className={BTN_BASE + ' ' + (shape === s ? BTN_ON : BTN_OFF)}
               >
-                <PinShapeSwatch shape={s} logoUrl={logoUrl} />
+                <PinShapeSwatch shape={s} />
                 {s}
               </button>
             ))}
           </div>
-          {shape === 'logo' && !logoUrl && (
-            <p className="mt-1.5 text-xs text-warning">
-              No org logo yet — pins show a plain mark. Upload one in Admin → Branding.
-            </p>
-          )}
         </div>
 
         <div>
@@ -72,21 +69,24 @@ export function PinAppearanceControl({ shape, size, onChange, disabled }: PinApp
         </div>
       </div>
 
-      <PinAppearancePreview shape={shape} size={size} logoUrl={logoUrl} />
+      <PinAppearancePreview shape={shape} size={size} />
     </div>
   );
 }
 
-function PinShapeSwatch({ shape, logoUrl }: { shape: PinShape; logoUrl: string | null }) {
-  if (shape === 'logo') {
-    return logoUrl ? (
-      <img
-        src={logoUrl}
-        alt=""
-        className="inline-block h-3.5 w-3.5 rounded-full border border-white object-contain shadow-sm"
-      />
-    ) : (
-      <ImageIcon size={14} aria-hidden className="text-text-faint" />
+function PinShapeSwatch({ shape }: { shape: PinShape }) {
+  if (shape === 'teardrop') {
+    return (
+      <svg width={14} height={14} viewBox="0 0 24 24" aria-hidden>
+        <path
+          fillRule="evenodd"
+          clipRule="evenodd"
+          d={TEARDROP_PATH}
+          fill="#B8965A"
+          stroke="white"
+          strokeWidth="1.1"
+        />
+      </svg>
     );
   }
   const cls =
@@ -100,16 +100,8 @@ function PinShapeSwatch({ shape, logoUrl }: { shape: PinShape; logoUrl: string |
   );
 }
 
-function PinAppearancePreview({
-  shape,
-  size,
-  logoUrl,
-}: {
-  shape: PinShape;
-  size: PinSize;
-  logoUrl: string | null;
-}) {
-  // Three sample pins in the three statuses — confirms the flagged dot stays
+function PinAppearancePreview({ shape, size }: { shape: PinShape; size: PinSize }) {
+  // Three sample pins in the three statuses — confirms the flagged state stays
   // visible at the chosen shape/size.
   const samples: Array<{ id: string; status: 'good' | 'attention' | 'flagged'; label: string }> = [
     { id: 'preview-good', status: 'good', label: 'Good' },
@@ -133,7 +125,6 @@ function PinAppearancePreview({
                   status={s.status}
                   shape={shape}
                   size={size}
-                  logoUrl={logoUrl}
                 />
               </div>
             </div>

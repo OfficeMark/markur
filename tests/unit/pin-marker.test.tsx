@@ -34,40 +34,26 @@ describe('PinMarker', () => {
     expect(onClick).toHaveBeenCalled();
   });
 
-  it('renders the org logo for the logo shape when a logo URL is given', () => {
+  it('renders an SVG teardrop for the teardrop shape', () => {
     const { container } = render(
-      <PinMarker
-        assetId="a-1"
-        name="Lobby"
-        type="directory"
-        status="good"
-        shape="logo"
-        logoUrl="https://cdn.example.com/logo.png"
-      />
+      <PinMarker assetId="a-1" name="Lobby" type="directory" status="good" shape="teardrop" />
     );
-    const img = container.querySelector('img');
-    expect(img).not.toBeNull();
-    expect(img?.getAttribute('src')).toBe('https://cdn.example.com/logo.png');
+    expect(container.querySelector('svg path')).not.toBeNull();
   });
 
-  it('falls back to a mark (no image) for the logo shape with no logo', () => {
+  it('renders a box (no svg path) for the default circle shape', () => {
     const { container } = render(
-      <PinMarker assetId="a-1" name="Lobby" type="directory" status="good" shape="logo" />
+      <PinMarker assetId="a-1" name="Lobby" type="directory" status="good" shape="circle" />
     );
-    expect(container.querySelector('img')).toBeNull();
+    expect(container.querySelector('svg path')).toBeNull();
   });
 
-  it('does not show the logo when flagged (whole pin goes red)', () => {
+  it('keeps the teardrop when flagged (the silhouette just turns red)', () => {
     const { container } = render(
-      <PinMarker
-        assetId="a-1"
-        name="Lobby"
-        type="directory"
-        status="flagged"
-        shape="logo"
-        logoUrl="https://cdn.example.com/logo.png"
-      />
+      <PinMarker assetId="a-1" name="Lobby" type="directory" status="flagged" shape="teardrop" />
     );
-    expect(container.querySelector('img')).toBeNull();
+    const path = container.querySelector('svg path');
+    expect(path).not.toBeNull();
+    expect(path?.getAttribute('fill')).toBe('rgb(var(--color-danger))');
   });
 });
