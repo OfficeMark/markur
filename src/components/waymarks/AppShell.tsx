@@ -5,6 +5,7 @@ import { EncryptedChip } from './EncryptedChip';
 import { LiveSyncChip } from './LiveSyncChip';
 import { UserMenu } from './UserMenu';
 import { BuildingNav, BuildingNavSheet } from './BuildingNav';
+import { TrialBanner } from './TrialBanner';
 import { useOrgBranding } from '@/hooks/useBranding';
 
 type AppShellProps = {
@@ -64,6 +65,7 @@ export function AppShell({ children, withSidebar = true }: AppShellProps) {
           </div>
         </div>
       </header>
+      <TrialBanner />
       <div className="mx-auto flex w-full max-w-[1600px] flex-1">
         {withSidebar && <BuildingNav />}
         <main id="main-content" tabIndex={-1} className="flex-1 min-w-0 outline-none">
