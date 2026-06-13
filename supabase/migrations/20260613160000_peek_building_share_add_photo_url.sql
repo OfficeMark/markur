@@ -1,19 +1,13 @@
--- peek_building_share: also return the building's photo_url (for the guest claim
--- screen hero). Applied on demo by web Claude (recorded:
--- peek_building_share_add_photo_url). Reconstructed here from the repo base
--- (20260611215440) + the photo_url addition — web Claude: confirm this matches
--- the recorded SQL byte-for-byte, or replace with the exact recorded version.
-
-create or replace function public.peek_building_share(p_token text)
- returns jsonb
- language plpgsql
- stable security definer
- set search_path to 'public', 'private', 'extensions'
-as $function$
+CREATE OR REPLACE FUNCTION public.peek_building_share(p_token text)
+RETURNS jsonb
+LANGUAGE plpgsql
+STABLE SECURITY DEFINER
+SET search_path TO 'public', 'private', 'extensions'
+AS $function$
 declare
   v record;
 begin
-  select s.revoked_at, s.expires_at, b.name as building_name, b.photo_url as photo_url
+  select s.revoked_at, s.expires_at, b.name as building_name, b.photo_url
   into v
   from public.building_shares s
   join public.buildings b on b.id = s.building_id
@@ -28,6 +22,11 @@ begin
   if v.expires_at <= now() then
     return jsonb_build_object('status','expired');
   end if;
-  return jsonb_build_object('status','ok','building_name',v.building_name,'expires_at',v.expires_at,'photo_url',v.photo_url);
+  return jsonb_build_object(
+    'status', 'ok',
+    'building_name', v.building_name,
+    'expires_at', v.expires_at,
+    'photo_url', v.photo_url
+  );
 end;
 $function$;
