@@ -18,9 +18,11 @@ import {
   Wrench,
   Images,
   Plus,
+  Info,
   type LucideIcon,
 } from 'lucide-react';
 import { Button } from '@/components/ui/Button';
+import { Tooltip } from '@/components/ui/Tooltip';
 import { useCreateAsset, useAssets, useUpdateAsset } from '@/hooks/useAssets';
 import { useFloors } from '@/hooks/useFloors';
 import { useContacts } from '@/hooks/useContacts';
@@ -477,13 +479,17 @@ export function NewAssetDialog({
 
                 {/* ---------------------------------------------------------- LOCATION */}
                 <Band icon={MapPin} label="Location" tone="paper">
-                  <Field label="Zone" htmlFor="asset-zone" hint="e.g. Reception, Parkade, Wing B. Optional.">
+                  <Field
+                    label="Zone or Department"
+                    htmlFor="asset-zone"
+                    tooltip="A grouping for this sign — e.g. Reception, Parkade, Wing B, or a department name. Optional; filterable later."
+                  >
                     <input
                       id="asset-zone"
                       list="asset-zone-suggestions"
                       value={zone}
                       onChange={(e) => setZone(e.target.value)}
-                      placeholder="Enter a zone if applicable"
+                      placeholder="Enter a zone or department"
                       className={inputClass}
                     />
                     <datalist id="asset-zone-suggestions">
@@ -724,22 +730,38 @@ function Field({
   htmlFor,
   error,
   hint,
+  tooltip,
   children,
 }: {
   label: string;
   htmlFor: string;
   error?: string;
   hint?: string;
+  /** Optional hover note shown via an info icon beside the label. */
+  tooltip?: string;
   children: React.ReactNode;
 }) {
   return (
     <div className="space-y-1.5">
-      <label
-        htmlFor={htmlFor}
-        className="block text-xs font-medium uppercase tracking-[0.18em] text-text-faint"
-      >
-        {label}
-      </label>
+      <div className="flex items-center gap-1">
+        <label
+          htmlFor={htmlFor}
+          className="block text-xs font-medium uppercase tracking-[0.18em] text-text-faint"
+        >
+          {label}
+        </label>
+        {tooltip && (
+          <Tooltip text={tooltip}>
+            <button
+              type="button"
+              className="inline-flex cursor-help text-text-faint hover:text-text-muted"
+              aria-label={tooltip}
+            >
+              <Info size={12} aria-hidden />
+            </button>
+          </Tooltip>
+        )}
+      </div>
       {children}
       {hint && !error && <p className="text-xs text-text-faint">{hint}</p>}
       {error && <p className="text-xs text-danger">{error}</p>}
