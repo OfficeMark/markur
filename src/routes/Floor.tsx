@@ -31,17 +31,6 @@ import { useCan } from '@/lib/permissions-context';
 import { planKindForPath, signedUrlForPlan } from '@/lib/upload';
 import { pinAppearanceFromSettings } from '@/lib/pin-appearance';
 import { pinNumberMatchesQuery } from '@/lib/pin-types';
-import { photoToJpegDataUrl } from '@/lib/photo-to-data-url';
-import { listFirstPhotoPaths, signedAssetPhotoUrl } from '@/lib/queries/asset-photos';
-import {
-  abortCatalogueTarget,
-  buildCatalogueDoc,
-  catalogueDownloadName,
-  pickCatalogueSaveTarget,
-  prepareCatalogueEntries,
-  writeCatalogue,
-  type CatalogueEntry,
-} from '@/lib/floor-catalogue';
 import {
   putAssetsForFloor,
   putBuilding,
@@ -102,10 +91,6 @@ export function Floor() {
     'idle'
   );
   const [cacheError, setCacheError] = useState<string | null>(null);
-
-  // Floor photo catalogue export (markur-changes #4).
-  const [catalogueState, setCatalogueState] = useState<'idle' | 'building' | 'error'>('idle');
-  const [catalogueError, setCatalogueError] = useState<string | null>(null);
 
   // Deliberate-reposition state machine (M5).
   const [repositionAssetId, setRepositionAssetId] = useState<string | null>(null);
@@ -263,58 +248,6 @@ export function Floor() {
     }
   }
 
-  // Build + save a PDF catalogue of every asset on this floor. Photo failures
-  // degrade gracefully to a "No photo" box rather than aborting.
-  async function handleExportCatalogue() {
-    if (!floor || !building) return;
-    setCatalogueError(null);
-
-    // Open the OS "Save As" dialog up front, while the click's user activation
-    // is still live -- the photo loading below can outlast the activation
-    // window. On browsers without the File System Access API this resolves to
-    // a plain download instead.
-    const generatedOn = new Date();
-    const fileName = catalogueDownloadName(building.name, floor.label, generatedOn);
-    const target = await pickCatalogueSaveTarget(fileName);
-    if (target.kind === 'cancelled') return;
-
-    setCatalogueState('building');
-    try {
-      const drafts = prepareCatalogueEntries(assets);
-      const photoPaths = await listFirstPhotoPaths(assets.map((a) => a.id));
-      const entries: CatalogueEntry[] = await Promise.all(
-        drafts.map(async (d) => {
-          let photoDataUrl: string | null = null;
-          const path = photoPaths.get(d.assetId);
-          if (path) {
-            try {
-              const signed = await signedAssetPhotoUrl(path);
-              photoDataUrl = await photoToJpegDataUrl(signed);
-            } catch {
-              photoDataUrl = null;
-            }
-          }
-          return { ...d, photoDataUrl };
-        })
-      );
-      const addressLine =
-        [building.address, building.city, building.region].filter(Boolean).join(', ') || null;
-      const doc = buildCatalogueDoc({
-        buildingName: building.name,
-        floorLabel: floor.label,
-        addressLine,
-        generatedOn,
-        entries,
-      });
-      await writeCatalogue(doc, target, fileName);
-      setCatalogueState('idle');
-    } catch (e) {
-      abortCatalogueTarget(target);
-      setCatalogueError(e instanceof Error ? e.message : 'Could not build the catalogue.');
-      setCatalogueState('error');
-    }
-  }
-
   const planKind = useMemo(() => planKindForPath(floor?.plan_url), [floor?.plan_url]);
 
   const baseSet = assets;
@@ -464,16 +397,14 @@ export function Floor() {
             </Tooltip>
           )}
           {assets.length > 0 && (
-            <Tooltip text="Download a PDF catalogue of every asset on this floor">
-              <button
-                type="button"
-                onClick={() => void handleExportCatalogue()}
-                disabled={catalogueState === 'building'}
-                className="inline-flex h-7 items-center gap-1 rounded-md border border-black/15 bg-surface px-2.5 text-[11px] font-medium text-text hover:bg-black/5 disabled:opacity-60 dark:border-white/15 dark:hover:bg-white/5"
+            <Tooltip text="View the sign catalogue for this floor (print or download as PDF)">
+              <Link
+                to={`/floors/${id}/catalogue`}
+                className="inline-flex h-7 items-center gap-1 rounded-md border border-black/15 bg-surface px-2.5 text-[11px] font-medium text-text hover:bg-black/5 dark:border-white/15 dark:hover:bg-white/5"
               >
                 <FileDown size={11} aria-hidden />
-                {catalogueState === 'building' ? 'Building…' : 'Catalogue'}
-              </button>
+                Catalogue
+              </Link>
             </Tooltip>
           )}
           {canEdit && (
@@ -563,12 +494,6 @@ export function Floor() {
         {cacheError && (
           <div className="mb-4 rounded-md border border-danger/30 bg-danger-bg p-3 text-xs text-danger">
             Could not cache this floor: {cacheError}
-          </div>
-        )}
-
-        {catalogueError && (
-          <div className="mb-4 rounded-md border border-danger/30 bg-danger-bg p-3 text-xs text-danger">
-            Could not build the catalogue: {catalogueError}
           </div>
         )}
 

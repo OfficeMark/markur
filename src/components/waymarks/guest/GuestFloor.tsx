@@ -11,17 +11,7 @@ import { useAssetTypes } from '@/hooks/useAssetTypes';
 import { planKindForPath, signedUrlForPlan } from '@/lib/upload';
 import { pinAppearanceFromSettings } from '@/lib/pin-appearance';
 import { logAccess } from '@/lib/queries/access-log';
-import { listFirstPhotoPaths, signedAssetPhotoUrl } from '@/lib/queries/asset-photos';
-import { photoToJpegDataUrl } from '@/lib/photo-to-data-url';
-import {
-  abortCatalogueTarget,
-  buildCatalogueDoc,
-  catalogueDownloadName,
-  pickCatalogueSaveTarget,
-  prepareCatalogueEntries,
-  writeCatalogue,
-  type CatalogueEntry,
-} from '@/lib/floor-catalogue';
+import { FloorCatalogueView } from '@/components/waymarks/FloorCatalogueView';
 import type { Asset, Building } from '@/types/database';
 
 /**
@@ -49,8 +39,7 @@ export function GuestFloor({
   const [signedUrl, setSignedUrl] = useState<string | null>(null);
   const [signedUrlError, setSignedUrlError] = useState<string | null>(null);
   const [selectedAssetId, setSelectedAssetId] = useState<string | null>(null);
-  const [catalogueState, setCatalogueState] = useState<'idle' | 'building' | 'error'>('idle');
-  const [catalogueError, setCatalogueError] = useState<string | null>(null);
+  const [view, setView] = useState<'floor' | 'catalogue'>('floor');
 
   const planKind = useMemo(() => planKindForPath(floor?.plan_url), [floor?.plan_url]);
   const pinAppearance = useMemo(() => pinAppearanceFromSettings(building.settings), [building.settings]);
@@ -86,47 +75,17 @@ export function GuestFloor({
     void logAccess('view', 'pin', a.id);
   }
 
-  async function exportCatalogue() {
-    if (!floor) return;
-    setCatalogueError(null);
-    const generatedOn = new Date();
-    const fileName = catalogueDownloadName(building.name, floor.label, generatedOn);
-    const target = await pickCatalogueSaveTarget(fileName);
-    if (target.kind === 'cancelled') return;
-    setCatalogueState('building');
-    try {
-      const drafts = prepareCatalogueEntries(assets);
-      const photoPaths = await listFirstPhotoPaths(assets.map((a) => a.id));
-      const entries: CatalogueEntry[] = await Promise.all(
-        drafts.map(async (d) => {
-          let photoDataUrl: string | null = null;
-          const path = photoPaths.get(d.assetId);
-          if (path) {
-            try {
-              photoDataUrl = await photoToJpegDataUrl(await signedAssetPhotoUrl(path));
-            } catch {
-              photoDataUrl = null;
-            }
-          }
-          return { ...d, photoDataUrl };
-        })
-      );
-      const addressLine =
-        [building.address, building.city, building.region].filter(Boolean).join(', ') || null;
-      const doc = buildCatalogueDoc({
-        buildingName: building.name,
-        floorLabel: floor.label,
-        addressLine,
-        generatedOn,
-        entries,
-      });
-      await writeCatalogue(doc, target, fileName);
-      setCatalogueState('idle');
-    } catch (e) {
-      abortCatalogueTarget(target);
-      setCatalogueError(e instanceof Error ? e.message : 'Could not build the catalogue.');
-      setCatalogueState('error');
-    }
+  // Catalogue is its own view (cards + Print + Download PDF), shown in place of
+  // the floor and dismissed back to it — no separate route in the guest SPA.
+  if (view === 'catalogue' && floor) {
+    return (
+      <FloorCatalogueView
+        building={building}
+        floor={floor}
+        assets={assets}
+        onBack={() => setView('floor')}
+      />
+    );
   }
 
   return (
@@ -145,21 +104,14 @@ export function GuestFloor({
             <Button
               size="sm"
               variant="secondary"
-              loading={catalogueState === 'building'}
               iconLeft={<FileDown size={12} aria-hidden />}
-              onClick={() => void exportCatalogue()}
+              onClick={() => setView('catalogue')}
             >
               Catalogue
             </Button>
           )}
         </div>
       </div>
-
-      {catalogueError && (
-        <div className="mb-3 rounded-md border border-danger/30 bg-danger-bg p-3 text-xs text-danger">
-          {catalogueError}
-        </div>
-      )}
 
       {isLoading ? (
         <div className="h-[60vh] animate-pulse rounded-xl border border-black/10 bg-surface dark:border-white/10" />

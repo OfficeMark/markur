@@ -21,6 +21,9 @@ import { handleQueryError, onSessionLost } from '@/lib/queryErrorHandler';
 // the auth check.
 const Building = lazy(() => import('@/routes/Building').then((m) => ({ default: m.Building })));
 const Floor = lazy(() => import('@/routes/Floor').then((m) => ({ default: m.Floor })));
+const FloorCatalogue = lazy(() =>
+  import('@/routes/FloorCatalogue').then((m) => ({ default: m.FloorCatalogue }))
+);
 const Report = lazy(() => import('@/routes/Report').then((m) => ({ default: m.Report })));
 const Login = lazy(() => import('@/routes/Login').then((m) => ({ default: m.Login })));
 const ResetPassword = lazy(() =>
@@ -171,6 +174,14 @@ export default function App() {
                     element={
                       <ProtectedRoute>
                         <Floor />
+                      </ProtectedRoute>
+                    }
+                  />
+                  <Route
+                    path="/floors/:id/catalogue"
+                    element={
+                      <ProtectedRoute>
+                        <FloorCatalogue />
                       </ProtectedRoute>
                     }
                   />
