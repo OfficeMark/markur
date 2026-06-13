@@ -20,13 +20,17 @@ export const brandingKeys = {
   byOrg: (orgId: string | null) => [...brandingKeys.all, 'by-org', orgId] as const,
 };
 
-export function useOrgBranding() {
+export function useOrgBranding(orgIdOverride?: string | null) {
   const { data: buildings } = useBuildings();
-  const orgId = useMemo<string | null>(() => {
+  // Guests have no session org (useBuildings() is empty), so the logo would
+  // resolve to nothing. The guest path passes the viewed building's
+  // owner_org_id explicitly — same fix as useAssetTypes.
+  const derivedOrgId = useMemo<string | null>(() => {
     if (!buildings) return null;
     const withOrg = buildings.find((b) => b.owner_org_id);
     return withOrg?.owner_org_id ?? null;
   }, [buildings]);
+  const orgId = orgIdOverride !== undefined ? orgIdOverride : derivedOrgId;
 
   const query = useQuery<OrgBranding | null>({
     queryKey: brandingKeys.byOrg(orgId),

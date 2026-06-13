@@ -1,6 +1,7 @@
-import { MapPin } from 'lucide-react';
+import { Image as ImageIcon, MapPin } from 'lucide-react';
 import { PinMarker } from '@/components/waymarks/PinMarker';
 import { PIN_SHAPES, PIN_SIZES, type PinShape, type PinSize } from '@/lib/queries/branding';
+import { useOrgBranding } from '@/hooks/useBranding';
 
 /**
  * Pin shape (circle/square/diamond) + size (small/medium/large) picker with a
@@ -20,6 +21,7 @@ const BTN_ON = 'border-waymarks-ink bg-waymarks-ink/5 dark:border-white dark:bg-
 const BTN_OFF = 'border-black/10 hover:bg-black/5 dark:border-white/15 dark:hover:bg-white/5';
 
 export function PinAppearanceControl({ shape, size, onChange, disabled }: PinAppearanceControlProps) {
+  const { logoUrl } = useOrgBranding();
   return (
     <div className="grid gap-4 sm:grid-cols-[1fr_auto] sm:items-start">
       <div className="space-y-3">
@@ -37,11 +39,16 @@ export function PinAppearanceControl({ shape, size, onChange, disabled }: PinApp
                 aria-pressed={shape === s}
                 className={BTN_BASE + ' ' + (shape === s ? BTN_ON : BTN_OFF)}
               >
-                <PinShapeSwatch shape={s} />
+                <PinShapeSwatch shape={s} logoUrl={logoUrl} />
                 {s}
               </button>
             ))}
           </div>
+          {shape === 'logo' && !logoUrl && (
+            <p className="mt-1.5 text-xs text-warning">
+              No org logo yet — pins show a plain mark. Upload one in Admin → Branding.
+            </p>
+          )}
         </div>
 
         <div>
@@ -65,12 +72,23 @@ export function PinAppearanceControl({ shape, size, onChange, disabled }: PinApp
         </div>
       </div>
 
-      <PinAppearancePreview shape={shape} size={size} />
+      <PinAppearancePreview shape={shape} size={size} logoUrl={logoUrl} />
     </div>
   );
 }
 
-function PinShapeSwatch({ shape }: { shape: PinShape }) {
+function PinShapeSwatch({ shape, logoUrl }: { shape: PinShape; logoUrl: string | null }) {
+  if (shape === 'logo') {
+    return logoUrl ? (
+      <img
+        src={logoUrl}
+        alt=""
+        className="inline-block h-3.5 w-3.5 rounded-full border border-white object-contain shadow-sm"
+      />
+    ) : (
+      <ImageIcon size={14} aria-hidden className="text-text-faint" />
+    );
+  }
   const cls =
     shape === 'circle' ? 'rounded-full' : shape === 'square' ? 'rounded-sm' : 'rounded-[2px] rotate-45';
   return (
@@ -82,7 +100,15 @@ function PinShapeSwatch({ shape }: { shape: PinShape }) {
   );
 }
 
-function PinAppearancePreview({ shape, size }: { shape: PinShape; size: PinSize }) {
+function PinAppearancePreview({
+  shape,
+  size,
+  logoUrl,
+}: {
+  shape: PinShape;
+  size: PinSize;
+  logoUrl: string | null;
+}) {
   // Three sample pins in the three statuses — confirms the flagged dot stays
   // visible at the chosen shape/size.
   const samples: Array<{ id: string; status: 'good' | 'attention' | 'flagged'; label: string }> = [
@@ -107,6 +133,7 @@ function PinAppearancePreview({ shape, size }: { shape: PinShape; size: PinSize 
                   status={s.status}
                   shape={shape}
                   size={size}
+                  logoUrl={logoUrl}
                 />
               </div>
             </div>

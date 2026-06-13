@@ -11,7 +11,7 @@ import { supabase } from '@/lib/supabase';
  * later milestone.
  */
 
-export const PIN_SHAPES = ['circle', 'square', 'diamond'] as const;
+export const PIN_SHAPES = ['circle', 'square', 'diamond', 'logo'] as const;
 export type PinShape = typeof PIN_SHAPES[number];
 
 export const PIN_SIZES = ['small', 'medium', 'large'] as const;

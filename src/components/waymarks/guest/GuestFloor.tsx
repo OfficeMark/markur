@@ -8,6 +8,7 @@ import { AssetDrawer } from '@/components/waymarks/AssetDrawer';
 import { useFloor } from '@/hooks/useFloors';
 import { useAssets } from '@/hooks/useAssets';
 import { useAssetTypes } from '@/hooks/useAssetTypes';
+import { useOrgBranding } from '@/hooks/useBranding';
 import { planKindForPath, signedUrlForPlan } from '@/lib/upload';
 import { pinAppearanceFromSettings } from '@/lib/pin-appearance';
 import { logAccess } from '@/lib/queries/access-log';
@@ -46,6 +47,7 @@ export function GuestFloor({
   // (absent) guest session org — this populates the runtime colour/label map
   // so pins, the pin detail, and the PDF catalogue match the admin view.
   useAssetTypes(building.owner_org_id);
+  const { logoUrl: pinLogoUrl } = useOrgBranding(building.owner_org_id);
   const [signedUrl, setSignedUrl] = useState<string | null>(null);
   const [signedUrlError, setSignedUrlError] = useState<string | null>(null);
   const [selectedAssetId, setSelectedAssetId] = useState<string | null>(null);
@@ -192,6 +194,7 @@ export function GuestFloor({
               lastAuditByAsset={null}
               pinShape={pinAppearance.pinShape}
               pinSize={pinAppearance.pinSize}
+              pinLogoUrl={pinLogoUrl}
             />
           }
         />
