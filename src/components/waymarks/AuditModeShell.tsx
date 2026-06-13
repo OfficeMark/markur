@@ -14,6 +14,7 @@ import { AuditCompleteSummary } from '@/components/waymarks/AuditCompleteSummary
 import { AuditFlagDialog } from '@/components/waymarks/AuditFlagDialog';
 import { useAuditEvents, useCreateAuditEvent, useEndAudit, summarizeSession } from '@/hooks/useAudit';
 import { useUpdateAsset } from '@/hooks/useAssets';
+import { useOrgBranding } from '@/hooks/useBranding';
 import { createFlag } from '@/lib/queries/flags';
 import { nextPinInCycle, orderByPinNumber } from '@/lib/audit-cycle';
 import type { AssetStatus } from '@/lib/asset-status';
@@ -69,6 +70,7 @@ export function AuditModeShell({
   const [flagBusy, setFlagBusy] = useState(false);
   const [flagError, setFlagError] = useState<string | null>(null);
   const updateAsset = useUpdateAsset(session.floor_id);
+  const { logoUrl: pinLogoUrl } = useOrgBranding();
 
   const { auditedAssetIds, lastByAsset } = useMemo(() => summarizeSession(events), [events]);
   const total = assets.length;
@@ -271,6 +273,7 @@ export function AuditModeShell({
               onSelectAsset={(a) => setCurrentId(a.id)}
               pinShape={pinShape}
               pinSize={pinSize}
+              pinLogoUrl={pinLogoUrl}
             />
           }
         />

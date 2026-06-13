@@ -39,6 +39,11 @@ export type PinMarkerProps = {
   faded?: boolean;
   fillColor?: string;
   /**
+   * Org branding logo URL — used only when `shape === 'logo'`. When absent (no
+   * logo set, or it can't resolve), the pin falls back to a monochrome mark.
+   */
+  logoUrl?: string | null;
+  /**
    * Formatted pin label (e.g. "001"). When provided, it's prepended to the
    * aria-label so SR users still hear the pin number even though the visual
    * label is hidden by default (M32 Step 1 — hover/press to reveal).
@@ -80,6 +85,7 @@ export const PinMarker = forwardRef<HTMLButtonElement, PinMarkerProps>(function 
     repositioning,
     faded,
     fillColor,
+    logoUrl,
     pinLabel,
     onPointerDownDrag,
     onClick,
@@ -98,7 +104,18 @@ export const PinMarker = forwardRef<HTMLButtonElement, PinMarkerProps>(function 
   // Reverts to the type color automatically on resolve, since `status` is
   // recomputed once the flag clears.
   const flagged = status === 'flagged';
-  const resolvedFill = flagged ? 'rgb(var(--color-danger))' : (fillColor ?? colorForType(type));
+  // Logo pin shape: a white circular pin carrying the org logo glyph. Flagged
+  // always wins (whole pin red). With no usable logo it degrades to a simple
+  // monochrome (ink) mark so the pin is never blank.
+  const isLogo = shape === 'logo';
+  const showLogo = isLogo && !flagged && !!logoUrl;
+  const resolvedFill = flagged
+    ? 'rgb(var(--color-danger))'
+    : showLogo
+      ? '#ffffff'
+      : isLogo
+        ? 'rgb(var(--waymarks-ink))'
+        : (fillColor ?? colorForType(type));
   const ariaPrefix = pinLabel ? `Pin ${pinLabel}, ` : '';
   const statusRingClass = flagged
     ? 'ring-2 ring-danger ring-offset-1 ring-offset-white'
@@ -112,7 +129,11 @@ export const PinMarker = forwardRef<HTMLButtonElement, PinMarkerProps>(function 
   // circle: full radius. square: gentle rounding so it isn't harsh at small sizes.
   // diamond: 45deg body rotation absorbed into the inline transform; inner icon counter-rotates.
   const shapeClass =
-    shape === 'circle' ? 'rounded-full' : shape === 'square' ? 'rounded-md' : 'rounded-sm';
+    shape === 'circle' || isLogo
+      ? 'rounded-full'
+      : shape === 'square'
+        ? 'rounded-md'
+        : 'rounded-sm';
   const rotationDeg = shape === 'diamond' ? 45 : 0;
   const iconCounterRotate = shape === 'diamond';
 
@@ -166,11 +187,20 @@ export const PinMarker = forwardRef<HTMLButtonElement, PinMarkerProps>(function 
         faded && 'opacity-40'
       )}
     >
-      <Icon
-        size={iconPx}
-        className={cn('fill-white text-white', iconCounterRotate && '-rotate-45')}
-        aria-hidden
-      />
+      {showLogo ? (
+        <img
+          src={logoUrl ?? undefined}
+          alt=""
+          draggable={false}
+          className="h-full w-full rounded-full object-contain p-px"
+        />
+      ) : (
+        <Icon
+          size={iconPx}
+          className={cn('fill-white text-white', iconCounterRotate && '-rotate-45')}
+          aria-hidden
+        />
+      )}
       {/* The top-right dot slot is no longer used for flag state (the whole pin
           is red now). It's reserved for the attachments/video indicator. */}
     </button>
