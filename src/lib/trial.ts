@@ -50,7 +50,7 @@ export const PRICING_TIERS: ReadonlyArray<{ name: string; price: string; blurb: 
 
 // v1 conversion is manual: the customer emails OfficeMark, who flips the org's
 // subscription_status to 'active'.
-export const UPGRADE_EMAIL = 'hello@officemark.ca';
+export const UPGRADE_EMAIL = 'sales@officemark.ca';
 
 export function upgradeMailto(orgName?: string | null): string {
   const subject = 'Markur subscription' + (orgName ? ` — ${orgName}` : '');

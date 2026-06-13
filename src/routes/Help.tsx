@@ -117,6 +117,11 @@ export const SECTIONS: Section[] = [
         detail:
           "From the pin's drawer, click 'Reposition pin'. The drawer closes, the canvas highlights the pin, you drag it to a new spot, and a confirmation banner asks you to confirm or cancel before it commits.",
       },
+      {
+        label: 'View the sign catalogue',
+        detail:
+          "The 'Catalogue' button on the floor toolbar opens an on-screen page listing every sign on the floor — pin number, name, type, condition, and photo, in pin order. From there, 'Print' or 'Download PDF' to send it to a client or keep a record.",
+      },
     ],
   },
   {
@@ -158,7 +163,7 @@ export const SECTIONS: Section[] = [
     icon: Share2,
     title: 'Share a building with a client',
     intro:
-      "Send a client a view-only link to one building. They see floor plans, pins, photos, and can export the PDF catalogue — but can't edit anything. There's no account for you to set up: they just confirm their email by clicking a link we send them.",
+      "Send a client a view-only link to one building. They see floor plans, pins, photos, and the sign catalogue (which they can print or save as a PDF) — but can't edit anything. There's no account for you to set up: they just confirm their email by clicking a link we send them.",
     steps: [
       {
         label: "Click 'Share building'",
@@ -221,7 +226,7 @@ export const SECTIONS: Section[] = [
       {
         label: 'Set the pin shape & size',
         detail:
-          "In Building settings, the 'Pin appearance' panel sets the shape and size of every pin on that building's plans. Everyone sees the same look — including clients on a share link. Status and type colors don't change.",
+          "In Building settings, the 'Pin appearance' panel sets the shape (circle, square, diamond, or the Markur teardrop) and size of every pin on that building's plans. Everyone sees the same look — including clients on a share link. Status and type colors don't change.",
       },
       {
         label: 'Set the order / external link',
