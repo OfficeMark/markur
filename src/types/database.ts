@@ -773,6 +773,7 @@ export type Database = {
           id: string
           label: string
           plan_metadata: Json | null
+          plan_provenance: string
           plan_url: string | null
           sort_order: number
           updated_at: string
@@ -787,6 +788,7 @@ export type Database = {
           id?: string
           label: string
           plan_metadata?: Json | null
+          plan_provenance?: string
           plan_url?: string | null
           sort_order: number
           updated_at?: string
@@ -801,6 +803,7 @@ export type Database = {
           id?: string
           label?: string
           plan_metadata?: Json | null
+          plan_provenance?: string
           plan_url?: string | null
           sort_order?: number
           updated_at?: string

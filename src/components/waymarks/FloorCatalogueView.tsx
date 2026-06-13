@@ -14,6 +14,8 @@ import {
   writeCatalogue,
   type CatalogueEntry,
 } from '@/lib/floor-catalogue';
+import { PlanProvenanceCaption } from '@/components/waymarks/PlanProvenanceCaption';
+import { planProvenanceLabel } from '@/lib/plan-provenance';
 import type { Asset, Building, Floor } from '@/types/database';
 
 export type FloorCatalogueViewProps = {
@@ -100,6 +102,7 @@ export function FloorCatalogueView({
         addressLine,
         generatedOn: when,
         entries: full,
+        provenanceLabel: planProvenanceLabel(floor.plan_provenance),
       });
       await writeCatalogue(doc, target, fileName);
       setDownloadState('idle');
@@ -153,6 +156,7 @@ export function FloorCatalogueView({
           {addressLine ? `${addressLine} · ` : ''}
           {entries.length} {entries.length === 1 ? 'sign' : 'signs'} · {format(generatedOn ?? new Date(), 'PP')}
         </p>
+        <PlanProvenanceCaption provenance={floor.plan_provenance} className="mt-1" />
       </header>
 
       {entries.length === 0 ? (

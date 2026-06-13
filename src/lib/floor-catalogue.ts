@@ -215,6 +215,8 @@ export type BuildCatalogueParams = {
   addressLine: string | null;
   generatedOn: Date;
   entries: CatalogueEntry[];
+  /** Plan provenance caption (null when none). */
+  provenanceLabel?: string | null;
 };
 
 /**
@@ -223,7 +225,7 @@ export type BuildCatalogueParams = {
  * can `.save()` it (or, in tests, inspect it).
  */
 export function buildCatalogueDoc(params: BuildCatalogueParams): jsPDF {
-  const { buildingName, floorLabel, addressLine, generatedOn, entries } = params;
+  const { buildingName, floorLabel, addressLine, generatedOn, entries, provenanceLabel } = params;
   const doc = new jsPDF({ unit: 'mm', format: 'a4', orientation: 'portrait' });
   const PW = doc.internal.pageSize.getWidth();
   const PH = doc.internal.pageSize.getHeight();
@@ -268,6 +270,14 @@ export function buildCatalogueDoc(params: BuildCatalogueParams): jsPDF {
     y
   );
   y += 5;
+  if (provenanceLabel) {
+    doc.setFont('helvetica', 'italic');
+    doc.setFontSize(8.5);
+    doc.setTextColor(140, 140, 140);
+    doc.text(provenanceLabel, M, y);
+    doc.setFont('helvetica', 'normal');
+    y += 5;
+  }
   doc.setDrawColor(214, 188, 122);
   doc.setLineWidth(0.4);
   doc.line(M, y, PW - M, y);

@@ -5,6 +5,7 @@ import { GuestFloor } from './GuestFloor';
 import { useBuilding } from '@/hooks/useBuildings';
 import { useFloors } from '@/hooks/useFloors';
 import { logAccess } from '@/lib/queries/access-log';
+import { planProvenanceLabel } from '@/lib/plan-provenance';
 import type { Floor } from '@/types/database';
 
 /**
@@ -116,6 +117,11 @@ function FloorCard({ floor, onOpen }: { floor: Floor; onOpen: () => void }) {
           <span className="block text-xs text-text-faint">
             {floor.plan_url ? 'View plan' : 'No plan yet'}
           </span>
+          {floor.plan_url && planProvenanceLabel(floor.plan_provenance) && (
+            <span className="mt-0.5 block text-[11px] italic text-text-faint">
+              {planProvenanceLabel(floor.plan_provenance)}
+            </span>
+          )}
         </span>
         {!floor.plan_url && <ImageOff size={14} aria-hidden className="shrink-0 text-text-faint" />}
       </button>

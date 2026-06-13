@@ -59,6 +59,11 @@ export const SECTIONS: Section[] = [
         detail:
           "Click any floor with 'No plan yet'. Use 'Upload floor plan' — PDF works best (we read its title and warn you if it doesn't match the floor name).",
       },
+      {
+        label: 'Note where the plan came from',
+        detail:
+          "On a floor with a plan, the 'Plan settings' button (admins/editors) sets the plan's provenance — Client-provided plans, recreated from site reference, or recreated from a client print/scan. It shows as a small caption near the plan everywhere, including for clients on a share link. Leave it 'Not specified' to show nothing.",
+      },
     ],
   },
   {
