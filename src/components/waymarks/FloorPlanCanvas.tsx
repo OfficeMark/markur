@@ -36,6 +36,13 @@ export type FloorPlanCanvasProps = {
    *  Coordinates are 0–1 normalized within the rendered canvas box. */
   onPlaceClick?: (coords: { x: number; y: number }) => void;
   className?: string;
+  /**
+   * Fill the parent's height (`h-full`) instead of the default fixed `h-[70vh]`.
+   * Use inside a height-bounded flex column so the map takes the space left
+   * after the toolbars — fixes mobile where the toolbar rows + a 70vh map
+   * overflow the screen and clip the floating controls.
+   */
+  fill?: boolean;
 };
 
 type Status = 'idle' | 'loading' | 'ready' | 'error';
@@ -50,6 +57,7 @@ export function FloorPlanCanvas({
   mode = 'view',
   onPlaceClick,
   className,
+  fill = false,
 }: FloorPlanCanvasProps) {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
@@ -380,7 +388,8 @@ export function FloorPlanCanvas({
       // bypasses --zoom and balloons the pins.
       style={{ touchAction: 'none' }}
       className={cn(
-        'relative h-[70vh] w-full overflow-hidden rounded-xl border border-black/10 bg-surface outline-none focus-visible:ring-2 focus-visible:ring-waymarks-gold dark:border-white/10 dark:bg-white/5',
+        'relative w-full overflow-hidden rounded-xl border border-black/10 bg-surface outline-none focus-visible:ring-2 focus-visible:ring-waymarks-gold dark:border-white/10 dark:bg-white/5',
+        fill ? 'h-full' : 'h-[70vh]',
         cursor,
         className
       )}
@@ -423,7 +432,8 @@ export function FloorPlanCanvas({
             ref={canvasRef}
             aria-hidden
             className={cn(
-              'block h-auto w-auto max-h-[70vh] max-w-full select-none shadow-sm',
+              'block h-auto w-auto max-w-full select-none shadow-sm',
+              fill ? 'max-h-full' : 'max-h-[70vh]',
               status === 'ready' ? 'opacity-100' : 'opacity-0'
             )}
           />
