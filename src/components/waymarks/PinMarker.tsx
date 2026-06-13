@@ -39,11 +39,6 @@ export type PinMarkerProps = {
   faded?: boolean;
   fillColor?: string;
   /**
-   * Org branding logo URL — used only when `shape === 'logo'`. When absent (no
-   * logo set, or it can't resolve), the pin falls back to a monochrome mark.
-   */
-  logoUrl?: string | null;
-  /**
    * Formatted pin label (e.g. "001"). When provided, it's prepended to the
    * aria-label so SR users still hear the pin number even though the visual
    * label is hidden by default (M32 Step 1 — hover/press to reveal).
@@ -85,7 +80,6 @@ export const PinMarker = forwardRef<HTMLButtonElement, PinMarkerProps>(function 
     repositioning,
     faded,
     fillColor,
-    logoUrl,
     pinLabel,
     onPointerDownDrag,
     onClick,
@@ -104,18 +98,11 @@ export const PinMarker = forwardRef<HTMLButtonElement, PinMarkerProps>(function 
   // Reverts to the type color automatically on resolve, since `status` is
   // recomputed once the flag clears.
   const flagged = status === 'flagged';
-  // Logo pin shape: a white circular pin carrying the org logo glyph. Flagged
-  // always wins (whole pin red). With no usable logo it degrades to a simple
-  // monochrome (ink) mark so the pin is never blank.
-  const isLogo = shape === 'logo';
-  const showLogo = isLogo && !flagged && !!logoUrl;
-  const resolvedFill = flagged
-    ? 'rgb(var(--color-danger))'
-    : showLogo
-      ? '#ffffff'
-      : isLogo
-        ? 'rgb(var(--waymarks-ink))'
-        : (fillColor ?? colorForType(type));
+  // Teardrop is the Markur map-pin silhouette (hollow centre). It follows the
+  // same colour rules as the other shapes — type colour, red when flagged —
+  // rendered as an SVG rather than a CSS box.
+  const isTeardrop = shape === 'teardrop';
+  const resolvedFill = flagged ? 'rgb(var(--color-danger))' : (fillColor ?? colorForType(type));
   const ariaPrefix = pinLabel ? `Pin ${pinLabel}, ` : '';
   const statusRingClass = flagged
     ? 'ring-2 ring-danger ring-offset-1 ring-offset-white'
@@ -129,11 +116,7 @@ export const PinMarker = forwardRef<HTMLButtonElement, PinMarkerProps>(function 
   // circle: full radius. square: gentle rounding so it isn't harsh at small sizes.
   // diamond: 45deg body rotation absorbed into the inline transform; inner icon counter-rotates.
   const shapeClass =
-    shape === 'circle' || isLogo
-      ? 'rounded-full'
-      : shape === 'square'
-        ? 'rounded-md'
-        : 'rounded-sm';
+    shape === 'circle' ? 'rounded-full' : shape === 'square' ? 'rounded-md' : 'rounded-sm';
   const rotationDeg = shape === 'diamond' ? 45 : 0;
   const iconCounterRotate = shape === 'diamond';
 
@@ -160,7 +143,7 @@ export const PinMarker = forwardRef<HTMLButtonElement, PinMarkerProps>(function 
       }}
       aria-label={`${ariaPrefix}${name} (${typeName}, ${statusLabel(status)}${lockSuffix})`}
       style={{
-        backgroundColor: resolvedFill,
+        backgroundColor: isTeardrop ? 'transparent' : resolvedFill,
         width: px,
         height: px,
         transform,
@@ -168,11 +151,13 @@ export const PinMarker = forwardRef<HTMLButtonElement, PinMarkerProps>(function 
       }}
       className={cn(
         'group relative inline-flex items-center justify-center',
-        shapeClass,
+        !isTeardrop && shapeClass,
         // Hit-area extender (M12): visible body may be small (down to 18px) but the
         // tap target is enlarged by ~6px via a before-pseudo so phones stay easy to hit.
         'before:absolute before:-inset-1.5 before:rounded-full before:content-[""]',
-        'border border-white shadow-sm transition-transform',
+        'transition-transform',
+        // Teardrop carries its own white outline in the SVG; the others use a box border.
+        !isTeardrop && 'border border-white shadow-sm',
         'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-waymarks-gold focus-visible:ring-offset-1',
         !repositioning && !unlocked && !selected && statusRingClass,
         repositioning && 'cursor-grab touch-none ring-4 ring-waymarks-gold ring-offset-2',
@@ -187,13 +172,25 @@ export const PinMarker = forwardRef<HTMLButtonElement, PinMarkerProps>(function 
         faded && 'opacity-40'
       )}
     >
-      {showLogo ? (
-        <img
-          src={logoUrl ?? undefined}
-          alt=""
-          draggable={false}
-          className="h-full w-full rounded-full object-contain p-px"
-        />
+      {isTeardrop ? (
+        <svg
+          viewBox="0 0 24 24"
+          width={px}
+          height={px}
+          className="drop-shadow-sm"
+          aria-hidden
+        >
+          {/* Markur map-pin: teardrop body with a hollow centre (evenodd cut-out
+              so the plan shows through), white outline for definition. */}
+          <path
+            fillRule="evenodd"
+            clipRule="evenodd"
+            d="M12 1.75a7.25 7.25 0 0 0-7.25 7.25c0 5.4 6.2 12.1 6.78 12.72a.64.64 0 0 0 .94 0c.58-.62 6.78-7.32 6.78-12.72A7.25 7.25 0 0 0 12 1.75Zm0 4.6a2.65 2.65 0 1 0 0 5.3 2.65 2.65 0 0 0 0-5.3Z"
+            fill={resolvedFill}
+            stroke="white"
+            strokeWidth="1.1"
+          />
+        </svg>
       ) : (
         <Icon
           size={iconPx}

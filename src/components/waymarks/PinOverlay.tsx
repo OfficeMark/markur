@@ -63,8 +63,6 @@ export type PinOverlayProps = {
   // parent). Defaults applied so the overlay renders before the building loads.
   pinShape?: PinShape;
   pinSize?: PinSize;
-  /** Org logo URL for the 'logo' pin shape (resolved by the parent). */
-  pinLogoUrl?: string | null;
 };
 
 const LONG_PRESS_MS = 500;
@@ -104,7 +102,6 @@ export function PinOverlay({
   onLongPress,
   pinShape = DEFAULT_PIN_SHAPE,
   pinSize = DEFAULT_PIN_SIZE,
-  pinLogoUrl,
 }: PinOverlayProps) {
   const layerRef = useRef<HTMLDivElement | null>(null);
   // dragRef is always-current; the React state below is for visualization only.
@@ -295,7 +292,6 @@ export function PinOverlay({
               status={status}
               shape={pinShape}
               size={pinSize}
-              logoUrl={pinLogoUrl}
               pinLabel={pinLabel}
               fillColor={statusOverride ? statusFillColor(status) : undefined}
               selected={asset.id === selectedAssetId}
