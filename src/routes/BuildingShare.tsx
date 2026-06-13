@@ -9,6 +9,7 @@ import { GuestBuilding } from '@/components/waymarks/guest/GuestBuilding';
 import { useAuth } from '@/lib/auth-context';
 import { supabase } from '@/lib/supabase';
 import { peekBuildingShare, claimBuildingShare } from '@/lib/queries/building-shares';
+import { signedBuildingPhotoUrl } from '@/lib/queries/buildings';
 
 /**
  * Public guest entry for a building share link. Flow:
@@ -41,6 +42,28 @@ export function BuildingShare() {
     | { state: 'error'; message: string }
   >({ state: 'idle' });
   const [formError, setFormError] = useState<string | null>(null);
+
+  // Building hero photo on the claim screen (anon). Resolves only once the peek
+  // RPC returns a photo path and anon read is permitted; otherwise stays null.
+  const [heroUrl, setHeroUrl] = useState<string | null>(null);
+  const peekPhoto = peek.data?.photo_url ?? null;
+  useEffect(() => {
+    if (!peekPhoto) {
+      setHeroUrl(null);
+      return;
+    }
+    let cancelled = false;
+    void signedBuildingPhotoUrl(peekPhoto)
+      .then((u) => {
+        if (!cancelled) setHeroUrl(u);
+      })
+      .catch(() => {
+        /* no anon read yet (or no photo) — show the card without a hero */
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [peekPhoto]);
 
   // Once authenticated, claim the share (idempotent).
   useEffect(() => {
@@ -134,6 +157,14 @@ export function BuildingShare() {
   return (
     <GuestLayout title={peek.data?.building_name}>
       <CenterCard>
+        {heroUrl && (
+          <img
+            src={heroUrl}
+            alt=""
+            className="mb-5 h-40 w-full rounded-lg border border-black/10 object-cover dark:border-white/10 sm:h-48"
+            loading="lazy"
+          />
+        )}
         <header className="mb-5">
           <p className="flex items-center gap-1.5 text-[11px] font-medium uppercase tracking-[0.18em] text-text-faint">
             <ShieldCheck size={12} aria-hidden /> Shared with you

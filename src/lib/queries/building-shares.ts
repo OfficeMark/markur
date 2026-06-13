@@ -18,6 +18,12 @@ export type SharePeek = {
   status: 'ok' | 'expired' | 'revoked' | 'invalid';
   building_name: string | null;
   expires_at: string | null;
+  /**
+   * Building hero photo path (building-photos bucket). Populated by the RPC once
+   * web Claude ships the peek-returns-photo + anon-read changes; until then it's
+   * null and the claim screen simply shows no photo.
+   */
+  photo_url: string | null;
 };
 
 /** 32 random bytes, url-safe base64 (same shape as the invitation token). */
@@ -91,6 +97,7 @@ export async function peekBuildingShare(token: string): Promise<SharePeek> {
     status: d.status ?? 'invalid',
     building_name: d.building_name ?? null,
     expires_at: d.expires_at ?? null,
+    photo_url: d.photo_url ?? null,
   };
 }
 
