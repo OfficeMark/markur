@@ -27,6 +27,9 @@ const ResetPassword = lazy(() =>
   import('@/routes/ResetPassword').then((m) => ({ default: m.ResetPassword }))
 );
 const Trash = lazy(() => import('@/routes/Trash').then((m) => ({ default: m.Trash })));
+const BuildingSettings = lazy(() =>
+  import('@/routes/BuildingSettings').then((m) => ({ default: m.BuildingSettings }))
+);
 const AcceptInvitation = lazy(() =>
   import('@/routes/AcceptInvitation').then((m) => ({ default: m.AcceptInvitation }))
 );
@@ -163,6 +166,14 @@ export default function App() {
                     element={
                       <ProtectedRoute>
                         <Trash />
+                      </ProtectedRoute>
+                    }
+                  />
+                  <Route
+                    path="/buildings/:id/settings"
+                    element={
+                      <ProtectedRoute>
+                        <BuildingSettings />
                       </ProtectedRoute>
                     }
                   />

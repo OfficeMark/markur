@@ -42,6 +42,12 @@ import {
 import { ensureUploadableImage, PHOTO_ACCEPT } from '@/lib/heic';
 import { computeStatus, statusLabel, type AssetStatus } from '@/lib/asset-status';
 import { formatPinNumber } from '@/lib/pin-types';
+import {
+  buildingExternalLinkFromSettings,
+  DEFAULT_ORDER_LABEL,
+  DEFAULT_ORDER_URL,
+  type BuildingExternalLink,
+} from '@/lib/building-settings';
 import { useContacts } from '@/hooks/useContacts';
 import { NewAssetDialog } from './NewAssetDialog';
 import { useAssetVendors, useAddAssetVendor, useRemoveAssetVendor } from '@/hooks/useAssetVendors';
@@ -214,7 +220,12 @@ export function AssetDrawer({
                     pinValue={asset.room_number?.trim() || asset.name}
                   />
                 )}
-                {!guest && <OrderSignsRow asset={asset} />}
+                {!guest && (
+                  <OrderSignsRow
+                    asset={asset}
+                    externalLink={buildingExternalLinkFromSettings(building?.settings)}
+                  />
+                )}
                 <DetailsSection asset={asset} canEdit={canEdit} buildingId={buildingId} guest={guest} />
                 <StatusRow asset={asset} flagCount={asset.status === 'flagged' ? 1 : 0} />
                 {!guest && <AssetAttachmentsPanel assetId={asset.id} canEdit={canEdit} />}
@@ -436,8 +447,6 @@ function VisualizeRow({
   );
 }
 
-const OFFICEMARK_ORDER_URL = 'https://account.officemark.ca/authentication/login';
-
 function orderMailto(toEmail: string, toName: string | undefined, asset: Asset): string {
   const subject = `Sign order — ${asset.name}`;
   const body =
@@ -456,7 +465,13 @@ function orderMailto(toEmail: string, toName: string | undefined, asset: Asset):
  *   3. the pin's contact with an email → prefilled mailto draft
  *   4. fallback                       → the Officemark order login
  */
-function OrderSignsRow({ asset }: { asset: Asset }) {
+function OrderSignsRow({
+  asset,
+  externalLink,
+}: {
+  asset: Asset;
+  externalLink: BuildingExternalLink;
+}) {
   const { data: vendors } = useAssetVendors(asset.id);
   const contacts = useContacts();
 
@@ -469,7 +484,11 @@ function OrderSignsRow({ asset }: { asset: Asset }) {
   let href: string;
   let helper: string;
   let opensExternally: boolean;
+  let title = 'Order signs';
+  let buttonLabel = DEFAULT_ORDER_LABEL;
+  let custom = false;
   if (vendorEmail) {
+    // A pin's own vendor/contact target always wins over the building default.
     href = orderMailto(vendorEmail.email!.trim(), vendorEmail.name, asset);
     helper = `Email ${vendorEmail.name} to order replacement signage.`;
     opensExternally = false;
@@ -481,16 +500,28 @@ function OrderSignsRow({ asset }: { asset: Asset }) {
     href = orderMailto(contact.email.trim(), contact.label, asset);
     helper = `Email ${contact.label} to order replacement signage.`;
     opensExternally = false;
+  } else if (externalLink.mode === 'hidden') {
+    // Building opted out of a fallback button and the pin has no own target.
+    return null;
+  } else if (externalLink.mode === 'custom') {
+    href = externalLink.url;
+    title = externalLink.label.trim() || 'External link';
+    buttonLabel = externalLink.label.trim() || 'Open';
+    helper = 'Open this building’s configured link.';
+    opensExternally = true;
+    custom = true;
   } else {
-    href = OFFICEMARK_ORDER_URL;
+    href = DEFAULT_ORDER_URL;
     helper = 'Order new or replacement signage from Officemark.';
     opensExternally = true;
   }
 
+  const Icon = custom ? ExternalLink : ShoppingCart;
+
   return (
     <div className="flex items-center justify-between gap-3 rounded-md border border-waymarks-gold/30 bg-waymarks-gold-soft px-3 py-2 text-xs dark:bg-white/5">
       <div className="min-w-0">
-        <p className="font-semibold text-waymarks-ink dark:text-white">Order signs</p>
+        <p className="truncate font-semibold text-waymarks-ink dark:text-white">{title}</p>
         <p className="text-text-muted">{helper}</p>
       </div>
       <a
@@ -498,8 +529,8 @@ function OrderSignsRow({ asset }: { asset: Asset }) {
         {...(opensExternally ? { target: '_blank', rel: 'noopener noreferrer' } : {})}
         className="inline-flex h-8 shrink-0 items-center gap-1.5 rounded-md bg-waymarks-gold px-3 text-xs font-medium text-white hover:bg-waymarks-gold-deep"
       >
-        <ShoppingCart size={12} aria-hidden />
-        Order Signs
+        <Icon size={12} aria-hidden />
+        <span className="max-w-[120px] truncate">{buttonLabel}</span>
       </a>
     </div>
   );
