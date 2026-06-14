@@ -36,14 +36,16 @@ export function FilterByTypePopover({ selectedTypes, onChange }: FilterByTypePop
         <button
           type="button"
           aria-label="Filter pins by type"
+          // h-7 + text-[11px] to match the action buttons and the text input
+          // in the same toolbar (was h-9, which read as oversized next to them).
           className={
-            'inline-flex h-9 items-center gap-1.5 rounded-md border px-3 text-xs font-medium transition-colors ' +
+            'inline-flex h-7 shrink-0 items-center gap-1 rounded-md border px-2.5 text-[11px] font-medium transition-colors ' +
             (isFiltering
               ? 'border-waymarks-gold bg-waymarks-gold-soft text-waymarks-ink'
               : 'border-black/15 bg-surface text-text-muted hover:border-black/25 hover:text-text')
           }
         >
-          <Filter size={12} aria-hidden />
+          <Filter size={11} aria-hidden />
           <span>Filter</span>
           {isFiltering && (
             <span className="rounded bg-waymarks-ink px-1 font-mono text-[10px] text-white">

@@ -50,7 +50,7 @@ export function FilterByTextInput({
   const showClear = local.length > 0;
 
   return (
-    <div className="relative inline-flex h-7 items-center">
+    <div className="relative flex h-7 w-full min-w-0 items-center">
       <Search
         size={11}
         aria-hidden
@@ -64,8 +64,9 @@ export function FilterByTextInput({
         aria-label="Filter pins by text"
         // Explicit h-7 + py-0 + leading-none so @tailwindcss/forms' base input
         // padding/line-height can't inflate it past the 28px toolbar row.
-        // Narrow on phones so the toolbar row wraps less and leaves the map height.
-        className="h-7 w-36 rounded-md border border-black/15 bg-surface py-0 pl-7 pr-7 text-[11px] leading-none text-text outline-none placeholder:text-text-faint focus:border-waymarks-gold focus:ring-2 focus:ring-waymarks-gold/40 dark:border-white/15 dark:bg-white/5 sm:w-56"
+        // Fills its parent (the parent controls the width: stretches on mobile,
+        // fixed on desktop).
+        className="h-7 w-full rounded-md border border-black/15 bg-surface py-0 pl-7 pr-7 text-[11px] leading-none text-text outline-none placeholder:text-text-faint focus:border-waymarks-gold focus:ring-2 focus:ring-waymarks-gold/40 dark:border-white/15 dark:bg-white/5"
       />
       {showClear && (
         <button

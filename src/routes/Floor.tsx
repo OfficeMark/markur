@@ -332,8 +332,8 @@ export function Floor() {
             One row instead of three (was: back link + eyebrow + giant
             H1 + boxed toolbar). The big floor label is duplicative of
             the left sidebar highlight. */}
-        <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
-          <nav aria-label="Breadcrumb" className="flex items-center gap-1.5 text-xs text-text-muted">
+        <div className="mb-2 flex flex-wrap items-center gap-2">
+          <nav aria-label="Breadcrumb" className="mr-auto flex items-center gap-1.5 text-xs text-text-muted">
             <Link
               to="/"
               className="inline-flex items-center gap-1 rounded px-1 py-0.5 hover:bg-black/5 hover:text-text dark:hover:bg-white/5"
@@ -350,61 +350,60 @@ export function Floor() {
             <ChevronRight size={12} aria-hidden className="text-text-faint" />
             <span className="font-semibold text-text">Floor {floor.label}</span>
           </nav>
-          <div className="flex items-center gap-1.5">
-            {/* Map / Grid toggle - now compact (24px tall) */}
-            {floor.plan_url && (
-              <div role="group" aria-label="View mode" className="inline-flex h-7 rounded-md border border-black/15 text-[11px] font-medium dark:border-white/15">
-                <button
-                  type="button"
-                  onClick={() => setViewMode('map')}
-                  aria-pressed={viewMode === 'map'}
-                  className={
-                    'inline-flex h-full items-center gap-1 rounded-l-md px-2.5 transition-colors ' +
-                    (viewMode === 'map'
-                      ? 'bg-waymarks-ink text-white'
-                      : 'text-text-muted hover:bg-black/5 dark:hover:bg-white/5')
-                  }
-                >
-                  <MapIcon size={11} aria-hidden /> Map
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setViewMode('grid')}
-                  aria-pressed={viewMode === 'grid'}
-                  className={
-                    'inline-flex h-full items-center gap-1 rounded-r-md border-l border-black/10 px-2.5 transition-colors dark:border-white/10 ' +
-                    (viewMode === 'grid'
-                      ? 'bg-waymarks-ink text-white'
-                      : 'text-text-muted hover:bg-black/5 dark:hover:bg-white/5')
-                  }
-                >
-                  <LayoutGrid size={11} aria-hidden /> Grid
-                </button>
+          {/* Map / Grid toggle - sits with the breadcrumb (its own line on
+              mobile, inline-right on desktop). 28px tall to match the row. */}
+          {floor.plan_url && (
+            <div role="group" aria-label="View mode" className="inline-flex h-7 rounded-md border border-black/15 text-[11px] font-medium dark:border-white/15">
+              <button
+                type="button"
+                onClick={() => setViewMode('map')}
+                aria-pressed={viewMode === 'map'}
+                className={
+                  'inline-flex h-full items-center gap-1 rounded-l-md px-2.5 transition-colors ' +
+                  (viewMode === 'map'
+                    ? 'bg-waymarks-ink text-white'
+                    : 'text-text-muted hover:bg-black/5 dark:hover:bg-white/5')
+                }
+              >
+                <MapIcon size={11} aria-hidden /> Map
+              </button>
+              <button
+                type="button"
+                onClick={() => setViewMode('grid')}
+                aria-pressed={viewMode === 'grid'}
+                className={
+                  'inline-flex h-full items-center gap-1 rounded-r-md border-l border-black/10 px-2.5 transition-colors dark:border-white/10 ' +
+                  (viewMode === 'grid'
+                    ? 'bg-waymarks-ink text-white'
+                    : 'text-text-muted hover:bg-black/5 dark:hover:bg-white/5')
+                }
+              >
+                <LayoutGrid size={11} aria-hidden /> Grid
+              </button>
+            </div>
+          )}
+          {/* Filter controls. On phones this is its own full-width row: the
+              text input stretches flush-left and the type-Filter button is
+              pinned right (no float/gap). On sm+ it collapses back to a natural
+              right-aligned cluster. All controls are 28px tall. */}
+          {floor.plan_url && assets.length > 0 && (
+            <div className="flex w-full items-center gap-1.5 sm:w-auto">
+              <div className="min-w-0 flex-1 sm:w-56 sm:flex-none">
+                <FilterByTextInput value={filterText} onChange={setFilterText} />
               </div>
-            )}
-            {/* Free-text filter (M22 #6) */}
-            {floor.plan_url && assets.length > 0 && (
-              <FilterByTextInput value={filterText} onChange={setFilterText} />
-            )}
-            {/* Filter by type */}
-            {floor.plan_url && assets.length > 0 && (
               <FilterByTypePopover selectedTypes={filterTypes} onChange={setFilterTypes} />
-            )}
-            {/* "X of Y visible" indicator when any filter is active */}
-            {floor.plan_url && filtersActive && assets.length > 0 && (
-              <span className="inline-flex h-7 items-center rounded-md bg-waymarks-gold-soft px-2 text-[11px] font-medium text-waymarks-ink">
-                {visibleAssets.length} of {assets.length} visible
-              </span>
-            )}
-          </div>
+              {filtersActive && (
+                <span className="inline-flex h-7 shrink-0 items-center rounded-md bg-waymarks-gold-soft px-2 text-[11px] font-medium text-waymarks-ink">
+                  {visibleAssets.length} of {assets.length} visible
+                </span>
+              )}
+            </div>
+          )}
         </div>
 
-        {/* Row 2 - action buttons, all 28px tall. On phones they stay in a
-            single flush row that scrolls horizontally (edge-to-edge via the
-            negative margin) instead of wrapping into 3-4 stacked rows that ate
-            the map's height; from sm+ they wrap and right-justify as before.
-            [&>*]:shrink-0 keeps each control its natural width while scrolling. */}
-        <div className="mb-3 -mx-4 flex items-center gap-1.5 overflow-x-auto px-4 [&>*]:shrink-0 sm:mx-0 sm:flex-wrap sm:justify-end sm:overflow-visible sm:px-0">
+        {/* Row 2 - action buttons right-justified, all 28px tall. They wrap to
+            as many rows as the screen width needs (≈3 on a phone). */}
+        <div className="mb-3 flex flex-wrap items-center justify-end gap-1.5">
           {showAuditCta && (
             <Tooltip text={activeSession ? 'Resume the audit walkaround you started' : 'Walk the floor and confirm every sign'}>
               <button
