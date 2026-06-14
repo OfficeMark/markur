@@ -7,6 +7,7 @@ import { UserMenu } from './UserMenu';
 import { BuildingNav, BuildingNavSheet } from './BuildingNav';
 import { TrialBanner } from './TrialBanner';
 import { useOrgBranding } from '@/hooks/useBranding';
+import { cn } from '@/lib/utils';
 
 type AppShellProps = {
   children: ReactNode;
@@ -15,12 +16,31 @@ type AppShellProps = {
    * yet → nothing to navigate to) and for the audit walkaround (full-screen).
    */
   withSidebar?: boolean;
+  /**
+   * Make the main content region a viewport-bounded flex column instead of a
+   * scrolling page. The shell becomes a *definite-height* chain
+   * (root → main-row → main), so a child can fill the space left below the
+   * header + trial banner with `h-full`/`flex-1` — and a percentage-height
+   * descendant (e.g. the floor-plan canvas's `h-full`) actually resolves.
+   * Without this the canvas sits in an indefinite-height column and collapses
+   * to ~0px on desktop. Opt-in (Floor map view) so other routes keep their
+   * normal page-scroll behaviour.
+   */
+  fillViewport?: boolean;
 };
 
-export function AppShell({ children, withSidebar = true }: AppShellProps) {
+export function AppShell({ children, withSidebar = true, fillViewport = false }: AppShellProps) {
   const navigate = useNavigate();
   return (
-    <div className="flex min-h-screen min-h-dvh flex-col bg-waymarks-cream text-text">
+    <div
+      className={cn(
+        'flex flex-col bg-waymarks-cream text-text',
+        // Definite viewport height in fill mode so the flex chain below can hand
+        // a real height down to a `h-full` map; min-h (indefinite) otherwise so
+        // tall pages scroll normally.
+        fillViewport ? 'h-dvh overflow-hidden' : 'min-h-screen min-h-dvh'
+      )}
+    >
       <a
         href="#main-content"
         className="sr-only focus:not-sr-only focus:fixed focus:left-3 focus:top-3 focus:z-50 focus:rounded-md focus:bg-waymarks-ink focus:px-3 focus:py-2 focus:text-sm focus:text-white focus:shadow-sheet"
@@ -66,9 +86,13 @@ export function AppShell({ children, withSidebar = true }: AppShellProps) {
         </div>
       </header>
       <TrialBanner />
-      <div className="mx-auto flex w-full max-w-[1600px] flex-1">
+      <div className={cn('mx-auto flex w-full max-w-[1600px] flex-1', fillViewport && 'min-h-0')}>
         {withSidebar && <BuildingNav />}
-        <main id="main-content" tabIndex={-1} className="flex-1 min-w-0 outline-none">
+        <main
+          id="main-content"
+          tabIndex={-1}
+          className={cn('flex-1 min-w-0 outline-none', fillViewport && 'min-h-0')}
+        >
           {children}
         </main>
       </div>

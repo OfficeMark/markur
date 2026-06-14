@@ -6,6 +6,7 @@ import {
   listAssetsByFloor,
   listDeletedAssetsForBuilding,
   restoreAsset,
+  setFloorPinsLocked,
   softDeleteAsset,
   updateAsset,
   type CreateAssetInput,
@@ -135,6 +136,29 @@ export function useUpdateAsset(floorId: string | undefined) {
         qc.invalidateQueries({ queryKey: assetKeys.detail(asset.id) });
       }
       if (floorId) qc.invalidateQueries({ queryKey: assetKeys.byFloor(floorId) });
+    },
+  });
+}
+
+/**
+ * Lock or unlock every live pin on a floor at once (the "Lock all / Unlock all"
+ * control). The RPC writes straight to the DB, bypassing the per-pin optimistic
+ * path, so we invalidate the floor's asset list + the per-asset detail caches on
+ * success. That refetch re-derives each pin's lock styling and draggable flag on
+ * the canvas — the same live re-render the single-pin toggle gets — with no page
+ * reload. Resolves to the number of pins changed (for the count toast).
+ */
+export function useSetFloorPinsLocked(floorId: string | undefined) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (locked: boolean) => {
+      if (!floorId) throw new Error('No floor');
+      return setFloorPinsLocked(floorId, locked);
+    },
+    onSuccess: () => {
+      if (floorId) qc.invalidateQueries({ queryKey: assetKeys.byFloor(floorId) });
+      // An open AssetDrawer reads the per-asset detail query — refresh those too.
+      qc.invalidateQueries({ queryKey: [...assetKeys.all, 'detail'] });
     },
   });
 }

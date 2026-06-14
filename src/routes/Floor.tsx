@@ -299,6 +299,12 @@ export function Floor() {
   const buildingId = floor.building_id;
   const showAuditCta = Boolean(floor.plan_url) && canAudit;
 
+  // Map view fills the viewport below the header + trial banner (definite-height
+  // flex chain via AppShell) so the plan canvas's `h-full` resolves at every
+  // breakpoint. Grid view (and the no-plan empty state) keep the normal
+  // scrolling page so a long grid grows past the fold.
+  const fillViewport = Boolean(floor.plan_url) && viewMode === 'map';
+
   // Visualize-in-ViewMark URL. The deeper integration (auth bridge,
   // floor-context handoff) lands in a later milestone; for now this
   // is a stub that opens the visualizer with the building name as a
@@ -309,13 +315,19 @@ export function Floor() {
     : 'https://viewmark-app.netlify.app/';
 
   return (
-    <AppShell>
-      {/* Viewport-bounded flex column so the map fills the space left by the
-          toolbar rows instead of overflowing the screen on mobile (the toolbars
-          flex to their natural height; the map area flexes to fill the rest).
-          min-h (not fixed h) lets Grid view grow + scroll normally. 3.5rem =
-          the AppShell header height. */}
-      <div className="mx-auto flex min-h-[calc(100dvh-3.5rem)] w-full max-w-5xl flex-col px-4 py-4 sm:px-6 sm:py-5">
+    <AppShell fillViewport={fillViewport}>
+      {/* Flex column for the floor view. In map mode AppShell makes the chain a
+          definite height, so `h-full` here fills exactly the space left under
+          the header + trial banner (toolbars take their natural height; the map
+          flexes to fill the rest) — no hardcoded viewport math, and the
+          breadcrumb is never clipped. Grid/empty state fall back to min-h so a
+          tall page scrolls normally. */}
+      <div
+        className={
+          'mx-auto flex w-full max-w-5xl flex-col px-4 py-4 sm:px-6 sm:py-5 ' +
+          (fillViewport ? 'h-full min-h-0' : 'min-h-[calc(100dvh-3.5rem)]')
+        }
+      >
         {/* Row 1 - breadcrumb left, Map/Grid + Filter right.
             One row instead of three (was: back link + eyebrow + giant
             H1 + boxed toolbar). The big floor label is duplicative of

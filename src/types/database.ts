@@ -1168,6 +1168,10 @@ export type Database = {
         Args: { p_share_id: string }
         Returns: undefined
       }
+      set_floor_pins_locked: {
+        Args: { p_floor_id: string; p_locked: boolean }
+        Returns: number
+      }
       storage_asset_attachment_asset_id: {
         Args: { p_name: string }
         Returns: string

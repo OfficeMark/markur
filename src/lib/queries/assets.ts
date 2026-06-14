@@ -126,6 +126,21 @@ export async function updateAsset(id: string, patch: UpdateAssetInput): Promise<
   return data;
 }
 
+/**
+ * Lock or unlock every live pin on a floor in one call. Wraps the
+ * `set_floor_pins_locked` RPC (SECURITY INVOKER, so it inherits the same assets
+ * RLS — trial lock + role rules — as a single-pin edit; no extra gate needed).
+ * Returns the number of pins actually changed, for the confirmation toast.
+ */
+export async function setFloorPinsLocked(floorId: string, locked: boolean): Promise<number> {
+  const { data, error } = await supabase.rpc('set_floor_pins_locked', {
+    p_floor_id: floorId,
+    p_locked: locked,
+  });
+  if (error) throw error;
+  return typeof data === 'number' ? data : 0;
+}
+
 export async function softDeleteAsset(id: string): Promise<void> {
   const { error } = await supabase
     .from('assets')
