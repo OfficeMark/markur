@@ -24,7 +24,7 @@ export function FilterByTextInput({
   value,
   onChange,
   debounceMs = 150,
-  placeholder = 'Filter by name, location, vendor…',
+  placeholder = 'Filter by name…',
 }: FilterByTextInputProps) {
   // Local mirror so the input stays responsive while we debounce upstream.
   const [local, setLocal] = useState(value);
@@ -62,7 +62,10 @@ export function FilterByTextInput({
         onChange={(e) => setLocal(e.target.value)}
         placeholder={placeholder}
         aria-label="Filter pins by text"
-        className="h-full w-44 rounded-md border border-black/15 bg-surface pl-7 pr-7 text-[11px] text-text outline-none placeholder:text-text-faint focus:border-waymarks-gold focus:ring-2 focus:ring-waymarks-gold/40 dark:border-white/15 dark:bg-white/5 sm:w-56"
+        // Explicit h-7 + py-0 + leading-none so @tailwindcss/forms' base input
+        // padding/line-height can't inflate it past the 28px toolbar row.
+        // Narrow on phones so the toolbar row wraps less and leaves the map height.
+        className="h-7 w-36 rounded-md border border-black/15 bg-surface py-0 pl-7 pr-7 text-[11px] leading-none text-text outline-none placeholder:text-text-faint focus:border-waymarks-gold focus:ring-2 focus:ring-waymarks-gold/40 dark:border-white/15 dark:bg-white/5 sm:w-56"
       />
       {showClear && (
         <button

@@ -399,9 +399,12 @@ export function Floor() {
           </div>
         </div>
 
-        {/* Row 2 - action buttons right-justified, all 28px tall.
-            No surrounding card; the actions sit naturally on the page. */}
-        <div className="mb-3 flex flex-wrap items-center justify-end gap-1.5">
+        {/* Row 2 - action buttons, all 28px tall. On phones they stay in a
+            single flush row that scrolls horizontally (edge-to-edge via the
+            negative margin) instead of wrapping into 3-4 stacked rows that ate
+            the map's height; from sm+ they wrap and right-justify as before.
+            [&>*]:shrink-0 keeps each control its natural width while scrolling. */}
+        <div className="mb-3 -mx-4 flex items-center gap-1.5 overflow-x-auto px-4 [&>*]:shrink-0 sm:mx-0 sm:flex-wrap sm:justify-end sm:overflow-visible sm:px-0">
           {showAuditCta && (
             <Tooltip text={activeSession ? 'Resume the audit walkaround you started' : 'Walk the floor and confirm every sign'}>
               <button

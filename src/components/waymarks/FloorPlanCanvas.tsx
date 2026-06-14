@@ -63,6 +63,15 @@ export function FloorPlanCanvas({
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const [status, setStatus] = useState<Status>('idle');
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
+  // Intrinsic plan dimensions (from the decoded PDF page / image) and the live
+  // measured size of the container. We fit the canvas box in pixels from these
+  // two — deterministic, instead of relying on `max-h-full`/`max-w-full`
+  // percentages that silently resolve to "no constraint" when an ancestor's
+  // height is indefinite (which drew the plan at full intrinsic size — ~2x —
+  // on desktop). The DB stores no plan dimensions, so intrinsic size always
+  // comes from the decoded asset at runtime; re-fit on every container resize.
+  const [dims, setDims] = useState<{ w: number; h: number } | null>(null);
+  const [containerSize, setContainerSize] = useState<{ w: number; h: number } | null>(null);
 
   const [zoom, setZoom] = useState(1);
   const [pan, setPan] = useState({ x: 0, y: 0 });
@@ -116,6 +125,7 @@ export function FloorPlanCanvas({
     let pdfDoc: { destroy: () => Promise<void> } | null = null;
     setStatus('loading');
     setErrorMsg(null);
+    setDims(null);
     setZoom(1);
     setPan({ x: 0, y: 0 });
 
@@ -143,6 +153,7 @@ export function FloorPlanCanvas({
           renderTask = page.render({ canvasContext: ctx, viewport });
           await renderTask.promise;
           if (cancelled) return;
+          setDims({ w: viewport.width, h: viewport.height });
           setStatus('ready');
         } else {
           const img = new Image();
@@ -165,6 +176,7 @@ export function FloorPlanCanvas({
             canvas.width = w;
             canvas.height = h;
             ctx.drawImage(img, 0, 0, w, h);
+            setDims({ w, h });
             setStatus('ready');
           };
           img.onerror = () => {
@@ -189,6 +201,36 @@ export function FloorPlanCanvas({
       void pdfDoc?.destroy();
     };
   }, [src, kind, scale]);
+
+  // Track the container's rendered size so we can fit the plan to it in pixels.
+  // Re-measures on every resize (orientation change, mobile address-bar
+  // collapse, the dvh/flex height settling after mount) — so sizing never
+  // depends on *when* the layout resolves.
+  useEffect(() => {
+    const el = containerRef.current;
+    if (!el || typeof ResizeObserver === 'undefined') return;
+    const measure = () => setContainerSize({ w: el.clientWidth, h: el.clientHeight });
+    measure();
+    const ro = new ResizeObserver(measure);
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
+
+  // Largest box with the plan's aspect ratio that fits inside the container.
+  // Centered by the flex wrapper; pins overlay this exact box so they stay
+  // registered to the plan.
+  const fitted = useMemo(() => {
+    if (!dims || !containerSize) return null;
+    if (dims.w <= 0 || dims.h <= 0 || containerSize.w <= 0 || containerSize.h <= 0) return null;
+    const ar = dims.w / dims.h;
+    let w = containerSize.w;
+    let h = w / ar;
+    if (h > containerSize.h) {
+      h = containerSize.h;
+      w = h * ar;
+    }
+    return { w, h };
+  }, [dims, containerSize]);
 
   // Recenter: reset pan + zoom to the initial fit (M12). Used by both the
   // keyboard '0' shortcut and the floating recenter button. Hard to find your
@@ -419,21 +461,22 @@ export function FloorPlanCanvas({
           ['--zoom' as string]: String(zoom),
         } as CSSProperties}
       >
-        {/* M30: the inner wrapper must inherit a max width/height that's
-            relative to the flex container (not the canvas's intrinsic
-            size), otherwise on mobile the canvas renders at its full
-            PDF.js pixel dimensions and overflows the viewport — which
-            reads as "the working area opens already zoomed in." Putting
-            max-h-full / max-w-full here (and matching styles on the
-            canvas) lets the centered flex container do the fit-to-screen
-            work. */}
-        <div className="relative min-h-0 min-w-0 max-h-full max-w-full">
+        {/* The inner wrapper is sized in pixels to the fitted box (largest
+            aspect-correct rectangle inside the measured container). The canvas
+            fills it and the pin overlay shares its exact bounds, so pins stay
+            registered to the plan. Pixel sizing avoids the percentage-height
+            traps that drew the plan at full intrinsic size. Falls back to a
+            shrink-to-fit box until the first measure + decode land (canvas is
+            invisible until `ready`). */}
+        <div
+          className="relative max-h-full max-w-full"
+          style={fitted ? { width: fitted.w, height: fitted.h } : undefined}
+        >
           <canvas
             ref={canvasRef}
             aria-hidden
             className={cn(
-              'block h-auto w-auto max-w-full select-none shadow-sm',
-              fill ? 'max-h-full' : 'max-h-[70vh]',
+              'block h-full w-full select-none shadow-sm',
               status === 'ready' ? 'opacity-100' : 'opacity-0'
             )}
           />
