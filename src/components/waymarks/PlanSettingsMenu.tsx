@@ -16,10 +16,16 @@ export function PlanSettingsMenu({
   floorId,
   buildingId,
   provenance,
+  allPinsLocked,
+  hasPins,
 }: {
   floorId: string;
   buildingId?: string;
   provenance: string;
+  /** True when every live pin on the floor is currently locked. */
+  allPinsLocked: boolean;
+  /** True when the floor has at least one live pin. */
+  hasPins: boolean;
 }) {
   const setProvenance = useSetFloorProvenance(floorId, buildingId);
   const setPinsLocked = useSetFloorPinsLocked(floorId);
@@ -81,34 +87,27 @@ export function PlanSettingsMenu({
             <p className="mt-2 text-xs text-danger">Couldn't save — try again.</p>
           )}
 
-          {canEdit && (
+          {canEdit && hasPins && (
             <div className="mt-3 border-t border-black/10 pt-3 dark:border-white/10">
               <p className="text-[11px] font-medium uppercase tracking-[0.18em] text-text-faint">
                 Pin lock
               </p>
               <p className="mt-1 text-xs text-text-muted">
-                Lock or unlock every pin on this floor at once. Locked pins can't be dragged.
+                {allPinsLocked
+                  ? 'Every pin on this floor is locked. Unlock them all to nudge pins.'
+                  : 'Lock every pin on this floor at once so none can be dragged.'}
               </p>
-              <div className="mt-2 flex gap-2">
-                <button
-                  type="button"
-                  disabled={setPinsLocked.isPending}
-                  onClick={() => void applyLock(true)}
-                  className="inline-flex h-8 flex-1 items-center justify-center gap-1.5 rounded-md border border-black/15 bg-surface px-3 text-xs font-medium text-text hover:bg-black/5 disabled:opacity-50 dark:border-white/15 dark:hover:bg-white/5"
-                >
-                  <Lock size={12} aria-hidden />
-                  Lock all
-                </button>
-                <button
-                  type="button"
-                  disabled={setPinsLocked.isPending}
-                  onClick={() => void applyLock(false)}
-                  className="inline-flex h-8 flex-1 items-center justify-center gap-1.5 rounded-md border border-waymarks-gold bg-waymarks-gold px-3 text-xs font-medium text-waymarks-ink hover:bg-waymarks-gold-deep disabled:opacity-50"
-                >
-                  <LockOpen size={12} aria-hidden />
-                  Unlock all
-                </button>
-              </div>
+              {/* One whole-floor toggle — the label flips with the floor's
+                  current state so it never reads like a per-pin control. */}
+              <button
+                type="button"
+                disabled={setPinsLocked.isPending}
+                onClick={() => void applyLock(!allPinsLocked)}
+                className="mt-2 inline-flex h-8 w-full items-center justify-center gap-1.5 rounded-md border border-waymarks-gold bg-waymarks-gold px-3 text-xs font-medium text-waymarks-ink transition-colors hover:bg-waymarks-gold-deep disabled:opacity-50"
+              >
+                {allPinsLocked ? <LockOpen size={12} aria-hidden /> : <Lock size={12} aria-hidden />}
+                {allPinsLocked ? 'Unlock all pins' : 'Lock all pins'}
+              </button>
               {lockResult && (
                 <p className="mt-2 text-xs text-text-muted" role="status" aria-live="polite">
                   {lockResult}

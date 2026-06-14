@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { ReactNode } from 'react';
 import type { Session, User } from '@supabase/supabase-js';
 import { supabase } from './supabase';
@@ -28,32 +28,46 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [profile, setProfile] = useState<Profile | null>(null);
   const [loading, setLoading] = useState(true);
 
+  // The user id we've already loaded for. Supabase fires several auth events on
+  // boot (INITIAL_SESSION, SIGNED_IN, token refreshes) and hands us a *fresh*
+  // session/user object each time. Swapping `user` on every one of those churns
+  // its identity, which re-runs every downstream effect/query that depends on
+  // it — that's the boot re-fetch storm (profiles 3×, grants/buildings 2–3×).
+  // We gate the expensive work (user swap + profile fetch) on the id actually
+  // changing, and keep `session` stable unless the access token changes.
+  const userIdRef = useRef<string | null>(null);
+
   // Resolve the initial session, then keep it in sync with auth events.
   useEffect(() => {
     let cancelled = false;
 
-    void (async () => {
-      const { data } = await supabase.auth.getSession();
+    function apply(next: Session | null) {
       if (cancelled) return;
-      const next = data.session;
-      setSession(next);
-      setUser(next?.user ?? null);
-      if (next?.user) {
-        const p = await fetchProfile(next.user.id);
-        if (!cancelled) setProfile(p);
-      }
-      if (!cancelled) setLoading(false);
-    })();
+      // Keep the same session object when the token hasn't changed, so the
+      // memoized context value doesn't churn on duplicate events.
+      setSession((prev) => (prev?.access_token === next?.access_token ? prev : next));
 
-    const { data: sub } = supabase.auth.onAuthStateChange((_event, next) => {
-      setSession(next);
-      setUser(next?.user ?? null);
-      if (next?.user) {
-        void fetchProfile(next.user.id).then((p) => setProfile(p));
-      } else {
-        setProfile(null);
+      const nextId = next?.user?.id ?? null;
+      if (nextId !== userIdRef.current) {
+        userIdRef.current = nextId;
+        setUser(next?.user ?? null);
+        if (next?.user) {
+          // Deferred (not awaited inside the auth callback) so we never block
+          // Supabase's auth lock on another Supabase call.
+          void fetchProfile(next.user.id).then((p) => {
+            if (!cancelled) setProfile(p);
+          });
+        } else {
+          setProfile(null);
+        }
       }
-    });
+      setLoading(false);
+    }
+
+    // Prime from the current session (covers INITIAL_SESSION already having
+    // fired before we subscribed); onAuthStateChange keeps it in sync after.
+    void supabase.auth.getSession().then(({ data }) => apply(data.session));
+    const { data: sub } = supabase.auth.onAuthStateChange((_event, next) => apply(next));
 
     return () => {
       cancelled = true;

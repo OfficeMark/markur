@@ -305,6 +305,11 @@ export function Floor() {
   // scrolling page so a long grid grows past the fold.
   const fillViewport = Boolean(floor.plan_url) && viewMode === 'map';
 
+  // Floor-wide lock state drives the "Lock all / Unlock all pins" toggle label
+  // in Plan settings (and re-derives live after the RPC invalidates the assets).
+  const hasPins = assets.length > 0;
+  const allPinsLocked = hasPins && assets.every((a) => a.is_locked);
+
   // Visualize-in-ViewMark URL. The deeper integration (auth bridge,
   // floor-context handoff) lands in a later milestone; for now this
   // is a stub that opens the visualizer with the building name as a
@@ -409,30 +414,22 @@ export function Floor() {
           )}
         </div>
 
-        {/* Row 2 - the action group. On phones the filter input + Filter
-            button + 9 actions form ONE uniform 4-col grid (4 + 4 + 3, with one
-            blank cell): every control is the same width and height. Tooltip /
-            PlanSettingsMenu render their <button>/<a> as the direct child, so
-            `[&>button]`/`[&>a]` size every real control (and skip the input's
-            nested clear button); the slightly smaller text/padding lets the
-            longest labels fit 4-across on a phone. On sm+ it reverts to the
-            natural right-aligned wrap and the filter controls hide here (they
-            render in Row 1 instead), so desktop is unchanged. */}
+        {/* Name-search — its own full-width band on phones (the zone filter and
+            Catalogue are dropped on mobile per the toolbar trim). On sm+ this
+            row hides and the search box lives in the Row 1 cluster instead. */}
+        {floor.plan_url && assets.length > 0 && (
+          <div className="mb-2 sm:hidden">
+            <FilterByTextInput value={filterText} onChange={setFilterText} />
+          </div>
+        )}
+
+        {/* Row 2 - action buttons. On phones a uniform grid: every button the
+            same width and height, Catalogue hidden (PDF export is a desk job)
+            so what's left tiles evenly. `[&>button]`/`[&>a]` give the controls
+            slightly smaller text/padding so the longest labels fit. On sm+ it
+            reverts to the natural right-aligned wrap with Catalogue shown, so
+            desktop is unchanged. */}
         <div className="mb-3 grid grid-cols-4 gap-1 [&>*]:w-full [&>*]:justify-center [&>*]:whitespace-nowrap [&>a]:px-1.5 [&>a]:text-[10px] [&>button]:px-1.5 [&>button]:text-[10px] sm:flex sm:flex-wrap sm:items-center sm:justify-end sm:gap-1.5 sm:[&>*]:w-auto sm:[&>a]:px-2.5 sm:[&>a]:text-[11px] sm:[&>button]:px-2.5 sm:[&>button]:text-[11px]">
-          {/* Mobile-only: filter input + Filter button as the first two grid
-              cells (hidden on sm+, where they render in Row 1's cluster). */}
-          {floor.plan_url && assets.length > 0 && (
-            <div className="h-7 sm:hidden">
-              <FilterByTextInput value={filterText} onChange={setFilterText} />
-            </div>
-          )}
-          {floor.plan_url && assets.length > 0 && (
-            <FilterByTypePopover
-              selectedTypes={filterTypes}
-              onChange={setFilterTypes}
-              triggerClassName="sm:hidden"
-            />
-          )}
           {showAuditCta && (
             <Tooltip text={activeSession ? 'Resume the audit walkaround you started' : 'Walk the floor and confirm every sign'}>
               <button
@@ -450,7 +447,8 @@ export function Floor() {
             <Tooltip text="View the sign catalogue for this floor (print or download as PDF)">
               <Link
                 to={`/floors/${id}/catalogue`}
-                className="inline-flex h-7 items-center gap-1 rounded-md border border-black/15 bg-surface px-2.5 text-[11px] font-medium text-text hover:bg-black/5 dark:border-white/15 dark:hover:bg-white/5"
+                // Hidden on phones (PDF export is a desk job); shown on sm+.
+                className="hidden h-7 items-center gap-1 rounded-md border border-black/15 bg-surface px-2.5 text-[11px] font-medium text-text hover:bg-black/5 sm:inline-flex dark:border-white/15 dark:hover:bg-white/5"
               >
                 <FileDown size={11} aria-hidden />
                 Catalogue
@@ -516,6 +514,8 @@ export function Floor() {
               floorId={floor.id}
               buildingId={floor.building_id}
               provenance={floor.plan_provenance}
+              allPinsLocked={allPinsLocked}
+              hasPins={hasPins}
             />
           )}
           {/* M14c - Visualize in ViewMark. Gold outline so it reads as a

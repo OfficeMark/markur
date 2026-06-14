@@ -1,4 +1,3 @@
-import { useEffect, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   createBuilding,
@@ -76,23 +75,22 @@ export function useCreateBuildingNoReturn() {
 /**
  * Resolves a signed URL for a building photo path. Returns `null` until the
  * URL arrives so consumers can render a placeholder while loading.
+ *
+ * Cached by path through TanStack Query so a photo is signed once and reused
+ * across every BuildingCard, re-render, and remount (the signed URL lives 1h;
+ * we re-sign at most every 30 min). The previous useState/useEffect version
+ * re-minted a fresh signed URL on every mount, which the boot re-render churn
+ * turned into a storm of POST-sign + GET round-trips.
  */
 export function useBuildingPhotoUrl(path: string | null | undefined): string | null {
-  const [url, setUrl] = useState<string | null>(null);
-  useEffect(() => {
-    let cancelled = false;
-    if (!path) {
-      setUrl(null);
-      return;
-    }
-    void signedBuildingPhotoUrl(path).then((u) => {
-      if (!cancelled) setUrl(u);
-    });
-    return () => {
-      cancelled = true;
-    };
-  }, [path]);
-  return url;
+  const { data } = useQuery({
+    queryKey: path ? buildingKeys.photoUrl(path) : ['building-photos', 'signed', 'none'],
+    queryFn: () => signedBuildingPhotoUrl(path),
+    enabled: !!path,
+    staleTime: 30 * 60_000,
+    gcTime: 60 * 60_000,
+  });
+  return data ?? null;
 }
 
 export function useUploadBuildingPhoto(buildingId: string | undefined) {

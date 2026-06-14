@@ -23,17 +23,21 @@ export function WelcomeCard() {
     id: firstBuilding?.id ?? '',
   });
 
-  const { data: floors = [] } = useFloors(firstBuilding?.id);
-  const firstFloorWithPlan = floors.find((f) => !!f.plan_url);
+  const { data: floors } = useFloors(firstBuilding?.id);
   // Cross-floor pin check (single round trip via PostgREST inner join).
   // Was: assets from the FIRST plan-bearing floor only -- which gave a false
   // negative for buildings whose pins live on a later floor (Crescent School
   // had 6 pins on Level 300; the banner never hid).
-  const { data: hasPin = false } = useBuildingHasAnyAsset(firstBuilding?.id);
+  const { data: hasPin } = useBuildingHasAnyAsset(firstBuilding?.id);
 
   if (!firstBuilding) return null;
   if (!canEdit) return null;
+  // Wait for the checklist inputs to resolve before rendering — otherwise the
+  // default-empty query state (no floors, no pins) flashes the "Set up X" card
+  // on open and then corrects once the floor/pin reads land.
+  if (floors === undefined || hasPin === undefined) return null;
 
+  const firstFloorWithPlan = floors.find((f) => !!f.plan_url);
   const hasPhoto = !!firstBuilding.photo_url;
   const hasPlan = !!firstFloorWithPlan;
 
