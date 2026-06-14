@@ -382,13 +382,21 @@ export function Floor() {
               </button>
             </div>
           )}
-          {/* Filter controls. On phones this is its own full-width row: the
-              text input stretches flush-left and the type-Filter button is
-              pinned right (no float/gap). On sm+ it collapses back to a natural
-              right-aligned cluster. All controls are 28px tall. */}
+          {/* Filtered-count badge — mobile only. On phones the filter input +
+              Filter button live in the action grid below (Row 2), so this keeps
+              the "X of Y visible" readout up here. The desktop count lives in
+              the filter cluster to the right. */}
+          {floor.plan_url && filtersActive && assets.length > 0 && (
+            <span className="inline-flex h-7 shrink-0 items-center rounded-md bg-waymarks-gold-soft px-2 text-[11px] font-medium text-waymarks-ink sm:hidden">
+              {visibleAssets.length} of {assets.length} visible
+            </span>
+          )}
+          {/* Desktop filter cluster (sm+ only). On phones these controls move
+              into the Row 2 action grid so all 11 controls share one uniform
+              grid. */}
           {floor.plan_url && assets.length > 0 && (
-            <div className="flex w-full items-center gap-1.5 sm:w-auto">
-              <div className="min-w-0 flex-1 sm:w-56 sm:flex-none">
+            <div className="hidden w-auto items-center gap-1.5 sm:flex">
+              <div className="w-56">
                 <FilterByTextInput value={filterText} onChange={setFilterText} />
               </div>
               <FilterByTypePopover selectedTypes={filterTypes} onChange={setFilterTypes} />
@@ -401,12 +409,30 @@ export function Floor() {
           )}
         </div>
 
-        {/* Row 2 - the 9 action buttons. On phones: a uniform 3-col grid so
-            every button is the same width (content no longer sizes them) and
-            height — 9 buttons fill 3 even rows. Tooltip/PlanSettingsMenu all
-            render their <button>/<a> as the direct child, so `[&>*]` styles
-            each one. On sm+ it reverts to the natural right-aligned wrap. */}
-        <div className="mb-3 grid grid-cols-3 gap-1.5 [&>*]:w-full [&>*]:justify-center [&>*]:whitespace-nowrap sm:flex sm:flex-wrap sm:items-center sm:justify-end sm:[&>*]:w-auto">
+        {/* Row 2 - the action group. On phones the filter input + Filter
+            button + 9 actions form ONE uniform 4-col grid (4 + 4 + 3, with one
+            blank cell): every control is the same width and height. Tooltip /
+            PlanSettingsMenu render their <button>/<a> as the direct child, so
+            `[&>button]`/`[&>a]` size every real control (and skip the input's
+            nested clear button); the slightly smaller text/padding lets the
+            longest labels fit 4-across on a phone. On sm+ it reverts to the
+            natural right-aligned wrap and the filter controls hide here (they
+            render in Row 1 instead), so desktop is unchanged. */}
+        <div className="mb-3 grid grid-cols-4 gap-1 [&>*]:w-full [&>*]:justify-center [&>*]:whitespace-nowrap [&>a]:px-1.5 [&>a]:text-[10px] [&>button]:px-1.5 [&>button]:text-[10px] sm:flex sm:flex-wrap sm:items-center sm:justify-end sm:gap-1.5 sm:[&>*]:w-auto sm:[&>a]:px-2.5 sm:[&>a]:text-[11px] sm:[&>button]:px-2.5 sm:[&>button]:text-[11px]">
+          {/* Mobile-only: filter input + Filter button as the first two grid
+              cells (hidden on sm+, where they render in Row 1's cluster). */}
+          {floor.plan_url && assets.length > 0 && (
+            <div className="h-7 sm:hidden">
+              <FilterByTextInput value={filterText} onChange={setFilterText} />
+            </div>
+          )}
+          {floor.plan_url && assets.length > 0 && (
+            <FilterByTypePopover
+              selectedTypes={filterTypes}
+              onChange={setFilterTypes}
+              triggerClassName="sm:hidden"
+            />
+          )}
           {showAuditCta && (
             <Tooltip text={activeSession ? 'Resume the audit walkaround you started' : 'Walk the floor and confirm every sign'}>
               <button

@@ -13,9 +13,15 @@ import { useAssetTypes } from '@/hooks/useAssetTypes';
 export type FilterByTypePopoverProps = {
   selectedTypes: Set<string>;
   onChange: (next: Set<string>) => void;
+  /** Extra classes for the trigger button (e.g. responsive show/hide). */
+  triggerClassName?: string;
 };
 
-export function FilterByTypePopover({ selectedTypes, onChange }: FilterByTypePopoverProps) {
+export function FilterByTypePopover({
+  selectedTypes,
+  onChange,
+  triggerClassName = '',
+}: FilterByTypePopoverProps) {
   const { signage, facility, list } = useAssetTypes();
   const all = list.map((t) => t.key);
 
@@ -42,7 +48,8 @@ export function FilterByTypePopover({ selectedTypes, onChange }: FilterByTypePop
             'inline-flex h-7 shrink-0 items-center gap-1 rounded-md border px-2.5 text-[11px] font-medium transition-colors ' +
             (isFiltering
               ? 'border-waymarks-gold bg-waymarks-gold-soft text-waymarks-ink'
-              : 'border-black/15 bg-surface text-text-muted hover:border-black/25 hover:text-text')
+              : 'border-black/15 bg-surface text-text-muted hover:border-black/25 hover:text-text') +
+            (triggerClassName ? ' ' + triggerClassName : '')
           }
         >
           <Filter size={11} aria-hidden />
