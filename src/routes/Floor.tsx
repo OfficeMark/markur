@@ -401,9 +401,12 @@ export function Floor() {
           )}
         </div>
 
-        {/* Row 2 - action buttons right-justified, all 28px tall. They wrap to
-            as many rows as the screen width needs (≈3 on a phone). */}
-        <div className="mb-3 flex flex-wrap items-center justify-end gap-1.5">
+        {/* Row 2 - the 9 action buttons. On phones: a uniform 3-col grid so
+            every button is the same width (content no longer sizes them) and
+            height — 9 buttons fill 3 even rows. Tooltip/PlanSettingsMenu all
+            render their <button>/<a> as the direct child, so `[&>*]` styles
+            each one. On sm+ it reverts to the natural right-aligned wrap. */}
+        <div className="mb-3 grid grid-cols-3 gap-1.5 [&>*]:w-full [&>*]:justify-center [&>*]:whitespace-nowrap sm:flex sm:flex-wrap sm:items-center sm:justify-end sm:[&>*]:w-auto">
           {showAuditCta && (
             <Tooltip text={activeSession ? 'Resume the audit walkaround you started' : 'Walk the floor and confirm every sign'}>
               <button
@@ -510,7 +513,7 @@ export function Floor() {
                   setDeleteFloorError(null);
                   setDeleteFloorOpen(true);
                 }}
-                className="ml-1 inline-flex h-7 items-center gap-1 rounded-md border border-black/15 bg-surface px-2.5 text-[11px] font-medium text-text-muted hover:border-danger hover:bg-danger-bg hover:text-danger dark:border-white/15"
+                className="inline-flex h-7 items-center gap-1 rounded-md border border-black/15 bg-surface px-2.5 text-[11px] font-medium text-text-muted hover:border-danger hover:bg-danger-bg hover:text-danger dark:border-white/15 sm:ml-1"
               >
                 <Trash2 size={11} aria-hidden />
                 Delete floor
