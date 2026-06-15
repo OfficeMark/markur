@@ -38,12 +38,18 @@ const DEFAULT_TYPES: Record<string, AssetTypeColor> = {
 let RUNTIME_TYPES: Record<string, AssetTypeColor> = { ...DEFAULT_TYPES };
 
 /**
- * Replace the runtime asset-type catalog. Called by useAssetTypes after the
- * org_asset_types fetch completes. Keep this idempotent - same input
- * produces the same map.
+ * Overlay the org's effective asset-type catalog ON TOP of the bundled
+ * defaults. Called by useAssetTypes once the org_asset_types fetch resolves.
+ *
+ * Merging (not replacing) is deliberate: during a cold load the catalog can
+ * briefly resolve to an empty map (org id not known until buildings load), and
+ * a bare replace would wipe every default colour → pins draw slate/"black"
+ * until something forces a repaint. Keeping the defaults underneath means a
+ * standard-type pin always has its colour, and org-specific entries override on
+ * top. Idempotent — same input produces the same map.
  */
 export function setRuntimeAssetTypes(map: Record<string, AssetTypeColor>): void {
-  RUNTIME_TYPES = map;
+  RUNTIME_TYPES = { ...DEFAULT_TYPES, ...map };
 }
 
 /** Static defaults for components that need a synchronous list pre-fetch. */

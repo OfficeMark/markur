@@ -1,4 +1,4 @@
-import { useEffect, useMemo } from 'react';
+import { useMemo } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   clearOverride,
@@ -18,6 +18,7 @@ import {
 } from '@/lib/queries/asset-types';
 import { setRuntimeAssetTypes, type AssetTypeColor } from '@/lib/pin-types';
 import { useBuildings } from '@/hooks/useBuildings';
+import { usePermissions } from '@/lib/permissions-context';
 
 export const assetTypeKeys = {
   all: ['asset-types'] as const,
@@ -44,16 +45,23 @@ export const assetTypeKeys = {
  */
 export function useAssetTypes(orgIdOverride?: string | null) {
   const { data: buildings } = useBuildings();
+  const { grants } = usePermissions();
 
-  // Guests have a viewer grant but no session org, so useBuildings() returns []
-  // and the derived org is null — which would strip every org colour/label back
-  // to defaults (gray pins). The guest path passes the viewed building's
-  // owner_org_id explicitly so the catalogue resolves for that org instead.
+  // Resolve the org id as early as possible so the colour catalogue fetches in
+  // parallel with the rest of boot instead of waiting for the buildings list
+  // (which lands several seconds in — that's why pins drew before their colours
+  // on a cold load). The org-scope grant arrives right after the user, so prefer
+  // it; fall back to the owning org of any visible building for users who only
+  // hold a building-scope grant.
+  //
+  // Guests have a viewer grant but no session org and useBuildings() returns [],
+  // so both resolve to null — the guest path passes the viewed building's
+  // owner_org_id explicitly via orgIdOverride instead.
   const derivedOrgId = useMemo<string | null>(() => {
-    if (!buildings) return null;
-    const withOrg = buildings.find((b) => b.owner_org_id);
-    return withOrg?.owner_org_id ?? null;
-  }, [buildings]);
+    const fromGrant = grants.find((g) => g.scope_type === 'organization')?.scope_id;
+    if (fromGrant) return fromGrant;
+    return buildings?.find((b) => b.owner_org_id)?.owner_org_id ?? null;
+  }, [grants, buildings]);
   const orgId = orgIdOverride !== undefined ? orgIdOverride : derivedOrgId;
 
   const query = useQuery<ListEffectiveResult>({
@@ -62,21 +70,24 @@ export function useAssetTypes(orgIdOverride?: string | null) {
     staleTime: 60_000,
   });
 
-  // Push the effective map into the runtime catalog. Hidden entries
-  // stay in the map so existing assets continue to render with their
-  // effective color and label.
-  useEffect(() => {
-    if (!query.data) return;
+  // Push the effective map into the module-level runtime catalog that the sync
+  // colorForType()/labelForType() helpers read. Hidden entries stay in the map
+  // so existing assets keep their effective colour and label.
+  //
+  // This runs DURING render (not in a post-paint effect): a component that
+  // re-renders when this query resolves — e.g. the floor's pin layer — then
+  // reads the fresh colours in the SAME paint. The old effect ran after paint,
+  // so pins drew before the colours existed and only recoloured on a remount
+  // (the "black pins until you leave and come back" bug).
+  const effectiveMap = useMemo(() => {
+    if (!query.data) return null;
     const map: Record<string, AssetTypeColor> = {};
     for (const t of query.data.effective) {
-      map[t.key] = {
-        fill: t.color,
-        label: t.label,
-        category: t.category,
-      };
+      map[t.key] = { fill: t.color, label: t.label, category: t.category };
     }
-    setRuntimeAssetTypes(map);
+    return map;
   }, [query.data]);
+  if (effectiveMap) setRuntimeAssetTypes(effectiveMap);
 
   const list = useMemo<EffectiveAssetType[]>(
     () => query.data?.effective ?? [],

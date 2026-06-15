@@ -23,6 +23,7 @@ import { useAssetsWithVideos } from '@/hooks/useAuditVideos';
 import { useFloor, useSoftDeleteFloor } from '@/hooks/useFloors';
 import { useBuilding } from '@/hooks/useBuildings';
 import { useAssets, useSoftDeleteAsset, useUpdateAsset } from '@/hooks/useAssets';
+import { useAssetTypes } from '@/hooks/useAssetTypes';
 import {
   useActiveAuditSession,
   useLatestConfirmedByFloor,
@@ -50,6 +51,12 @@ export function Floor() {
     [building?.settings]
   );
   const { data: assets = [] } = useAssets(id);
+  // Subscribe the floor to the org asset-type catalog so the pin layer
+  // re-renders (and recolours) the instant the colours load. useAssetTypes
+  // writes the colour map into pin-types synchronously during its render, so
+  // when this query resolves the pins repaint in the same pass — no remount,
+  // no "black pins until you leave and come back".
+  useAssetTypes();
   const { user } = useAuth();
 
   const canUploadPlan = useCan('upload_plan', { type: 'building', id: floor?.building_id ?? '' });
