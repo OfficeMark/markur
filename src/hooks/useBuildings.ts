@@ -29,6 +29,9 @@ export function useBuildings() {
   return useQuery({
     queryKey: buildingKeys.list(),
     queryFn: listBuildings,
+    // Stable + invalidated on mutation; a longer staleTime lets the get_app_boot
+    // seed satisfy the sidebar nav across navigations instead of re-fetching.
+    staleTime: 5 * 60_000,
   });
 }
 

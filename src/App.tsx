@@ -14,6 +14,7 @@ import { ErrorBoundary } from '@/components/waymarks/ErrorBoundary';
 import { LastErrorBanner } from '@/components/waymarks/LastErrorBanner';
 import { CookieConsent } from '@/components/waymarks/CookieConsent';
 import { handleQueryError, isAuthExpiredError, onSessionLost } from '@/lib/queryErrorHandler';
+import { useAppBoot } from '@/hooks/useBundles';
 
 // Code-splitting (M12): non-critical routes are lazy-loaded so the initial
 // bundle stays lean. Floor in particular pulls pdfjs-dist (~1.4 MB raw),
@@ -108,6 +109,16 @@ const queryClient = new QueryClient({
   },
 });
 
+/**
+ * Fires the get_app_boot bundle once when signed in and seeds the per-entity
+ * caches (buildings, per-building floors, branding, colour catalogue) so the
+ * sidebar nav and lists read warm data instead of re-fetching the boot cascade.
+ */
+function BootPrefetch() {
+  useAppBoot();
+  return null;
+}
+
 function SessionLostHandler() {
   const navigate = useNavigate();
   const location = useLocation();
@@ -160,6 +171,7 @@ export default function App() {
               <ActionHintsProvider>
                 <RadixTooltip.Provider delayDuration={400} skipDelayDuration={200}>
                   <OfflineSync />
+                  <BootPrefetch />
                   <SessionLostHandler />
                   <LastErrorBanner />
                   <Suspense fallback={<RouteFallback />}>

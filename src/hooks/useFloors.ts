@@ -21,6 +21,10 @@ export function useFloors(buildingId: string | undefined) {
     queryKey: buildingId ? floorKeys.byBuilding(buildingId) : ['floors', 'by-building', 'none'],
     queryFn: () => (buildingId ? listFloorsByBuilding(buildingId) : Promise.resolve([])),
     enabled: !!buildingId,
+    // Stable + invalidated on mutation; a longer staleTime lets the get_app_boot
+    // seed (per-building floors) satisfy the sidebar nav instead of re-fetching
+    // every building's floors one at a time on each navigation.
+    staleTime: 5 * 60_000,
   });
 }
 
