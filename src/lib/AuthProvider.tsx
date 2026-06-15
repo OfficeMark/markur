@@ -35,7 +35,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   // it — that's the boot re-fetch storm (profiles 3×, grants/buildings 2–3×).
   // We gate the expensive work (user swap + profile fetch) on the id actually
   // changing, and keep `session` stable unless the access token changes.
-  const userIdRef = useRef<string | null>(null);
+  // `undefined` = no auth event applied yet (distinct from `null` = signed out).
+  const userIdRef = useRef<string | null | undefined>(undefined);
 
   // Resolve the initial session, then keep it in sync with auth events.
   useEffect(() => {
@@ -48,20 +49,30 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setSession((prev) => (prev?.access_token === next?.access_token ? prev : next));
 
       const nextId = next?.user?.id ?? null;
-      if (nextId !== userIdRef.current) {
-        userIdRef.current = nextId;
-        setUser(next?.user ?? null);
-        if (next?.user) {
-          // Deferred (not awaited inside the auth callback) so we never block
-          // Supabase's auth lock on another Supabase call.
-          void fetchProfile(next.user.id).then((p) => {
-            if (!cancelled) setProfile(p);
-          });
-        } else {
-          setProfile(null);
-        }
+      // Duplicate boot event / token refresh for the same identity: nothing to
+      // (re)load. (Guard against `undefined` so the very first signed-out apply
+      // still runs and clears `loading`.)
+      if (userIdRef.current !== undefined && nextId === userIdRef.current) return;
+      userIdRef.current = nextId;
+      setUser(next?.user ?? null);
+
+      if (next?.user) {
+        // Keep `loading` true until the profile lands so NO view renders in a
+        // half-ready state (loading=false + profile=null). That window crashed
+        // mobile (null read in a child) and double-rendered desktop. Re-gate on
+        // every new identity (initial load + sign-in). Deferred (not awaited
+        // inside the auth callback) so we never block Supabase's auth lock.
+        setLoading(true);
+        void fetchProfile(next.user.id).then((p) => {
+          if (!cancelled) {
+            setProfile(p);
+            setLoading(false);
+          }
+        });
+      } else {
+        setProfile(null);
+        setLoading(false);
       }
-      setLoading(false);
     }
 
     // Prime from the current session (covers INITIAL_SESSION already having
