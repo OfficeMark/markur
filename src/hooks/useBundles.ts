@@ -1,15 +1,19 @@
 import { useEffect } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { getAppBoot, getBuildingView } from '@/lib/queries/bundles';
+import { getAppBoot, getBuildingView, getFloorView } from '@/lib/queries/bundles';
 import { buildingKeys } from '@/hooks/useBuildings';
 import { floorKeys } from '@/hooks/useFloors';
+import { assetKeys } from '@/hooks/useAssets';
+import { assetPhotoKeys } from '@/hooks/useAssetPhotos';
 import { brandingKeys } from '@/hooks/useBranding';
+import { signedAssetPhotoUrls } from '@/lib/queries/asset-photos';
 import { setRuntimeAssetTypes, type AssetTypeColor } from '@/lib/pin-types';
 import { useAuth } from '@/lib/auth-context';
 
 export const bundleKeys = {
   appBoot: ['app-boot'] as const,
   buildingView: (id: string) => ['building-view', id] as const,
+  floorView: (id: string) => ['floor-view', id] as const,
 };
 
 /**
@@ -79,6 +83,49 @@ export function useBuildingView(buildingId: string | undefined) {
     if (data.building) qc.setQueryData(buildingKeys.detail(buildingId), data.building);
     qc.setQueryData(floorKeys.byBuilding(buildingId), data.floors);
   }, [buildingId, data, qc]);
+
+  return query;
+}
+
+/**
+ * One-call floor screen: floor + assets + per-pin photos (grouped) + catalogue.
+ * Seeds the per-entity caches the floor view and its drawer read, and — the main
+ * win — collapses the per-pin photo N+1: the grid otherwise fetches every pin's
+ * photo rows separately AND signs each thumbnail one at a time. Here we seed all
+ * the photo rows from the bundle and batch-sign every path in a single pass.
+ */
+export function useFloorView(floorId: string | undefined) {
+  const qc = useQueryClient();
+  const query = useQuery({
+    queryKey: floorId ? bundleKeys.floorView(floorId) : ['floor-view', 'none'],
+    queryFn: () => getFloorView(floorId!),
+    enabled: !!floorId,
+  });
+
+  const data = query.data;
+  useEffect(() => {
+    if (!floorId || !data) return;
+    if (data.floor) qc.setQueryData(floorKeys.detail(floorId), data.floor);
+    qc.setQueryData(assetKeys.byFloor(floorId), data.assets);
+    for (const a of data.assets) {
+      qc.setQueryData(assetKeys.detail(a.id), a);
+      qc.setQueryData(assetPhotoKeys.forAsset(a.id), data.photos[a.id] ?? []);
+    }
+    // Batch-sign every photo path on the floor in one request, then seed the
+    // per-path URL cache so the grid thumbnails read warm (no per-pin signing).
+    const paths = Object.values(data.photos)
+      .flat()
+      .map((p) => p.path);
+    if (paths.length) {
+      void signedAssetPhotoUrls(paths)
+        .then((map) => {
+          for (const [path, url] of Object.entries(map)) {
+            qc.setQueryData(assetPhotoKeys.signedUrl(path), url);
+          }
+        })
+        .catch(() => undefined);
+    }
+  }, [floorId, data, qc]);
 
   return query;
 }

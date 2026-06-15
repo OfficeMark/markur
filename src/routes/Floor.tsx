@@ -25,6 +25,7 @@ import { useFloor, useSoftDeleteFloor } from '@/hooks/useFloors';
 import { useBuilding } from '@/hooks/useBuildings';
 import { useAssets, useSoftDeleteAsset, useUpdateAsset } from '@/hooks/useAssets';
 import { useAssetTypes } from '@/hooks/useAssetTypes';
+import { useFloorView } from '@/hooks/useBundles';
 import {
   useActiveAuditSession,
   useLatestConfirmedByFloor,
@@ -52,6 +53,11 @@ export function Floor() {
     [building?.settings]
   );
   const { data: assets = [] } = useAssets(id);
+  // One bundled call seeds the per-pin photo rows + batch-signed thumbnail URLs
+  // (and floor/assets), collapsing the grid's per-pin photo N+1. useFloor /
+  // useAssets above stay the source of truth so the optimistic lock/drag edits
+  // keep working; this just warms the caches the grid + drawer read.
+  useFloorView(id);
   // Subscribe the floor to the org asset-type catalog so the pin layer
   // re-renders (and recolours) the instant the colours load. useAssetTypes
   // writes the colour map into pin-types synchronously during its render, so

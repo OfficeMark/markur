@@ -126,6 +126,27 @@ export async function signedAssetPhotoUrl(path: string): Promise<string> {
 }
 
 /**
+ * Batch-sign many asset-photo paths in ONE request (createSignedUrls, plural).
+ * Returns a path → signed-URL map. Used to collapse the per-pin signing N+1 on
+ * floor load: get_floor_view hands back every photo path at once, so we sign
+ * them all in a single pass instead of one createSignedUrl per thumbnail.
+ */
+export async function signedAssetPhotoUrls(paths: string[]): Promise<Record<string, string>> {
+  const out: Record<string, string> = {};
+  if (paths.length === 0) return out;
+  const { data, error } = await supabase.storage
+    .from('asset-photos')
+    .createSignedUrls(paths, 60 * 30);
+  if (error) throw error;
+  // Zip by index — the response preserves request order.
+  (data ?? []).forEach((row, i) => {
+    const p = paths[i];
+    if (p && row?.signedUrl) out[p] = row.signedUrl;
+  });
+  return out;
+}
+
+/**
  * A signed URL that forces a download instead of inline display. The
  * `download` option makes Supabase Storage return `Content-Disposition:
  * attachment; filename="…"`, so a plain anchor click saves the file to disk —

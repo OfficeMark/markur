@@ -1,8 +1,7 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useMemo, useState } from 'react';
 import { ArrowDown, ArrowUp, ArrowUpDown, ImageOff, Video } from 'lucide-react';
 import { format, formatDistanceToNow } from 'date-fns';
-import { useAssetPhotos } from '@/hooks/useAssetPhotos';
-import { signedAssetPhotoUrl } from '@/lib/queries/asset-photos';
+import { useAssetPhotos, useSignedAssetPhotoUrl } from '@/hooks/useAssetPhotos';
 import { TYPE_COLORS, labelForType, formatPinNumber } from '@/lib/pin-types';
 import { computeStatus, statusLabel, type AssetStatus } from '@/lib/asset-status';
 import type { VendorContact } from '@/lib/queries/assets';
@@ -276,23 +275,12 @@ function StatusBadge({ status }: { status: AssetStatus }) {
 }
 
 function PhotoThumb({ assetId }: { assetId: string }) {
+  // Both reads come warm from get_floor_view's seed (photo rows + the batch-
+  // signed thumbnail URL), so a grid of N pins no longer fires N photo fetches
+  // + N signs. Outside that seed they fall back to fetching/signing per item.
   const { data: photos } = useAssetPhotos(assetId);
   const path = photos?.[0]?.path;
-  const [url, setUrl] = useState<string | null>(null);
-
-  useEffect(() => {
-    let cancelled = false;
-    if (!path) {
-      setUrl(null);
-      return;
-    }
-    void signedAssetPhotoUrl(path)
-      .then((u) => !cancelled && setUrl(u))
-      .catch(() => undefined);
-    return () => {
-      cancelled = true;
-    };
-  }, [path]);
+  const url = useSignedAssetPhotoUrl(path);
 
   return (
     <div className="h-10 w-10 overflow-hidden rounded-md border border-black/10 bg-surface-soft dark:border-white/10">

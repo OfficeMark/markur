@@ -1,5 +1,5 @@
 import { supabase } from '@/lib/supabase';
-import type { Building, Floor } from '@/types/database';
+import type { Asset, AssetPhoto, Building, Floor } from '@/types/database';
 import type { OrgBranding } from '@/lib/queries/branding';
 
 /**
@@ -51,6 +51,26 @@ export type AppBoot = {
   branding: OrgBranding[];
   asset_types: AppBootAssetType[];
 };
+
+// --- get_floor_view -----------------------------------------------------------
+
+export type FloorView = {
+  floor: Floor | null;
+  assets: Asset[];
+  /** Photos grouped per asset id. A pin with no photos has NO key. */
+  photos: Record<string, AssetPhoto[]>;
+};
+
+export async function getFloorView(floorId: string): Promise<FloorView> {
+  const { data, error } = await supabase.rpc('get_floor_view', { p_floor_id: floorId });
+  if (error) throw error;
+  const v = (data ?? {}) as Partial<FloorView>;
+  return {
+    floor: v.floor ?? null,
+    assets: v.assets ?? [],
+    photos: v.photos ?? {},
+  };
+}
 
 export async function getAppBoot(): Promise<AppBoot> {
   const { data, error } = await supabase.rpc('get_app_boot');
