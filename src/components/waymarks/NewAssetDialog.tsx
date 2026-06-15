@@ -50,9 +50,14 @@ import type { Asset } from '@/types/database';
 // drawer's Vendors list, not this dialog.
 const schema = z.object({
   type: z.string().max(60).optional(),
-  name: z.string().max(80, 'Up to 80 characters').optional(),
-  room_number: z.string().max(80, 'Up to 80 characters').optional(),
-  notes: z.string().max(4000, 'Up to 4000 characters').optional(),
+  // All of these store in unlimited Postgres `text` columns, so the caps are
+  // purely a front-end guard. The old 80-char caps on name/room_number surfaced
+  // as an "Up to 80 characters" save block when longer descriptive text was
+  // entered, so they're now generous. Notes is freeform with no practical limit
+  // (a high ceiling only to guard against an accidental multi-megabyte paste).
+  name: z.string().max(200, 'Up to 200 characters').optional(),
+  room_number: z.string().max(200, 'Up to 200 characters').optional(),
+  notes: z.string().max(20000, 'Up to 20000 characters').optional(),
 });
 
 type FormValues = z.infer<typeof schema>;
