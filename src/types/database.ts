@@ -1168,6 +1168,16 @@ export type Database = {
         Args: { p_action: string; p_entity_id?: string; p_entity_type?: string }
         Returns: undefined
       }
+      log_client_error: {
+        Args: {
+          p_message: string
+          p_stack?: string | null
+          p_component_stack?: string | null
+          p_url?: string | null
+          p_user_agent?: string | null
+        }
+        Returns: undefined
+      }
       org_slug: { Args: { input: string }; Returns: string }
       peek_building_share: { Args: { p_token: string }; Returns: Json }
       revoke_building_share: {

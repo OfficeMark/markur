@@ -1,6 +1,7 @@
 import { Component, type ErrorInfo, type ReactNode } from 'react';
 import { AlertTriangle, Copy, RotateCw } from 'lucide-react';
 import { Button } from '@/components/ui/Button';
+import { LAST_ERROR_KEY, logClientError, type CapturedError } from '@/lib/last-error';
 
 /**
  * Top-level error boundary (M10e). Wraps the entire route tree so a single
@@ -36,6 +37,27 @@ export class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundarySt
   override componentDidCatch(error: Error, info: ErrorInfo): void {
     this.setState({ componentStack: info.componentStack ?? null });
     console.error('[Markur] Uncaught error in app tree:', error, info.componentStack);
+
+    const captured: CapturedError = {
+      message: error.message,
+      stack: error.stack ?? null,
+      componentStack: info.componentStack ?? null,
+      url: window.location.href,
+      ua: navigator.userAgent,
+      at: Date.now(),
+    };
+
+    // Log to the DB so web Claude can read every crash directly — including the
+    // ones that self-recover before they can be read on the phone. Best-effort.
+    void logClientError(captured);
+
+    // Also persist locally so the error survives a PWA auto-reload / flash-away;
+    // LastErrorBanner re-surfaces it on the next clean render for capture.
+    try {
+      localStorage.setItem(LAST_ERROR_KEY, JSON.stringify(captured));
+    } catch {
+      /* storage disabled / full — the DB log + on-screen details still work */
+    }
   }
 
   handleReload = (): void => {

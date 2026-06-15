@@ -11,6 +11,7 @@ import { Home } from '@/routes/Home';
 import { ProtectedRoute } from '@/routes/ProtectedRoute';
 import { OfflineSync } from '@/components/waymarks/OfflineSync';
 import { ErrorBoundary } from '@/components/waymarks/ErrorBoundary';
+import { LastErrorBanner } from '@/components/waymarks/LastErrorBanner';
 import { CookieConsent } from '@/components/waymarks/CookieConsent';
 import { handleQueryError, isAuthExpiredError, onSessionLost } from '@/lib/queryErrorHandler';
 
@@ -160,6 +161,7 @@ export default function App() {
                 <RadixTooltip.Provider delayDuration={400} skipDelayDuration={200}>
                   <OfflineSync />
                   <SessionLostHandler />
+                  <LastErrorBanner />
                   <Suspense fallback={<RouteFallback />}>
                     <Routes>
                   <Route path="/login" element={<Login />} />
