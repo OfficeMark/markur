@@ -7,6 +7,7 @@ import { Button } from '@/components/ui/Button';
 import { Tooltip } from '@/components/ui/Tooltip';
 import { FloorPlanCanvas } from '@/components/waymarks/FloorPlanCanvas';
 import { PlanSettingsMenu } from '@/components/waymarks/PlanSettingsMenu';
+import { FloorNotesButton } from '@/components/waymarks/FloorNotesButton';
 import { PlanProvenanceCaption } from '@/components/waymarks/PlanProvenanceCaption';
 import { FloorPlanUploadDialog } from '@/components/waymarks/FloorPlanUploadDialog';
 import { PinOverlay } from '@/components/waymarks/PinOverlay';
@@ -525,6 +526,14 @@ export function Floor() {
               hasPins={hasPins}
             />
           )}
+          {/* Floor-wide team notes. Self-gates: editors always see it; viewers
+              only when a note exists; never rendered on guest share links. */}
+          <FloorNotesButton
+            floorId={floor.id}
+            buildingId={floor.building_id}
+            notes={floor.floor_notes}
+            canEdit={canEdit}
+          />
           {/* M14c - Visualize in ViewMark. Gold outline so it reads as a
               brand-aligned secondary, distinct from the gold-filled
               Audit primary. */}

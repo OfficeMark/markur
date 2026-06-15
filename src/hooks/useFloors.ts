@@ -3,6 +3,7 @@ import {
   getFloor,
   listFloorsByBuilding,
   nextFloorSortOrder,
+  setFloorNotes,
   setFloorProvenance,
   softDeleteFloor,
   type NewFloorInput,
@@ -93,6 +94,21 @@ export function useSetFloorProvenance(floorId: string | undefined, buildingId?: 
     mutationFn: (provenance: string) => {
       if (!floorId) throw new Error('No floor');
       return setFloorProvenance(floorId, provenance);
+    },
+    onSuccess: () => {
+      if (floorId) qc.invalidateQueries({ queryKey: floorKeys.detail(floorId) });
+      if (buildingId) qc.invalidateQueries({ queryKey: floorKeys.byBuilding(buildingId) });
+    },
+  });
+}
+
+/** Set the floor-wide notes (team-only free text). */
+export function useSetFloorNotes(floorId: string | undefined, buildingId?: string | undefined) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (notes: string) => {
+      if (!floorId) throw new Error('No floor');
+      return setFloorNotes(floorId, notes);
     },
     onSuccess: () => {
       if (floorId) qc.invalidateQueries({ queryKey: floorKeys.detail(floorId) });
