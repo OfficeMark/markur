@@ -14,6 +14,7 @@ import {
   type SaveOrgBrandingInput,
 } from '@/lib/queries/branding';
 import { useBuildings } from '@/hooks/useBuildings';
+import { usePermissions } from '@/lib/permissions-context';
 
 export const brandingKeys = {
   all: ['branding'] as const,
@@ -22,14 +23,18 @@ export const brandingKeys = {
 
 export function useOrgBranding(orgIdOverride?: string | null) {
   const { data: buildings } = useBuildings();
-  // Guests have no session org (useBuildings() is empty), so the logo would
-  // resolve to nothing. The guest path passes the viewed building's
-  // owner_org_id explicitly — same fix as useAssetTypes.
+  const { grants } = usePermissions();
+  // Resolve the org id from the early org-scope grant before falling back to the
+  // (late-loading) buildings list, so branding/logo fetches in parallel with
+  // boot instead of behind buildings. Same pattern as useAssetTypes.
+  //
+  // Guests have no org grant and an empty buildings list → null; the guest path
+  // passes the viewed building's owner_org_id explicitly via orgIdOverride.
   const derivedOrgId = useMemo<string | null>(() => {
-    if (!buildings) return null;
-    const withOrg = buildings.find((b) => b.owner_org_id);
-    return withOrg?.owner_org_id ?? null;
-  }, [buildings]);
+    const fromGrant = grants.find((g) => g.scope_type === 'organization')?.scope_id;
+    if (fromGrant) return fromGrant;
+    return buildings?.find((b) => b.owner_org_id)?.owner_org_id ?? null;
+  }, [grants, buildings]);
   const orgId = orgIdOverride !== undefined ? orgIdOverride : derivedOrgId;
 
   const query = useQuery<OrgBranding | null>({
