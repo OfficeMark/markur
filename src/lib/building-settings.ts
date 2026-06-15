@@ -18,7 +18,9 @@
 
 /** The default Officemark order destination (was hardcoded in AssetDrawer). */
 export const DEFAULT_ORDER_URL = 'https://account.officemark.ca/authentication/login';
-export const DEFAULT_ORDER_LABEL = 'Order Signs';
+// Asset-neutral: a pin may be a sign, a service call, a repair, etc. — the
+// label shouldn't presume signage.
+export const DEFAULT_ORDER_LABEL = 'Order / Request';
 
 export type ExternalLinkMode = 'default' | 'custom' | 'hidden';
 

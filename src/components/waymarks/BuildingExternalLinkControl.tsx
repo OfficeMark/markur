@@ -18,7 +18,7 @@ export type BuildingExternalLinkControlProps = {
 };
 
 const MODE_OPTIONS: { value: ExternalLinkMode; label: string; hint: string }[] = [
-  { value: 'default', label: 'Officemark (default)', hint: 'The standard Order Signs button.' },
+  { value: 'default', label: 'Officemark (default)', hint: 'The standard Order / Request button.' },
   { value: 'custom', label: 'Custom link', hint: 'Point it at your own portal.' },
   { value: 'hidden', label: 'Hidden', hint: 'No button on pins.' },
 ];

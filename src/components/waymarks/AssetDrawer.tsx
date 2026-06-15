@@ -475,10 +475,10 @@ function VisualizeRow({
 }
 
 function orderMailto(toEmail: string, toName: string | undefined, asset: Asset): string {
-  const subject = `Sign order — ${asset.name}`;
+  const subject = `Order / request — ${asset.name}`;
   const body =
     `Hi${toName ? ` ${toName}` : ''},\n\n` +
-    `I'd like to order signage for "${asset.name}"` +
+    `I'd like to order a replacement or request service for "${asset.name}"` +
     `${asset.room_number ? ` (room ${asset.room_number})` : ''}.\n\n` +
     `Details:\n\n\nThanks.`;
   return `mailto:${toEmail}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
@@ -511,21 +511,21 @@ function OrderSignsRow({
   let href: string;
   let helper: string;
   let opensExternally: boolean;
-  let title = 'Order signs';
+  let title = 'Order or request';
   let buttonLabel = DEFAULT_ORDER_LABEL;
   let custom = false;
   if (vendorEmail) {
     // A pin's own vendor/contact target always wins over the building default.
     href = orderMailto(vendorEmail.email!.trim(), vendorEmail.name, asset);
-    helper = `Email ${vendorEmail.name} to order replacement signage.`;
+    helper = `Email ${vendorEmail.name} to order a replacement or request service.`;
     opensExternally = false;
   } else if (vendorUrl) {
     href = vendorUrlHref(vendorUrl.url!.trim());
-    helper = `Open ${vendorUrl.name}'s site to order signage.`;
+    helper = `Open ${vendorUrl.name}'s site to order or request service.`;
     opensExternally = true;
   } else if (contact?.email?.trim()) {
     href = orderMailto(contact.email.trim(), contact.label, asset);
-    helper = `Email ${contact.label} to order replacement signage.`;
+    helper = `Email ${contact.label} to order a replacement or request service.`;
     opensExternally = false;
   } else if (externalLink.mode === 'hidden') {
     // Building opted out of a fallback button and the pin has no own target.
@@ -539,7 +539,7 @@ function OrderSignsRow({
     custom = true;
   } else {
     href = DEFAULT_ORDER_URL;
-    helper = 'Order new or replacement signage from Officemark.';
+    helper = 'Order a replacement or request service for this item.';
     opensExternally = true;
   }
 
