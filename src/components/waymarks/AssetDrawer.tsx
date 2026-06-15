@@ -45,7 +45,6 @@ import { computeStatus, statusLabel, type AssetStatus } from '@/lib/asset-status
 import { formatPinNumber } from '@/lib/pin-types';
 import {
   buildingExternalLinkFromSettings,
-  DEFAULT_ORDER_LABEL,
   DEFAULT_ORDER_URL,
   type BuildingExternalLink,
 } from '@/lib/building-settings';
@@ -476,12 +475,18 @@ function VisualizeRow({
   );
 }
 
-function orderMailto(toEmail: string, toName: string | undefined, asset: Asset): string {
-  const isFacility = asset.category === 'facility';
-  const subject = isFacility ? `Service request — ${asset.name}` : `Sign order — ${asset.name}`;
-  const action = isFacility
-    ? 'request service or a repair for'
-    : 'order a replacement or new sign for';
+function orderMailto(
+  toEmail: string,
+  toName: string | undefined,
+  asset: Asset,
+  intent: 'order' | 'service'
+): string {
+  const subject =
+    intent === 'service' ? `Service request — ${asset.name}` : `Sign order — ${asset.name}`;
+  const action =
+    intent === 'service'
+      ? 'request service or a repair for'
+      : 'order a replacement or new sign for';
   const body =
     `Hi${toName ? ` ${toName}` : ''},\n\n` +
     `I'd like to ${action} "${asset.name}"` +
@@ -491,17 +496,18 @@ function orderMailto(toEmail: string, toName: string | undefined, asset: Asset):
 }
 
 /**
- * Action card targeted at the directory the pin references. Copy is driven by
- * the asset's CATEGORY: signage pins read as "Order signs"; facility pins
- * (stairwell / service room / utility room) read as "Request service" — a
- * facility item is a maintenance job, not a sign order. Routing priority is the
- * same for both:
- *   1. a linked vendor with an email → prefilled mailto draft
- *   2. a linked vendor with a URL    → opens the supplier site in a new tab
- *   3. the pin's contact with an email → prefilled mailto draft
- *   4. the building's configured external link (custom), else:
- *      - signage  → the Officemark order login (default)
- *      - facility → nothing (the sign-supplier fallback doesn't apply)
+ * Action card driven by the asset's CATEGORY (type-driven pin-action-cards
+ * brief):
+ *   - signage  → "Order or service": an "Order replacement" primary plus a
+ *                "Request service" secondary.
+ *   - facility → "Request service" only (no sign-order framing); the card still
+ *                shows as a prompt even when it has no target.
+ *
+ * The vendor/contact named in the card comes ONLY from the asset's own data
+ * (asset_vendors / contact) — never a stored placeholder. Targets, in priority:
+ * vendor email → contact email → vendor URL → building custom link → (signage
+ * only) the Officemark default order login. Service targets are the same minus
+ * the Officemark fallback. Buttons with no resolvable target are dropped.
  */
 function OrderSignsRow({
   asset,
@@ -520,66 +526,88 @@ function OrderSignsRow({
     : undefined;
 
   const isFacility = asset.category === 'facility';
-  const actionPhrase = isFacility
-    ? 'request service or a repair'
-    : 'order a replacement or new sign';
+  const hidden = externalLink.mode === 'hidden';
 
-  let href: string;
-  let helper: string;
-  let opensExternally: boolean;
-  let title = isFacility ? 'Request service' : 'Order signs';
-  let buttonLabel = isFacility ? 'Request service' : DEFAULT_ORDER_LABEL;
-  let custom = false;
-  if (vendorEmail) {
-    // A pin's own vendor/contact target always wins over the building default.
-    href = orderMailto(vendorEmail.email!.trim(), vendorEmail.name, asset);
-    helper = `Email ${vendorEmail.name} to ${actionPhrase}.`;
-    opensExternally = false;
-  } else if (vendorUrl) {
-    href = vendorUrlHref(vendorUrl.url!.trim());
-    helper = `Open ${vendorUrl.name}'s site to ${actionPhrase}.`;
-    opensExternally = true;
-  } else if (contact?.email?.trim()) {
-    href = orderMailto(contact.email.trim(), contact.label, asset);
-    helper = `Email ${contact.label} to ${actionPhrase}.`;
-    opensExternally = false;
-  } else if (externalLink.mode === 'hidden') {
-    // Building opted out of a fallback button and the pin has no own target.
-    return null;
-  } else if (externalLink.mode === 'custom') {
-    href = externalLink.url;
-    title = externalLink.label.trim() || 'External link';
-    buttonLabel = externalLink.label.trim() || 'Open';
-    helper = 'Open this building’s configured link.';
-    opensExternally = true;
-    custom = true;
-  } else if (isFacility) {
-    // No own target, no custom link, and this is a facility item — the
-    // Officemark sign-order fallback doesn't apply. Show nothing rather than
-    // point a service request at a sign supplier.
-    return null;
-  } else {
-    href = DEFAULT_ORDER_URL;
-    helper = 'Order a replacement or new sign for this asset from Officemark.';
-    opensExternally = true;
+  // Target resolution from the asset's own data only.
+  const emailTarget = vendorEmail?.email?.trim()
+    ? { email: vendorEmail.email.trim(), name: vendorEmail.name }
+    : contact?.email?.trim()
+      ? { email: contact.email.trim(), name: contact.label }
+      : null;
+  const urlTarget = !emailTarget && vendorUrl?.url?.trim() ? vendorUrlHref(vendorUrl.url.trim()) : null;
+  const customUrl =
+    !emailTarget && !urlTarget && externalLink.mode === 'custom' ? externalLink.url : null;
+
+  const orderHref = emailTarget
+    ? orderMailto(emailTarget.email, emailTarget.name, asset, 'order')
+    : urlTarget ?? customUrl ?? (!isFacility && !hidden ? DEFAULT_ORDER_URL : null);
+  const serviceHref = emailTarget
+    ? orderMailto(emailTarget.email, emailTarget.name, asset, 'service')
+    : urlTarget ?? customUrl ?? null;
+  // mailto opens the user's mail client; url / custom / default open a new tab.
+  const external = !emailTarget;
+
+  // Vendor reference line — from the asset, or "Officemark" as the default sign
+  // vendor when a signage order falls back to it. Display only, never saved.
+  const vendorName =
+    emailTarget?.name ?? vendorUrl?.name ?? (customUrl ? externalLink.label.trim() || null : null);
+  const vendorLine = vendorName
+    ? `via ${vendorName}`
+    : !isFacility && orderHref === DEFAULT_ORDER_URL
+      ? 'via Officemark'
+      : null;
+
+  const title = isFacility ? 'Request service' : 'Order or service';
+  const body = isFacility
+    ? 'Log a service or maintenance request for this location.'
+    : 'Order a replacement sign or request service for this sign.';
+
+  type Btn = { label: string; href: string; primary: boolean; service: boolean };
+  const buttons: Btn[] = [];
+  if (!isFacility && orderHref) {
+    buttons.push({ label: 'Order replacement', href: orderHref, primary: true, service: false });
+  }
+  if (serviceHref) {
+    buttons.push({
+      label: 'Request service',
+      href: serviceHref,
+      primary: isFacility,
+      service: true,
+    });
   }
 
-  const Icon = custom ? ExternalLink : isFacility ? Wrench : ShoppingCart;
+  // Signage with the building's fallback hidden and no own target has nothing to
+  // offer; a facility pin always shows its prompt even without a target.
+  if (buttons.length === 0 && !isFacility) return null;
 
   return (
-    <div className="flex items-center justify-between gap-3 rounded-md border border-waymarks-gold/30 bg-waymarks-gold-soft px-3 py-2 text-xs dark:bg-white/5">
-      <div className="min-w-0">
-        <p className="truncate font-semibold text-waymarks-ink dark:text-white">{title}</p>
-        <p className="text-text-muted">{helper}</p>
-      </div>
-      <a
-        href={href}
-        {...(opensExternally ? { target: '_blank', rel: 'noopener noreferrer' } : {})}
-        className="inline-flex h-8 shrink-0 items-center gap-1.5 rounded-md bg-waymarks-gold px-3 text-xs font-medium text-white hover:bg-waymarks-gold-deep"
-      >
-        <Icon size={12} aria-hidden />
-        <span className="max-w-[120px] truncate">{buttonLabel}</span>
-      </a>
+    <div className="rounded-md border border-waymarks-gold/30 bg-waymarks-gold-soft px-3 py-2 text-xs dark:bg-white/5">
+      <p className="font-semibold text-waymarks-ink dark:text-white">{title}</p>
+      <p className="mt-0.5 text-text-muted">{body}</p>
+      {vendorLine && <p className="mt-0.5 text-text-faint">{vendorLine}</p>}
+      {buttons.length > 0 && (
+        <div className="mt-2 flex flex-wrap gap-2">
+          {buttons.map((b) => {
+            const Icon = b.service ? Wrench : ShoppingCart;
+            return (
+              <a
+                key={b.label}
+                href={b.href}
+                {...(external ? { target: '_blank', rel: 'noopener noreferrer' } : {})}
+                className={
+                  'inline-flex h-8 items-center gap-1.5 rounded-md px-3 text-xs font-medium ' +
+                  (b.primary
+                    ? 'bg-waymarks-gold text-white hover:bg-waymarks-gold-deep'
+                    : 'border border-waymarks-gold text-waymarks-ink hover:bg-waymarks-gold-soft dark:text-white')
+                }
+              >
+                <Icon size={12} aria-hidden />
+                {b.label}
+              </a>
+            );
+          })}
+        </div>
+      )}
     </div>
   );
 }
