@@ -1,4 +1,4 @@
-import { lazy, Suspense, useEffect, useState } from 'react';
+import { lazy, Suspense, useEffect, useState, type ComponentType } from 'react';
 import { Navigate, Route, Routes, useLocation, useNavigate } from 'react-router-dom';
 import { MutationCache, QueryCache, QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import * as RadixTooltip from '@radix-ui/react-tooltip';
@@ -16,47 +16,93 @@ import { CookieConsent } from '@/components/waymarks/CookieConsent';
 import { handleQueryError, isAuthExpiredError, onSessionLost } from '@/lib/queryErrorHandler';
 import { useAppBoot } from '@/hooks/useBundles';
 
+// A new deploy replaces hashed JS chunks. A device holding the old index.html
+// can request a chunk the new build already removed; Netlify serves the HTML
+// fallback in its place, the browser refuses to run HTML as a module
+// ("'text/html' is not a valid JavaScript MIME type"), and the Suspense
+// boundary throws "something went wrong" (intermittent, worst right after a
+// deploy, never reaches client_errors because it fails before that chunk
+// loads). Catch the dynamic-import failure and do ONE full reload to pull the
+// fresh index.html + asset manifest. A session flag prevents a reload loop on a
+// genuinely-broken chunk.
+const CHUNK_RELOAD_KEY = 'markur:chunk-reloaded';
+function lazyWithReload<T extends ComponentType<unknown>>(
+  factory: () => Promise<{ default: T }>
+) {
+  return lazy(() =>
+    factory().then(
+      (mod) => {
+        try {
+          sessionStorage.removeItem(CHUNK_RELOAD_KEY);
+        } catch {
+          /* storage unavailable */
+        }
+        return mod;
+      },
+      (err: unknown) => {
+        let reloaded = false;
+        try {
+          reloaded = !!sessionStorage.getItem(CHUNK_RELOAD_KEY);
+        } catch {
+          /* storage unavailable */
+        }
+        if (!reloaded) {
+          try {
+            sessionStorage.setItem(CHUNK_RELOAD_KEY, '1');
+          } catch {
+            /* storage unavailable */
+          }
+          window.location.reload();
+          // Hang until the reload takes over so React doesn't render the error.
+          return new Promise<{ default: T }>(() => {});
+        }
+        throw err; // already reloaded once and still failing — surface it
+      }
+    )
+  );
+}
+
 // Code-splitting (M12): non-critical routes are lazy-loaded so the initial
 // bundle stays lean. Floor in particular pulls pdfjs-dist (~1.4 MB raw),
 // which used to ship in main.js even when the user never opened a floor.
 // Home + ProtectedRoute stay eager because they're hit immediately after
 // the auth check.
-const Building = lazy(() => import('@/routes/Building').then((m) => ({ default: m.Building })));
-const Floor = lazy(() => import('@/routes/Floor').then((m) => ({ default: m.Floor })));
-const FloorCatalogue = lazy(() =>
+const Building = lazyWithReload(() => import('@/routes/Building').then((m) => ({ default: m.Building })));
+const Floor = lazyWithReload(() => import('@/routes/Floor').then((m) => ({ default: m.Floor })));
+const FloorCatalogue = lazyWithReload(() =>
   import('@/routes/FloorCatalogue').then((m) => ({ default: m.FloorCatalogue }))
 );
-const Report = lazy(() => import('@/routes/Report').then((m) => ({ default: m.Report })));
-const Login = lazy(() => import('@/routes/Login').then((m) => ({ default: m.Login })));
-const ResetPassword = lazy(() =>
+const Report = lazyWithReload(() => import('@/routes/Report').then((m) => ({ default: m.Report })));
+const Login = lazyWithReload(() => import('@/routes/Login').then((m) => ({ default: m.Login })));
+const ResetPassword = lazyWithReload(() =>
   import('@/routes/ResetPassword').then((m) => ({ default: m.ResetPassword }))
 );
-const Trash = lazy(() => import('@/routes/Trash').then((m) => ({ default: m.Trash })));
-const BuildingSettings = lazy(() =>
+const Trash = lazyWithReload(() => import('@/routes/Trash').then((m) => ({ default: m.Trash })));
+const BuildingSettings = lazyWithReload(() =>
   import('@/routes/BuildingSettings').then((m) => ({ default: m.BuildingSettings }))
 );
-const AcceptInvitation = lazy(() =>
+const AcceptInvitation = lazyWithReload(() =>
   import('@/routes/AcceptInvitation').then((m) => ({ default: m.AcceptInvitation }))
 );
-const BuildingShare = lazy(() =>
+const BuildingShare = lazyWithReload(() =>
   import('@/routes/BuildingShare').then((m) => ({ default: m.BuildingShare }))
 );
-const Help = lazy(() => import('@/routes/Help').then((m) => ({ default: m.Help })));
-const Settings = lazy(() => import('@/routes/Settings').then((m) => ({ default: m.Settings })));
-const Privacy = lazy(() => import('@/routes/Privacy').then((m) => ({ default: m.Privacy })));
-const Terms = lazy(() => import('@/routes/Terms').then((m) => ({ default: m.Terms })));
+const Help = lazyWithReload(() => import('@/routes/Help').then((m) => ({ default: m.Help })));
+const Settings = lazyWithReload(() => import('@/routes/Settings').then((m) => ({ default: m.Settings })));
+const Privacy = lazyWithReload(() => import('@/routes/Privacy').then((m) => ({ default: m.Privacy })));
+const Terms = lazyWithReload(() => import('@/routes/Terms').then((m) => ({ default: m.Terms })));
 
 // M15 - Admin section (asset types, members, invitations, security, branding).
 // Each pane is its own lazy chunk so the admin tooling never lands in the
 // initial bundle for users who never visit /admin.
-const Admin = lazy(() => import('@/routes/Admin').then((m) => ({ default: m.Admin })));
-const AdminAssetTypesPane = lazy(() => import('@/components/waymarks/admin/AdminAssetTypesPane').then((m) => ({ default: m.AdminAssetTypesPane })));
-const AdminMembersPane = lazy(() => import('@/components/waymarks/admin/AdminMembersPane').then((m) => ({ default: m.AdminMembersPane })));
-const AdminInvitationsPane = lazy(() => import('@/components/waymarks/admin/AdminInvitationsPane').then((m) => ({ default: m.AdminInvitationsPane })));
-const AdminSecurityPane = lazy(() => import('@/components/waymarks/admin/AdminSecurityPane').then((m) => ({ default: m.AdminSecurityPane })));
-const AdminBrandingPane = lazy(() => import('@/components/waymarks/admin/AdminBrandingPane').then((m) => ({ default: m.AdminBrandingPane })));
-const AdminDirectoryPane = lazy(() => import('@/components/waymarks/admin/AdminDirectoryPane').then((m) => ({ default: m.AdminDirectoryPane })));
-const AdminDeletedBuildingsPane = lazy(() => import('@/components/waymarks/admin/AdminDeletedBuildingsPane').then((m) => ({ default: m.AdminDeletedBuildingsPane })));
+const Admin = lazyWithReload(() => import('@/routes/Admin').then((m) => ({ default: m.Admin })));
+const AdminAssetTypesPane = lazyWithReload(() => import('@/components/waymarks/admin/AdminAssetTypesPane').then((m) => ({ default: m.AdminAssetTypesPane })));
+const AdminMembersPane = lazyWithReload(() => import('@/components/waymarks/admin/AdminMembersPane').then((m) => ({ default: m.AdminMembersPane })));
+const AdminInvitationsPane = lazyWithReload(() => import('@/components/waymarks/admin/AdminInvitationsPane').then((m) => ({ default: m.AdminInvitationsPane })));
+const AdminSecurityPane = lazyWithReload(() => import('@/components/waymarks/admin/AdminSecurityPane').then((m) => ({ default: m.AdminSecurityPane })));
+const AdminBrandingPane = lazyWithReload(() => import('@/components/waymarks/admin/AdminBrandingPane').then((m) => ({ default: m.AdminBrandingPane })));
+const AdminDirectoryPane = lazyWithReload(() => import('@/components/waymarks/admin/AdminDirectoryPane').then((m) => ({ default: m.AdminDirectoryPane })));
+const AdminDeletedBuildingsPane = lazyWithReload(() => import('@/components/waymarks/admin/AdminDeletedBuildingsPane').then((m) => ({ default: m.AdminDeletedBuildingsPane })));
 
 function RouteFallback() {
   return (
