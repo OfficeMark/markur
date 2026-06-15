@@ -12,7 +12,7 @@ import { ProtectedRoute } from '@/routes/ProtectedRoute';
 import { OfflineSync } from '@/components/waymarks/OfflineSync';
 import { ErrorBoundary } from '@/components/waymarks/ErrorBoundary';
 import { CookieConsent } from '@/components/waymarks/CookieConsent';
-import { handleQueryError, onSessionLost } from '@/lib/queryErrorHandler';
+import { handleQueryError, isAuthExpiredError, onSessionLost } from '@/lib/queryErrorHandler';
 
 // Code-splitting (M12): non-critical routes are lazy-loaded so the initial
 // bundle stays lean. Floor in particular pulls pdfjs-dist (~1.4 MB raw),
@@ -86,7 +86,23 @@ const queryClient = new QueryClient({
       // are reasonable; per-table tuning lands as we add features.
       staleTime: 30_000,
       refetchOnWindowFocus: false,
-      retry: 1,
+      // Resilient retry. A request that goes out during the token-refresh
+      // window 401s transiently; retrying with a short backoff gives Supabase's
+      // autoRefreshToken time to land, so the query recovers instead of erroring
+      // (and, crucially, instead of firing handleQueryError → a false
+      // session-lost redirect). Network blips / 5xx get the same treatment.
+      // A genuine session loss still exhausts the retries and escalates.
+      retry: (failureCount, error) => {
+        if (failureCount >= 3) return false;
+        if (isAuthExpiredError(error)) return true;
+        const status =
+          (error as { status?: number; statusCode?: number })?.status ??
+          (error as { statusCode?: number })?.statusCode ??
+          0;
+        if (status === 0 || status >= 500) return true; // network / server blip
+        return failureCount < 1; // one retry for everything else
+      },
+      retryDelay: (attempt) => Math.min(400 * 2 ** attempt, 2000),
     },
   },
 });

@@ -1161,6 +1161,9 @@ export type Database = {
     }
     Functions: {
       claim_building_share: { Args: { p_token: string }; Returns: string }
+      get_app_boot: { Args: Record<PropertyKey, never>; Returns: Json }
+      get_building_view: { Args: { p_building_id: string }; Returns: Json }
+      get_floor_view: { Args: { p_floor_id: string }; Returns: Json }
       log_access: {
         Args: { p_action: string; p_entity_id?: string; p_entity_type?: string }
         Returns: undefined

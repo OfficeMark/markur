@@ -9,16 +9,21 @@ import { NewFloorDialog } from '@/components/waymarks/NewFloorDialog';
 import { ShareBuildingDialog } from '@/components/waymarks/ShareBuildingDialog';
 import { StepUpDialog } from '@/components/waymarks/StepUpDialog';
 import { ResumeAuditBanner } from '@/components/waymarks/ResumeAuditBanner';
-import { useBuilding, useSoftDeleteBuilding } from '@/hooks/useBuildings';
-import { useFloors } from '@/hooks/useFloors';
+import { SectionErrorBoundary } from '@/components/waymarks/SectionErrorBoundary';
+import { useSoftDeleteBuilding } from '@/hooks/useBuildings';
+import { useBuildingView } from '@/hooks/useBundles';
 import { useCan, useIsSuperAdmin } from '@/lib/permissions-context';
 import type { Floor } from '@/types/database';
 
 export function Building() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
-  const { data: building, isLoading: bLoading, error: bError } = useBuilding(id);
-  const { data: floors = [], isLoading: fLoading } = useFloors(id);
+  // One bundled call replaces the old building-open cascade (building + floors +
+  // tenants + access/audit fan-out). Fewer requests = faster on mobile and far
+  // less failure surface than ~20 separate sub-requests.
+  const { data: view, isLoading: bLoading, error: bError } = useBuildingView(id);
+  const building = view?.building ?? null;
+  const floors = view?.floors ?? [];
   const [newFloorOpen, setNewFloorOpen] = useState(false);
   const [shareOpen, setShareOpen] = useState(false);
   const [deleteOpen, setDeleteOpen] = useState(false);
@@ -82,7 +87,9 @@ export function Building() {
           </p>
         </header>
 
-        <ResumeAuditBanner buildingId={building.id} />
+        <SectionErrorBoundary>
+          <ResumeAuditBanner buildingId={building.id} />
+        </SectionErrorBoundary>
 
         <div className="mb-6 flex flex-wrap gap-2">
           <Tooltip text="Survey report: every asset in this building, grouped by floor.">
@@ -159,9 +166,7 @@ export function Building() {
               </Tooltip>
             )}
           </div>
-          {fLoading ? (
-            <FloorListSkeleton />
-          ) : floors.length === 0 ? (
+          {floors.length === 0 ? (
             <div className="rounded-lg border border-black/10 bg-surface p-4 dark:border-white/10">
               <p className="text-sm text-text-muted">No floors set up yet.</p>
               {canEdit && (
@@ -186,7 +191,9 @@ export function Building() {
 
         {canManageAccess && (
           <section className="mt-10">
-            <AccessManagementCard buildingId={building.id} />
+            <SectionErrorBoundary label="Access management">
+              <AccessManagementCard buildingId={building.id} />
+            </SectionErrorBoundary>
           </section>
         )}
 
@@ -288,16 +295,6 @@ function FloorCard({ floor }: { floor: Floor }) {
         {!floor.plan_url && <ImageOff size={14} aria-hidden className="text-text-faint" />}
       </Link>
     </li>
-  );
-}
-
-function FloorListSkeleton() {
-  return (
-    <ul className="grid grid-cols-1 gap-2 sm:grid-cols-2" aria-hidden>
-      {[0, 1, 2, 3].map((i) => (
-        <li key={i} className="h-16 animate-pulse rounded-lg border border-black/10 bg-surface dark:border-white/10" />
-      ))}
-    </ul>
   );
 }
 
