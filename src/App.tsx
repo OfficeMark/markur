@@ -25,6 +25,28 @@ import { useAppBoot } from '@/hooks/useBundles';
 // loads). Catch the dynamic-import failure and do ONE full reload to pull the
 // fresh index.html + asset manifest. A session flag prevents a reload loop on a
 // genuinely-broken chunk.
+// A failed chunk almost always means a stale shell — an old index.html or an old
+// service-worker precache asking for hashes the new build removed. A no-cache
+// header fixes the network path, but a partial cache-clear can leave the SW
+// still serving its precached old shell. So before reloading, drop the SW
+// registrations + Cache Storage so the reload pulls a fresh shell + manifest
+// from the network (the SW + offline cache re-populate on the next clean load).
+async function purgeCachesAndReload(): Promise<void> {
+  try {
+    if ('serviceWorker' in navigator) {
+      const regs = await navigator.serviceWorker.getRegistrations();
+      await Promise.all(regs.map((r) => r.unregister()));
+    }
+    if (typeof caches !== 'undefined') {
+      const keys = await caches.keys();
+      await Promise.all(keys.map((k) => caches.delete(k)));
+    }
+  } catch {
+    /* best-effort — reload anyway */
+  }
+  window.location.reload();
+}
+
 const CHUNK_RELOAD_KEY = 'markur:chunk-reloaded';
 function lazyWithReload<T extends ComponentType<unknown>>(
   factory: () => Promise<{ default: T }>
@@ -52,7 +74,7 @@ function lazyWithReload<T extends ComponentType<unknown>>(
           } catch {
             /* storage unavailable */
           }
-          window.location.reload();
+          void purgeCachesAndReload();
           // Hang until the reload takes over so React doesn't render the error.
           return new Promise<{ default: T }>(() => {});
         }

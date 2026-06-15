@@ -13,6 +13,13 @@
   status = 200
 
 # Sensible default headers (tighten further in M10).
+# The HTML shell is served at EVERY route ("/", "/buildings/:id", …) via the SPA
+# fallback, and the browser requests the bare route ("/"), never "/index.html" —
+# so no-cache must live on /* (a "/index.html" rule never matches the real
+# request). This makes a device always re-validate the shell after a deploy and
+# stop requesting chunk hashes the new build removed (the "'text/html' is not a
+# valid JavaScript MIME type" stale-chunk crash). /assets/* below is the more
+# specific / last rule, so hashed assets still win the immutable cache.
 [[headers]]
   for = "/*"
   [headers.values]
@@ -23,22 +30,9 @@
     # microphone must be granted to the same origin. Cross-origin embeds
     # still can't use them. Geolocation stays locked — we don't use it.
     Permissions-Policy = "camera=(self), microphone=(self), geolocation=()"
+    Cache-Control = "no-cache, must-revalidate"
 
 [[headers]]
   for = "/assets/*"
   [headers.values]
     Cache-Control = "public, max-age=31536000, immutable"
-
-# Hashed asset filenames are immutable (cached a year, above). index.html and the
-# service worker must NOT be cached, so a device always picks up the latest asset
-# manifest after a deploy and stops requesting chunk hashes the new build removed
-# (the "'text/html' is not a valid JavaScript MIME type" stale-chunk crash).
-[[headers]]
-  for = "/index.html"
-  [headers.values]
-    Cache-Control = "no-cache, must-revalidate"
-
-[[headers]]
-  for = "/sw.js"
-  [headers.values]
-    Cache-Control = "no-cache, must-revalidate"
