@@ -224,7 +224,9 @@ export function AssetDrawer({
                     onStartAuditHere ? () => onStartAuditHere(asset.id) : undefined
                   }
                 />
-                {!guest && (
+                {/* Visualize-on-a-wall is a signage mock-up tool — not relevant
+                    to facility pins (stairwells, service/utility rooms). */}
+                {!guest && asset.category === 'signage' && (
                   <VisualizeRow
                     buildingName={building?.name ?? 'Building'}
                     floorLabel={floor?.label ?? ''}
@@ -475,22 +477,31 @@ function VisualizeRow({
 }
 
 function orderMailto(toEmail: string, toName: string | undefined, asset: Asset): string {
-  const subject = `Order / request — ${asset.name}`;
+  const isFacility = asset.category === 'facility';
+  const subject = isFacility ? `Service request — ${asset.name}` : `Sign order — ${asset.name}`;
+  const action = isFacility
+    ? 'request service or a repair for'
+    : 'order a replacement or new sign for';
   const body =
     `Hi${toName ? ` ${toName}` : ''},\n\n` +
-    `I'd like to order a replacement or request service for "${asset.name}"` +
+    `I'd like to ${action} "${asset.name}"` +
     `${asset.room_number ? ` (room ${asset.room_number})` : ''}.\n\n` +
     `Details:\n\n\nThanks.`;
   return `mailto:${toEmail}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
 }
 
 /**
- * Item 3: "Order signs" is an action button targeted at the directory the pin
- * references. Priority:
+ * Action card targeted at the directory the pin references. Copy is driven by
+ * the asset's CATEGORY: signage pins read as "Order signs"; facility pins
+ * (stairwell / service room / utility room) read as "Request service" — a
+ * facility item is a maintenance job, not a sign order. Routing priority is the
+ * same for both:
  *   1. a linked vendor with an email → prefilled mailto draft
  *   2. a linked vendor with a URL    → opens the supplier site in a new tab
  *   3. the pin's contact with an email → prefilled mailto draft
- *   4. fallback                       → the Officemark order login
+ *   4. the building's configured external link (custom), else:
+ *      - signage  → the Officemark order login (default)
+ *      - facility → nothing (the sign-supplier fallback doesn't apply)
  */
 function OrderSignsRow({
   asset,
@@ -508,24 +519,29 @@ function OrderSignsRow({
     ? contacts.list.find((c) => c.id === asset.contact_id)
     : undefined;
 
+  const isFacility = asset.category === 'facility';
+  const actionPhrase = isFacility
+    ? 'request service or a repair'
+    : 'order a replacement or new sign';
+
   let href: string;
   let helper: string;
   let opensExternally: boolean;
-  let title = 'Order or request';
-  let buttonLabel = DEFAULT_ORDER_LABEL;
+  let title = isFacility ? 'Request service' : 'Order signs';
+  let buttonLabel = isFacility ? 'Request service' : DEFAULT_ORDER_LABEL;
   let custom = false;
   if (vendorEmail) {
     // A pin's own vendor/contact target always wins over the building default.
     href = orderMailto(vendorEmail.email!.trim(), vendorEmail.name, asset);
-    helper = `Email ${vendorEmail.name} to order a replacement or request service.`;
+    helper = `Email ${vendorEmail.name} to ${actionPhrase}.`;
     opensExternally = false;
   } else if (vendorUrl) {
     href = vendorUrlHref(vendorUrl.url!.trim());
-    helper = `Open ${vendorUrl.name}'s site to order or request service.`;
+    helper = `Open ${vendorUrl.name}'s site to ${actionPhrase}.`;
     opensExternally = true;
   } else if (contact?.email?.trim()) {
     href = orderMailto(contact.email.trim(), contact.label, asset);
-    helper = `Email ${contact.label} to order a replacement or request service.`;
+    helper = `Email ${contact.label} to ${actionPhrase}.`;
     opensExternally = false;
   } else if (externalLink.mode === 'hidden') {
     // Building opted out of a fallback button and the pin has no own target.
@@ -537,13 +553,18 @@ function OrderSignsRow({
     helper = 'Open this building’s configured link.';
     opensExternally = true;
     custom = true;
+  } else if (isFacility) {
+    // No own target, no custom link, and this is a facility item — the
+    // Officemark sign-order fallback doesn't apply. Show nothing rather than
+    // point a service request at a sign supplier.
+    return null;
   } else {
     href = DEFAULT_ORDER_URL;
-    helper = 'Order a replacement or request service for this item.';
+    helper = 'Order a replacement or new sign for this asset from Officemark.';
     opensExternally = true;
   }
 
-  const Icon = custom ? ExternalLink : ShoppingCart;
+  const Icon = custom ? ExternalLink : isFacility ? Wrench : ShoppingCart;
 
   return (
     <div className="flex items-center justify-between gap-3 rounded-md border border-waymarks-gold/30 bg-waymarks-gold-soft px-3 py-2 text-xs dark:bg-white/5">
