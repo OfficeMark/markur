@@ -54,11 +54,7 @@ export const auditKeys = {
     [...auditKeys.all, 'active', 'for-user', userId, buildingId ?? 'all'] as const,
 };
 
-export function useActiveAuditSession(
-  floorId: string | undefined,
-  userId: string | undefined,
-  opts?: { enabled?: boolean }
-) {
+export function useActiveAuditSession(floorId: string | undefined, userId: string | undefined) {
   return useQuery({
     queryKey:
       floorId && userId
@@ -66,10 +62,7 @@ export function useActiveAuditSession(
         : ['audit', 'active', 'none'],
     queryFn: () =>
       floorId && userId ? getActiveSessionForFloor(floorId, userId) : Promise.resolve(null),
-    // The floor page passes enabled:false: get_floor_view seeds this key, and
-    // start/end-audit patch it directly, so the page reads the seed without a
-    // second fetch.
-    enabled: (opts?.enabled ?? true) && !!floorId && !!userId,
+    enabled: !!floorId && !!userId,
   });
 }
 
@@ -182,19 +175,6 @@ export function useCreateAuditEvent(floorId: string | undefined) {
       qc.invalidateQueries({ queryKey: ['audit-log', 'assets', vars.asset_id] });
       if (vars.outcome === 'confirmed' && floorId) {
         qc.invalidateQueries({ queryKey: auditKeys.latestConfirmedByFloor(floorId) });
-        // Patch the map in place too: the floor page reads this from the
-        // get_floor_view seed with its own query disabled, so the invalidate
-        // above is a no-op there — this keeps the pin status colour live as the
-        // walkaround confirms pins (works offline; the synthetic event settles
-        // the same path).
-        qc.setQueryData<Map<string, string>>(
-          auditKeys.latestConfirmedByFloor(floorId),
-          (old) => {
-            const m = new Map(old ?? []);
-            m.set(vars.asset_id, new Date().toISOString());
-            return m;
-          }
-        );
       }
       // Pending count powers SyncChip; bump the surface even on success so
       // the chip can recompute (cheap query).
@@ -345,10 +325,7 @@ export function useSessionPendingEvents(sessionId: string | undefined): PendingA
  * stale-while-revalidate on top: writes back to Dexie on success, falls
  * back to the cache offline.
  */
-export function useLatestConfirmedByFloor(
-  floorId: string | undefined,
-  opts?: { enabled?: boolean }
-) {
+export function useLatestConfirmedByFloor(floorId: string | undefined) {
   return useQuery<Map<string, string>>({
     queryKey: floorId
       ? auditKeys.latestConfirmedByFloor(floorId)
@@ -367,10 +344,7 @@ export function useLatestConfirmedByFloor(
         throw err;
       }
     },
-    // The floor page passes enabled:false: get_floor_view seeds this map and
-    // useCreateAuditEvent patches it on each confirm, so the pin-status colours
-    // stay live without the floor re-fetching it on open.
-    enabled: (opts?.enabled ?? true) && !!floorId,
+    enabled: !!floorId,
   });
 }
 

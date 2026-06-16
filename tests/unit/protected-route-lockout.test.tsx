@@ -20,12 +20,6 @@ vi.mock('@/lib/permissions-context', () => ({
 vi.mock('@/lib/queries/organizations', () => ({
   getOrgStatus: vi.fn(async () => mockOrg),
 }));
-// useOrgSubscription now reads org status from the app_boot bundle first and
-// falls back to getOrgStatus when the org isn't in it. Mock app_boot as loaded
-// with no orgs so the fallback (getOrgStatus, above) drives these tests.
-vi.mock('@/hooks/useBundles', () => ({
-  useAppBoot: () => ({ data: { organizations: [] }, isLoading: false }),
-}));
 
 const ORG_ID = '124afbb7-d91e-494f-bf33-731c083e3ad1';
 const orgAdminGrant: Grant = {

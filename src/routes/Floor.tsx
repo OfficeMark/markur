@@ -20,6 +20,7 @@ import { AssetGridView } from '@/components/waymarks/AssetGridView';
 import { FilterByTypePopover } from '@/components/waymarks/FilterByTypePopover';
 import { FilterByTextInput } from '@/components/waymarks/FilterByTextInput';
 import { AuditVideoRecorderDialog } from '@/components/waymarks/AuditVideoRecorderDialog';
+import { useAssetsWithVideos } from '@/hooks/useAuditVideos';
 import { useSoftDeleteFloor } from '@/hooks/useFloors';
 import { useBuilding } from '@/hooks/useBuildings';
 import { useAssets, useSoftDeleteAsset, useUpdateAsset } from '@/hooks/useAssets';
@@ -45,14 +46,11 @@ import type { Asset } from '@/types/database';
 
 export function Floor() {
   const { id } = useParams<{ id: string }>();
-  const { user } = useAuth();
   // One bundled call is the floor's sole fetch: it returns floor + assets +
-  // per-pin photo rows + batch-signed thumbnail URLs + the audit data (active
-  // session, last-confirmed map, video flags), and seeds the per-entity caches
-  // the drawer + grid + audit hooks read. Passing the user id lets it seed the
-  // current user's active-session cache. The page no longer fires its own floor
-  // / assets / per-pin-photo / audit-session / last-confirmed / video requests.
-  const floorView = useFloorView(id, user?.id);
+  // per-pin photo rows + batch-signed thumbnail URLs, and seeds the per-entity
+  // caches the drawer + grid read. Floor + assets come straight off it now, so
+  // the page no longer fires its own floor / assets / per-pin-photo requests.
+  const floorView = useFloorView(id);
   const floor = floorView.data?.floor ?? null;
   const fLoading = floorView.isLoading;
   const fError = floorView.error as Error | null;
@@ -72,6 +70,7 @@ export function Floor() {
   // when this query resolves the pins repaint in the same pass — no remount,
   // no "black pins until you leave and come back".
   useAssetTypes();
+  const { user } = useAuth();
 
   const canUploadPlan = useCan('upload_plan', { type: 'building', id: floor?.building_id ?? '' });
   const canCreate = useCan('create', { type: 'building', id: floor?.building_id ?? '' });
@@ -85,12 +84,9 @@ export function Floor() {
   const [deleteFloorOpen, setDeleteFloorOpen] = useState(false);
   const [deleteFloorError, setDeleteFloorError] = useState<string | null>(null);
 
-  // M6 — audit walkaround. These read the caches get_floor_view seeds above
-  // (enabled:false → no own fetch); start/end-audit + the confirm patch keep
-  // them live, so the floor no longer fires its own active-session /
-  // last-confirmed requests on open.
-  const { data: lastAuditByAsset } = useLatestConfirmedByFloor(id, { enabled: false });
-  const { data: activeSession } = useActiveAuditSession(id, user?.id, { enabled: false });
+  // M6 — audit walkaround
+  const { data: lastAuditByAsset } = useLatestConfirmedByFloor(id);
+  const { data: activeSession } = useActiveAuditSession(id, user?.id);
   const startAudit = useStartAudit(id, user?.id);
   const [inAudit, setInAudit] = useState(false);
   // Pin to pre-select when entering Audit Mode (set by the AssetDrawer
@@ -129,13 +125,8 @@ export function Floor() {
 
   // M27 — building-level video recording (no asset selected).
   const [videoRecorderOpen, setVideoRecorderOpen] = useState(false);
-  // Which pins have a video — read from the get_floor_view bundle (it carries
-  // the asset ids with >=1 video), so the floor no longer fires a separate
-  // assets-with-videos query. Add/delete-video re-seed the bundle.
-  const assetsWithVideos = useMemo(
-    () => new Set(floorView.data?.asset_video_ids ?? []),
-    [floorView.data?.asset_video_ids]
-  );
+  const assetIds = useMemo(() => assets.map((a) => a.id), [assets]);
+  const { data: assetsWithVideos } = useAssetsWithVideos(floor?.building_id, assetIds);
 
   // Resolve a signed URL whenever the plan_url changes.
   useEffect(() => {

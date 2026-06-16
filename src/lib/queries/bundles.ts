@@ -1,5 +1,5 @@
 import { supabase } from '@/lib/supabase';
-import type { Asset, AssetPhoto, AuditSession, Building, Floor } from '@/types/database';
+import type { Asset, AssetPhoto, Building, Floor } from '@/types/database';
 import type { OrgBranding } from '@/lib/queries/branding';
 
 /**
@@ -14,16 +14,10 @@ import type { OrgBranding } from '@/lib/queries/branding';
 
 export type BuildingViewFloor = Floor & { pin_count: number };
 
-/** An open session in this building, with the floor label for the resume banner. */
-export type BuildingViewResumeSession = AuditSession & {
-  floor: { id: string; label: string };
-};
-
 export type BuildingView = {
   building: Building | null;
   floors: BuildingViewFloor[];
   tenants: unknown[];
-  resume_sessions: BuildingViewResumeSession[];
 };
 
 export async function getBuildingView(buildingId: string): Promise<BuildingView> {
@@ -36,7 +30,6 @@ export async function getBuildingView(buildingId: string): Promise<BuildingView>
     building: v.building ?? null,
     floors: v.floors ?? [],
     tenants: v.tenants ?? [],
-    resume_sessions: v.resume_sessions ?? [],
   };
 }
 
@@ -53,21 +46,10 @@ export type AppBootAssetType = {
   category: 'signage' | 'facility';
 };
 
-/** Org subscription/trial status — feeds useOrgSubscription (lockout gating). */
-export type AppBootOrg = {
-  id: string;
-  name: string;
-  plan: string | null;
-  subscription_status: string;
-  trial_ends_at: string | null;
-  current_period_end: string | null;
-};
-
 export type AppBoot = {
   buildings: AppBootBuilding[];
   branding: OrgBranding[];
   asset_types: AppBootAssetType[];
-  organizations: AppBootOrg[];
 };
 
 // --- get_floor_view -----------------------------------------------------------
@@ -77,12 +59,6 @@ export type FloorView = {
   assets: Asset[];
   /** Photos grouped per asset id. A pin with no photos has NO key. */
   photos: Record<string, AssetPhoto[]>;
-  /** The current user's open session on this floor, or null. */
-  active_audit_session?: AuditSession | null;
-  /** { asset_id: iso } newest CONFIRMED time per asset; never-confirmed absent. */
-  last_confirmed_by_asset?: Record<string, string>;
-  /** Asset ids on this floor with >=1 video. */
-  asset_video_ids?: string[];
 };
 
 export async function getFloorView(floorId: string): Promise<FloorView> {
@@ -93,9 +69,6 @@ export async function getFloorView(floorId: string): Promise<FloorView> {
     floor: v.floor ?? null,
     assets: v.assets ?? [],
     photos: v.photos ?? {},
-    active_audit_session: v.active_audit_session ?? null,
-    last_confirmed_by_asset: v.last_confirmed_by_asset ?? {},
-    asset_video_ids: v.asset_video_ids ?? [],
   };
 }
 
@@ -106,12 +79,10 @@ export async function getAppBoot(): Promise<AppBoot> {
     buildings?: AppBootBuilding[];
     branding?: OrgBranding[];
     asset_types?: AppBootAssetType[];
-    organizations?: AppBootOrg[];
   };
   return {
     buildings: v.buildings ?? [],
     branding: v.branding ?? [],
     asset_types: v.asset_types ?? [],
-    organizations: v.organizations ?? [],
   };
 }
