@@ -1,7 +1,8 @@
 import { supabase } from '@/lib/supabase';
-import type { Asset, AssetPhoto, AuditSession, Building, Floor } from '@/types/database';
+import type { Asset, AssetPhoto, AuditSession, Building, Floor, Profile } from '@/types/database';
 import type { OrgBranding } from '@/lib/queries/branding';
 import type { OrgAssetType, OrgAssetTypeOverride } from '@/lib/queries/asset-types';
+import type { Grant } from '@/lib/permissions-types';
 
 /**
  * Single-call screen bundles (web Claude's get_*_view DB functions). Each RPC is
@@ -57,6 +58,8 @@ export type AppBootOrg = {
 };
 
 export type AppBoot = {
+  profile: Profile | null;
+  grants: Grant[];
   buildings: AppBootBuilding[];
   branding: OrgBranding[];
   organizations: AppBootOrg[];
@@ -69,6 +72,8 @@ export async function getAppBoot(): Promise<AppBoot> {
   const { data, error } = await supabase.rpc('get_app_boot');
   if (error) throw error;
   const v = (data ?? {}) as {
+    profile?: Profile | null;
+    grants?: Grant[];
     buildings?: AppBootBuilding[];
     branding?: OrgBranding[];
     organizations?: AppBootOrg[];
@@ -76,6 +81,8 @@ export async function getAppBoot(): Promise<AppBoot> {
     asset_type_overrides?: OrgAssetTypeOverride[];
   };
   return {
+    profile: v.profile ?? null,
+    grants: v.grants ?? [],
     buildings: v.buildings ?? [],
     branding: v.branding ?? [],
     organizations: v.organizations ?? [],

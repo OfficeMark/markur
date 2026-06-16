@@ -9,6 +9,7 @@ import {
   type NewFloorInput,
 } from '@/lib/queries/floors';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { useAppBootRaw } from '@/hooks/useAppBootQuery';
 
 export const floorKeys = {
   all: ['floors'] as const,
@@ -16,16 +17,28 @@ export const floorKeys = {
   detail: (id: string) => [...floorKeys.all, 'detail', id] as const,
 };
 
+/**
+ * Floors for a building — read from the app_boot bundle (buildings carry their
+ * floors nested), falling back to a fetch only if the bundle lacks the building.
+ * Mutations invalidate ['app-boot'] (+ building-view) so floors refresh.
+ */
 export function useFloors(buildingId: string | undefined) {
-  return useQuery({
+  const boot = useAppBootRaw();
+  const fromBoot =
+    buildingId && boot.data
+      ? boot.data.buildings.find((b) => b.id === buildingId)?.floors ?? null
+      : null;
+  const query = useQuery({
     queryKey: buildingId ? floorKeys.byBuilding(buildingId) : ['floors', 'by-building', 'none'],
     queryFn: () => (buildingId ? listFloorsByBuilding(buildingId) : Promise.resolve([])),
-    enabled: !!buildingId,
-    // Stable + invalidated on mutation; a longer staleTime lets the get_app_boot
-    // seed (per-building floors) satisfy the sidebar nav instead of re-fetching
-    // every building's floors one at a time on each navigation.
+    enabled: !!buildingId && !fromBoot && !boot.isLoading,
     staleTime: 5 * 60_000,
   });
+  return {
+    ...query,
+    data: fromBoot ?? query.data,
+    isLoading: !buildingId ? false : fromBoot ? false : boot.isLoading || query.isLoading,
+  };
 }
 
 /**
@@ -45,7 +58,12 @@ export class FloorNotReadyError extends Error {
 }
 
 export function useFloor(id: string | undefined) {
-  return useQuery({
+  const boot = useAppBootRaw();
+  const fromBoot =
+    id && boot.data
+      ? boot.data.buildings.flatMap((b) => b.floors).find((f) => f.id === id) ?? null
+      : null;
+  const query = useQuery({
     queryKey: id ? floorKeys.detail(id) : ['floors', 'detail', 'none'],
     queryFn: async () => {
       if (!id) return null;
@@ -53,14 +71,18 @@ export function useFloor(id: string | undefined) {
       if (floor === null) throw new FloorNotReadyError();
       return floor;
     },
-    enabled: !!id,
-    // Retry only the transient "not visible yet" miss, briefly, so the first
-    // 60 seconds of a fresh signup (create building → create floor → open it)
-    // doesn't dead-end on a hard "floor not found".
+    // Read from app_boot when it carries the floor; otherwise fetch (covers the
+    // fresh-signup race below, where a brand-new floor isn't in the bundle yet).
+    enabled: !!id && !fromBoot && !boot.isLoading,
     retry: (failureCount, error) =>
       error instanceof FloorNotReadyError && failureCount < 3,
     retryDelay: (attempt) => Math.min(300 * 2 ** attempt, 1200),
   });
+  return {
+    ...query,
+    data: fromBoot ?? query.data,
+    isLoading: !id ? false : fromBoot ? false : boot.isLoading || query.isLoading,
+  };
 }
 
 export function useCreateFloor(buildingId: string | undefined) {
@@ -75,6 +97,9 @@ export function useCreateFloor(buildingId: string | undefined) {
     onSuccess: () => {
       if (buildingId) qc.invalidateQueries({ queryKey: floorKeys.byBuilding(buildingId) });
       qc.invalidateQueries({ queryKey: floorKeys.all });
+      // Floors are read from the bundles now — refresh them too.
+      qc.invalidateQueries({ queryKey: ['app-boot'] });
+      qc.invalidateQueries({ queryKey: ['building-view'] });
     },
   });
 }
@@ -87,6 +112,8 @@ export function useSoftDeleteFloor(buildingId: string | undefined) {
       qc.invalidateQueries({ queryKey: floorKeys.detail(id) });
       if (buildingId) qc.invalidateQueries({ queryKey: floorKeys.byBuilding(buildingId) });
       qc.invalidateQueries({ queryKey: floorKeys.all });
+      qc.invalidateQueries({ queryKey: ['app-boot'] });
+      qc.invalidateQueries({ queryKey: ['building-view'] });
     },
   });
 }
@@ -102,6 +129,10 @@ export function useSetFloorProvenance(floorId: string | undefined, buildingId?: 
     onSuccess: () => {
       if (floorId) qc.invalidateQueries({ queryKey: floorKeys.detail(floorId) });
       if (buildingId) qc.invalidateQueries({ queryKey: floorKeys.byBuilding(buildingId) });
+      // Floor row is read from the bundles now — refresh them.
+      qc.invalidateQueries({ queryKey: ['app-boot'] });
+      qc.invalidateQueries({ queryKey: ['building-view'] });
+      if (floorId) qc.invalidateQueries({ queryKey: ['floor-view', floorId] });
     },
   });
 }
@@ -117,6 +148,10 @@ export function useSetFloorNotes(floorId: string | undefined, buildingId?: strin
     onSuccess: () => {
       if (floorId) qc.invalidateQueries({ queryKey: floorKeys.detail(floorId) });
       if (buildingId) qc.invalidateQueries({ queryKey: floorKeys.byBuilding(buildingId) });
+      // Floor row is read from the bundles now — refresh them.
+      qc.invalidateQueries({ queryKey: ['app-boot'] });
+      qc.invalidateQueries({ queryKey: ['building-view'] });
+      if (floorId) qc.invalidateQueries({ queryKey: ['floor-view', floorId] });
     },
   });
 }

@@ -13,9 +13,8 @@ import {
   type PinSize,
   type SaveOrgBrandingInput,
 } from '@/lib/queries/branding';
-import { useBuildings } from '@/hooks/useBuildings';
 import { usePermissions } from '@/lib/permissions-context';
-import type { AppBoot } from '@/lib/queries/bundles';
+import { useAppBootRaw } from '@/hooks/useAppBootQuery';
 
 export const brandingKeys = {
   all: ['branding'] as const,
@@ -23,24 +22,21 @@ export const brandingKeys = {
 };
 
 export function useOrgBranding(orgIdOverride?: string | null) {
-  const { data: buildings } = useBuildings();
   const { grants } = usePermissions();
-  // Read-only subscription to the app_boot cache (populated by useAppBoot at
-  // the app root). enabled:false → never fetches here; just re-renders when the
-  // bundle lands. (A direct import of useAppBoot would cycle: useBundles imports
-  // brandingKeys from this module.)
-  const boot = useQuery<AppBoot>({ queryKey: ['app-boot'], enabled: false });
-  // Resolve the org id from the early org-scope grant before falling back to the
-  // (late-loading) buildings list, so branding/logo fetches in parallel with
-  // boot instead of behind buildings. Same pattern as useAssetTypes.
+  // The shared app_boot query (real loading state) — carries branding for every
+  // org the user can see, so the always-mounted logo / pin appearance don't fire
+  // a separate org_branding request.
+  const boot = useAppBootRaw();
+  // Resolve the org id from the org-scope grant, falling back to the owning org
+  // of any visible building (read from app_boot, not a separate buildings fetch).
   //
-  // Guests have no org grant and an empty buildings list → null; the guest path
-  // passes the viewed building's owner_org_id explicitly via orgIdOverride.
+  // Guests have no org grant → null; the guest path passes the viewed building's
+  // owner_org_id explicitly via orgIdOverride.
   const derivedOrgId = useMemo<string | null>(() => {
     const fromGrant = grants.find((g) => g.scope_type === 'organization')?.scope_id;
     if (fromGrant) return fromGrant;
-    return buildings?.find((b) => b.owner_org_id)?.owner_org_id ?? null;
-  }, [grants, buildings]);
+    return boot.data?.buildings.find((b) => b.owner_org_id)?.owner_org_id ?? null;
+  }, [grants, boot.data]);
   const orgId = orgIdOverride !== undefined ? orgIdOverride : derivedOrgId;
 
   // Authed path: read this org's branding straight from the app_boot bundle (it
@@ -54,8 +50,10 @@ export function useOrgBranding(orgIdOverride?: string | null) {
   const query = useQuery<OrgBranding | null>({
     queryKey: brandingKeys.byOrg(orgId),
     queryFn: () => (orgId ? getOrgBranding(orgId) : Promise.resolve(null)),
-    // Only fetch when we can't read it from app_boot (guest, or boot not yet in).
-    enabled: orgId !== null && (isGuest || (!fromBoot && !boot.isLoading)),
+    // Fetch only when app_boot can't answer: a guest (no bundle), or the bundle
+    // failed to load (no data and not loading). When the bundle IS loaded we
+    // trust it fully — an org absent from it simply has no branding row.
+    enabled: orgId !== null && (isGuest || (!boot.data && !boot.isLoading)),
     staleTime: 30_000,
   });
 
@@ -76,7 +74,11 @@ export function useSaveBranding() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: (input: SaveOrgBrandingInput) => saveOrgBranding(input),
-    onSuccess: () => qc.invalidateQueries({ queryKey: brandingKeys.all }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: brandingKeys.all });
+      // Branding is read from app_boot now — refresh it so the change shows.
+      qc.invalidateQueries({ queryKey: ['app-boot'] });
+    },
   });
 }
 

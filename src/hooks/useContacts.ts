@@ -35,7 +35,9 @@ export function useContacts() {
     queryKey: contactKeys.byOrg(orgId),
     queryFn: () => listContactsForOrg(orgId),
     enabled: orgId !== null,
-    staleTime: 30_000,
+    // Org-level + rarely changes — cache for the session so the Add-asset panel
+    // and asset drawer read it warm instead of refetching on every open.
+    staleTime: 5 * 60_000,
   });
   return { ...query, orgId, list: query.data ?? [] };
 }

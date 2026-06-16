@@ -6,9 +6,13 @@ import { PermissionsContext, type PermissionsState } from './permissions-context
 import type { Grant } from './permissions-types';
 
 /**
- * Loads the signed-in user's access_grants and exposes them via context. The
- * empty-state acceptance criterion in M1 turns on this exact data: a fresh
- * sign-up has zero rows here, which renders "no buildings yet."
+ * Loads the signed-in user's access_grants and exposes them via context.
+ *
+ * NOTE: get_app_boot also returns the user's grants, but we deliberately keep
+ * this dedicated fetch as the source. Grants gate EVERY capability check, and a
+ * shape mismatch (or an empty list misparsed from the bundle) would silently
+ * deny all access — a far worse failure than one small, fast query. Fold this
+ * into app_boot only once the bundle's grants shape is verified end-to-end.
  */
 export function PermissionsProvider({ children }: { children: ReactNode }) {
   const { user, loading: authLoading } = useAuth();

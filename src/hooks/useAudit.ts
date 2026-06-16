@@ -30,6 +30,7 @@ import {
 } from '@/lib/offline';
 import { useEffect, useState } from 'react';
 import type { AuditEvent, AuditSession } from '@/types/database';
+import type { BuildingView } from '@/lib/queries/bundles';
 
 /**
  * Audit walkaround hooks (M6).
@@ -399,13 +400,40 @@ export function useActiveAuditSessionsForUser(
   userId: string | undefined,
   buildingId?: string
 ): { data: ActiveSessionWithLabels[] | undefined; isLoading: boolean } {
-  return useQuery({
+  // Building-scoped: read the open sessions straight from the building_view
+  // bundle (it carries resume_sessions), so the banner fires no separate
+  // audit_sessions query on the building page. The cross-building Home banner
+  // (no buildingId) still fetches — there's no bundle covering all buildings.
+  const bv = useQuery<BuildingView>({
+    queryKey: buildingId ? ['building-view', buildingId] : ['building-view', 'none'],
+    enabled: false,
+  });
+  const fromBundle: ActiveSessionWithLabels[] | null =
+    buildingId && bv.data
+      ? bv.data.resume_sessions.map((s) => ({
+          id: s.id,
+          floor_id: s.floor_id,
+          floor_label: s.floor.label,
+          building_id: buildingId,
+          building_name: bv.data?.building?.name ?? '',
+          started_at: s.started_at,
+        }))
+      : null;
+
+  const query = useQuery({
     queryKey: userId
       ? auditKeys.activeForUser(userId, buildingId ?? null)
       : ['audit', 'active', 'for-user', 'none'],
     queryFn: () =>
       userId ? listActiveSessionsForUser(userId, buildingId) : Promise.resolve([]),
-    enabled: !!userId,
+    // Only the Home (cross-building) case fetches; the building page reads the
+    // bundle above.
+    enabled: !!userId && !buildingId,
   });
+
+  if (buildingId) {
+    return { data: fromBundle ?? [], isLoading: false };
+  }
+  return { data: query.data, isLoading: query.isLoading };
 }
 

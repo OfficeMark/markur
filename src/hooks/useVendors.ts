@@ -22,7 +22,8 @@ export function useVendors() {
     queryKey: vendorKeys.byOrg(orgId),
     queryFn: () => listVendorsForOrg(orgId),
     enabled: orgId !== null,
-    staleTime: 30_000,
+    // Org-level + rarely changes — cache for the session (asset drawer reads warm).
+    staleTime: 5 * 60_000,
   });
   return { ...query, orgId, list: query.data ?? [] };
 }

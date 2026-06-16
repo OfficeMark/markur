@@ -19,6 +19,13 @@ vi.mock('@/lib/queries/floors', () => ({
   softDeleteFloor: vi.fn(),
 }));
 
+// useFloor now reads app_boot first (and falls back to getFloor when the bundle
+// lacks the floor). Stub the bundle as loaded-but-empty so this test exercises
+// the getFloor fallback / retry path it's guarding.
+vi.mock('@/hooks/useAppBootQuery', () => ({
+  useAppBootRaw: () => ({ data: undefined, isLoading: false }),
+}));
+
 import { useFloor } from '@/hooks/useFloors';
 
 const floor = { id: 'f1', label: 'Ground', building_id: 'b1', plan_url: null } as unknown as Floor;

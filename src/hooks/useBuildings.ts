@@ -17,6 +17,7 @@ import {
 import type { PinShape, PinSize } from '@/lib/queries/branding';
 import { accessKeys } from '@/hooks/useAccess';
 import { floorKeys } from '@/hooks/useFloors';
+import { useAppBootRaw } from '@/hooks/useAppBootQuery';
 
 export const buildingKeys = {
   all: ['buildings'] as const,
@@ -25,22 +26,42 @@ export const buildingKeys = {
   photoUrl: (path: string) => ['building-photos', 'signed', path] as const,
 };
 
+/**
+ * The buildings list — read straight from the app_boot bundle (which carries
+ * every building the user can see). Falls back to its own fetch only if the
+ * bundle errored or genuinely lacks it, so this is never worse than fetching.
+ * Mutations invalidate ['app-boot'] so the list refreshes after edits.
+ */
 export function useBuildings() {
-  return useQuery({
+  const boot = useAppBootRaw();
+  const fromBoot = boot.data ? boot.data.buildings.map(({ floors: _f, ...b }) => b) : null;
+  const query = useQuery({
     queryKey: buildingKeys.list(),
     queryFn: listBuildings,
-    // Stable + invalidated on mutation; a longer staleTime lets the get_app_boot
-    // seed satisfy the sidebar nav across navigations instead of re-fetching.
+    enabled: !fromBoot && !boot.isLoading,
     staleTime: 5 * 60_000,
   });
+  return {
+    ...query,
+    data: fromBoot ?? query.data,
+    isLoading: fromBoot ? false : boot.isLoading || query.isLoading,
+  };
 }
 
 export function useBuilding(id: string | undefined) {
-  return useQuery({
+  const boot = useAppBootRaw();
+  const bootRow = id && boot.data ? boot.data.buildings.find((b) => b.id === id) : undefined;
+  const fromBoot = bootRow ? (({ floors: _f, ...b }) => b)(bootRow) : null;
+  const query = useQuery({
     queryKey: id ? buildingKeys.detail(id) : ['buildings', 'detail', 'none'],
     queryFn: () => (id ? getBuilding(id) : Promise.resolve(null)),
-    enabled: !!id,
+    enabled: !!id && !fromBoot && !boot.isLoading,
   });
+  return {
+    ...query,
+    data: fromBoot ?? query.data,
+    isLoading: !id ? false : fromBoot ? false : boot.isLoading || query.isLoading,
+  };
 }
 
 /**
@@ -54,6 +75,7 @@ export function useCreateBuilding() {
     mutationFn: (input: NewBuildingInput) => createBuilding(input),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: buildingKeys.list() });
+      qc.invalidateQueries({ queryKey: ['app-boot'] });
       qc.invalidateQueries({ queryKey: accessKeys.all });
     },
   });
@@ -70,6 +92,7 @@ export function useCreateBuildingNoReturn() {
     mutationFn: (input: NewBuildingInput) => createBuildingNoReturn(input),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: buildingKeys.list() });
+      qc.invalidateQueries({ queryKey: ['app-boot'] });
       qc.invalidateQueries({ queryKey: accessKeys.all });
     },
   });
@@ -106,6 +129,7 @@ export function useUploadBuildingPhoto(buildingId: string | undefined) {
     onSuccess: (b) => {
       qc.invalidateQueries({ queryKey: buildingKeys.detail(b.id) });
       qc.invalidateQueries({ queryKey: buildingKeys.list() });
+      qc.invalidateQueries({ queryKey: ['app-boot'] });
     },
   });
 }
@@ -126,6 +150,7 @@ export function useSoftDeleteBuilding() {
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: buildingKeys.all });
       qc.invalidateQueries({ queryKey: floorKeys.all });
+      qc.invalidateQueries({ queryKey: ['app-boot'] });
       qc.invalidateQueries({ queryKey: accessKeys.all });
     },
   });
@@ -139,6 +164,7 @@ export function useRestoreBuilding() {
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: buildingKeys.all });
       qc.invalidateQueries({ queryKey: floorKeys.all });
+      qc.invalidateQueries({ queryKey: ['app-boot'] });
     },
   });
 }
@@ -154,6 +180,7 @@ export function useSetBuildingPinAppearance(buildingId: string | undefined) {
     onSuccess: (b) => {
       qc.invalidateQueries({ queryKey: buildingKeys.detail(b.id) });
       qc.invalidateQueries({ queryKey: buildingKeys.list() });
+      qc.invalidateQueries({ queryKey: ['app-boot'] });
     },
   });
 }
@@ -169,6 +196,7 @@ export function useSetBuildingExternalLink(buildingId: string | undefined) {
     onSuccess: (b) => {
       qc.invalidateQueries({ queryKey: buildingKeys.detail(b.id) });
       qc.invalidateQueries({ queryKey: buildingKeys.list() });
+      qc.invalidateQueries({ queryKey: ['app-boot'] });
     },
   });
 }
@@ -183,6 +211,7 @@ export function useRemoveBuildingPhoto(buildingId: string | undefined) {
     onSuccess: (b) => {
       qc.invalidateQueries({ queryKey: buildingKeys.detail(b.id) });
       qc.invalidateQueries({ queryKey: buildingKeys.list() });
+      qc.invalidateQueries({ queryKey: ['app-boot'] });
     },
   });
 }

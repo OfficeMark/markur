@@ -18,9 +18,8 @@ import {
   type UpdateAssetTypePatch,
 } from '@/lib/queries/asset-types';
 import { setRuntimeAssetTypes, type AssetTypeColor } from '@/lib/pin-types';
-import { useBuildings } from '@/hooks/useBuildings';
 import { usePermissions } from '@/lib/permissions-context';
-import { useAppBoot } from '@/hooks/useBundles';
+import { useAppBootRaw } from '@/hooks/useAppBootQuery';
 
 export const assetTypeKeys = {
   all: ['asset-types'] as const,
@@ -46,34 +45,27 @@ export const assetTypeKeys = {
  * colorForType() / labelForType() callers see effective values.
  */
 export function useAssetTypes(orgIdOverride?: string | null) {
-  const { data: buildings } = useBuildings();
   const { grants } = usePermissions();
+  // The shared app_boot query — carries the raw asset_types + overrides AND the
+  // buildings we resolve the org id from, so this hook fires no separate
+  // org_asset_types / overrides / buildings requests.
+  const boot = useAppBootRaw();
 
-  // Resolve the org id as early as possible so the colour catalogue fetches in
-  // parallel with the rest of boot instead of waiting for the buildings list
-  // (which lands several seconds in — that's why pins drew before their colours
-  // on a cold load). The org-scope grant arrives right after the user, so prefer
-  // it; fall back to the owning org of any visible building for users who only
-  // hold a building-scope grant.
-  //
-  // Guests have a viewer grant but no session org and useBuildings() returns [],
-  // so both resolve to null — the guest path passes the viewed building's
-  // owner_org_id explicitly via orgIdOverride instead.
+  // Resolve the org id from the org-scope grant, falling back to the owning org
+  // of any visible building (read from app_boot). Guests have no org grant →
+  // null; the guest path passes the viewed building's owner_org_id explicitly.
   const derivedOrgId = useMemo<string | null>(() => {
     const fromGrant = grants.find((g) => g.scope_type === 'organization')?.scope_id;
     if (fromGrant) return fromGrant;
-    return buildings?.find((b) => b.owner_org_id)?.owner_org_id ?? null;
-  }, [grants, buildings]);
+    return boot.data?.buildings.find((b) => b.owner_org_id)?.owner_org_id ?? null;
+  }, [grants, boot.data]);
   const orgId = orgIdOverride !== undefined ? orgIdOverride : derivedOrgId;
   const isGuest = orgIdOverride !== undefined;
 
-  // Authed path: build the effective catalogue from the app_boot bundle (it
-  // carries the raw asset_types + overrides), so the floor / filter UI don't
-  // fire a separate org_asset_types + overrides pair. Defensive: only trust the
-  // bundle when its rows are full catalogue rows (have id + sort_order) — older
-  // app_boot shapes fall through to the dedicated fetch, so this can't break the
-  // admin catalogue. Guests (orgIdOverride set) have no app_boot → always fetch.
-  const boot = useAppBoot();
+  // Authed path: build the effective catalogue from the app_boot bundle.
+  // Defensive: only trust the bundle when its rows are full catalogue rows (have
+  // id + sort_order) — otherwise fall through to the dedicated fetch, so this
+  // can't break the admin catalogue. Guests have no app_boot → always fetch.
   const bootRows = !isGuest ? boot.data?.asset_types : undefined;
   const bootResult = useMemo<ListEffectiveResult | null>(() => {
     if (isGuest || orgId === null || !bootRows) return null;
