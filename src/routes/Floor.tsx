@@ -21,7 +21,7 @@ import { FilterByTypePopover } from '@/components/waymarks/FilterByTypePopover';
 import { FilterByTextInput } from '@/components/waymarks/FilterByTextInput';
 import { AuditVideoRecorderDialog } from '@/components/waymarks/AuditVideoRecorderDialog';
 import { useAssetsWithVideos } from '@/hooks/useAuditVideos';
-import { useSoftDeleteFloor } from '@/hooks/useFloors';
+import { useFloor, useSoftDeleteFloor } from '@/hooks/useFloors';
 import { useBuilding } from '@/hooks/useBuildings';
 import { useAssets, useSoftDeleteAsset, useUpdateAsset } from '@/hooks/useAssets';
 import { useAssetTypes } from '@/hooks/useAssetTypes';
@@ -46,24 +46,18 @@ import type { Asset } from '@/types/database';
 
 export function Floor() {
   const { id } = useParams<{ id: string }>();
-  // One bundled call is the floor's sole fetch: it returns floor + assets +
-  // per-pin photo rows + batch-signed thumbnail URLs, and seeds the per-entity
-  // caches the drawer + grid read. Floor + assets come straight off it now, so
-  // the page no longer fires its own floor / assets / per-pin-photo requests.
-  const floorView = useFloorView(id);
-  const floor = floorView.data?.floor ?? null;
-  const fLoading = floorView.isLoading;
-  const fError = floorView.error as Error | null;
+  const { data: floor, isLoading: fLoading, error: fError } = useFloor(id);
   const { data: building } = useBuilding(floor?.building_id);
   const pinAppearance = useMemo(
     () => pinAppearanceFromSettings(building?.settings),
     [building?.settings]
   );
-  // Read the floor's assets from the cache the bundle above seeds (enabled:false
-  // → no second fetch). The optimistic lock/drag patches still target this same
-  // key, so the canvas stays live; create / delete / lock-all re-seed via the
-  // bundle (see useAssets mutations).
-  const { data: assets = [] } = useAssets(id, { enabled: false });
+  const { data: assets = [] } = useAssets(id);
+  // One bundled call seeds the per-pin photo rows + batch-signed thumbnail URLs
+  // (and floor/assets), collapsing the grid's per-pin photo N+1. useFloor /
+  // useAssets above stay the source of truth so the optimistic lock/drag edits
+  // keep working; this just warms the caches the grid + drawer read.
+  useFloorView(id);
   // Subscribe the floor to the org asset-type catalog so the pin layer
   // re-renders (and recolours) the instant the colours load. useAssetTypes
   // writes the colour map into pin-types synchronously during its render, so
