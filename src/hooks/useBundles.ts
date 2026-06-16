@@ -6,10 +6,18 @@ import { floorKeys } from '@/hooks/useFloors';
 import { assetKeys } from '@/hooks/useAssets';
 import { assetPhotoKeys } from '@/hooks/useAssetPhotos';
 import { brandingKeys } from '@/hooks/useBranding';
+import { auditKeys } from '@/hooks/useAudit';
 import { signedAssetPhotoUrls } from '@/lib/queries/asset-photos';
 import { setRuntimeAssetTypes, type AssetTypeColor } from '@/lib/pin-types';
 import { useAuth } from '@/lib/auth-context';
-import { getAssetsForFloor, getFloor, putAssetsForFloor, putFloor } from '@/lib/offline';
+import {
+  getAssetsForFloor,
+  getFloor,
+  getLastAuditsForFloor,
+  putAssetsForFloor,
+  putFloor,
+  putLastAudits,
+} from '@/lib/offline';
 import type { FloorView } from '@/lib/queries/bundles';
 
 export const bundleKeys = {
@@ -96,29 +104,41 @@ export function useBuildingView(buildingId: string | undefined) {
  * photo rows separately AND signs each thumbnail one at a time. Here we seed all
  * the photo rows from the bundle and batch-sign every path in a single pass.
  */
-export function useFloorView(floorId: string | undefined) {
+export function useFloorView(floorId: string | undefined, userId?: string) {
   const qc = useQueryClient();
   const query = useQuery({
     queryKey: floorId ? bundleKeys.floorView(floorId) : ['floor-view', 'none'],
     queryFn: async (): Promise<FloorView> => {
       try {
         const view = await getFloorView(floorId!);
-        // Mirror floor + assets into Dexie so the audit walkaround has them
-        // offline even without an explicit "take offline" tap — the same
-        // background writeback useAssets did before the floor read moved here.
+        // Mirror floor + assets + last-confirmed into Dexie so the audit
+        // walkaround has them offline even without an explicit "take offline"
+        // tap — the same background writeback useAssets / useLatestConfirmed did
+        // before those reads moved here.
         if (view.floor) void putFloor(view.floor).catch(() => undefined);
         void putAssetsForFloor(floorId!, view.assets).catch(() => undefined);
+        void putLastAudits(
+          floorId!,
+          new Map(Object.entries(view.last_confirmed_by_asset ?? {}))
+        ).catch(() => undefined);
         return view;
       } catch (err) {
-        // Offline / RPC unreachable — rebuild floor + assets from the Dexie
-        // cache so the audit walkaround still works offline. Photos aren't
-        // cached offline (they're signed-URL only), so none are returned.
-        const [floor, assets] = await Promise.all([
+        // Offline / RPC unreachable — rebuild floor + assets + last-confirmed
+        // from the Dexie cache so the audit walkaround still works offline.
+        // Photos aren't cached offline (signed-URL only); active session and
+        // video flags stay undefined so the seed below leaves their caches be.
+        const [floor, assets, lastConfirmed] = await Promise.all([
           getFloor(floorId!).catch(() => undefined),
           getAssetsForFloor(floorId!).catch(() => [] as never[]),
+          getLastAuditsForFloor(floorId!).catch(() => new Map<string, string>()),
         ]);
         if (!floor && assets.length === 0) throw err; // nothing cached → surface it
-        return { floor: floor ?? null, assets, photos: {} };
+        return {
+          floor: floor ?? null,
+          assets,
+          photos: {},
+          last_confirmed_by_asset: Object.fromEntries(lastConfirmed),
+        };
       }
     },
     enabled: !!floorId,
@@ -132,6 +152,19 @@ export function useFloorView(floorId: string | undefined) {
     for (const a of data.assets) {
       qc.setQueryData(assetKeys.detail(a.id), a);
       qc.setQueryData(assetPhotoKeys.forAsset(a.id), data.photos[a.id] ?? []);
+    }
+    // Audit data folded into the bundle (expanded get_floor_view). Seed the
+    // per-entity caches the floor's (now disabled) audit hooks read. Each is
+    // seeded only when present so the offline Dexie fallback — which omits the
+    // active session + video flags — doesn't clobber a warmer cached value.
+    if (userId && data.active_audit_session !== undefined) {
+      qc.setQueryData(auditKeys.activeForFloor(floorId, userId), data.active_audit_session);
+    }
+    if (data.last_confirmed_by_asset !== undefined) {
+      qc.setQueryData(
+        auditKeys.latestConfirmedByFloor(floorId),
+        new Map(Object.entries(data.last_confirmed_by_asset))
+      );
     }
     // Batch-sign every photo path on the floor in one request, then seed the
     // per-path URL cache so the grid thumbnails read warm (no per-pin signing).
@@ -150,7 +183,7 @@ export function useFloorView(floorId: string | undefined) {
         })
         .catch(() => undefined);
     }
-  }, [floorId, data, qc]);
+  }, [floorId, userId, data, qc]);
 
   return query;
 }
