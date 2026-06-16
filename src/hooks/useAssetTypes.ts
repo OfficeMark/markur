@@ -67,6 +67,10 @@ export function useAssetTypes(orgIdOverride?: string | null) {
   const query = useQuery<ListEffectiveResult>({
     queryKey: assetTypeKeys.list(orgId),
     queryFn: () => listEffectiveAssetTypes(orgId),
+    // Don't fetch with a null org (no org → nothing to fetch). Waiting for the
+    // resolved org id avoids a throwaway null-org fetch firing before grants /
+    // buildings land — that was the duplicate org_asset_types call in the logs.
+    enabled: orgId !== null,
     staleTime: 60_000,
   });
 

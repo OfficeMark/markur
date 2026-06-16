@@ -2,10 +2,10 @@ import { useState } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import * as Dialog from '@radix-ui/react-dialog';
 import { Building2, Layers, ChevronRight, Menu, Plus, X } from 'lucide-react';
-import { useBuildings } from '@/hooks/useBuildings';
-import { useFloors } from '@/hooks/useFloors';
+import { useAppBoot } from '@/hooks/useBundles';
+import type { AppBootBuilding } from '@/lib/queries/bundles';
 import { cn } from '@/lib/utils';
-import type { Building, Floor } from '@/types/database';
+import type { Floor } from '@/types/database';
 import { NewBuildingDialog } from '@/components/waymarks/NewBuildingDialog';
 
 /**
@@ -66,7 +66,11 @@ export function BuildingNavSheet() {
 }
 
 function NavList({ onNavigate }: { onNavigate?: () => void }) {
-  const { data: buildings, isLoading } = useBuildings();
+  // Read buildings + their floors straight from the get_app_boot bundle (one
+  // call) instead of fetching the buildings list AND every building's floors
+  // separately — the sidebar's floors-per-building N+1.
+  const { data: boot, isLoading } = useAppBoot();
+  const buildings = boot?.buildings;
   const [createOpen, setCreateOpen] = useState(false);
 
   return (
@@ -117,10 +121,11 @@ function BuildingItem({
   building,
   onNavigate,
 }: {
-  building: Building;
+  building: AppBootBuilding;
   onNavigate?: () => void;
 }) {
-  const { data: floors } = useFloors(building.id);
+  // Floors come nested in the app_boot bundle — no per-building fetch.
+  const floors = building.floors;
   const location = useLocation();
   const buildingActive = location.pathname === `/buildings/${building.id}`;
 
@@ -128,11 +133,11 @@ function BuildingItem({
   // drill-in via the chevron toggle. We auto-expand when the current route
   // belongs to this building (its building page, or one of its floors) so
   // deep links and refreshes still show the active floor in context.
-  const floorActive = !!floors?.some((f) => location.pathname === `/floors/${f.id}`);
+  const floorActive = floors.some((f) => location.pathname === `/floors/${f.id}`);
   const autoExpand = buildingActive || floorActive;
   const [manualExpanded, setManualExpanded] = useState<boolean | null>(null);
   const expanded = manualExpanded ?? autoExpand;
-  const hasFloors = !!(floors && floors.length > 0);
+  const hasFloors = floors.length > 0;
 
   return (
     <li>
@@ -170,7 +175,7 @@ function BuildingItem({
       </div>
       {hasFloors && expanded && (
         <ul className="ml-4 mt-1 space-y-0.5">
-          {floors!.map((f) => (
+          {floors.map((f) => (
             <FloorItem key={f.id} floor={f} onNavigate={onNavigate} />
           ))}
         </ul>

@@ -54,6 +54,15 @@ vi.mock('@/hooks/useFloors', () => ({
   useFloor: () => ({ data: ground, isLoading: false }),
 }));
 
+// BuildingNav now reads buildings + their nested floors from the get_app_boot
+// bundle instead of useBuildings/useFloors.
+vi.mock('@/hooks/useBundles', () => ({
+  useAppBoot: () => ({
+    data: { buildings: [{ ...exampleBuilding, floors: [ground] }], branding: [], asset_types: [] },
+    isLoading: false,
+  }),
+}));
+
 // NewBuildingDialog reads the permissions context; without a real
 // <PermissionsProvider> in the tree the hook throws, so stub the module.
 vi.mock('@/lib/permissions-context', () => ({
