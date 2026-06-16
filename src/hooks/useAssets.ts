@@ -25,6 +25,16 @@ export const assetKeys = {
     [...assetKeys.all, 'building-has-any', buildingId] as const,
 };
 
+/** Apply `fn` to the floor's cached asset list in place (no refetch). */
+function patchFloorList(
+  qc: ReturnType<typeof useQueryClient>,
+  floorId: string | undefined,
+  fn: (list: Asset[]) => Asset[]
+) {
+  if (!floorId) return;
+  qc.setQueryData<Asset[]>(assetKeys.byFloor(floorId), (old) => fn(old ?? []));
+}
+
 /**
  * True if this building has at least one live pin on any live floor. Used by
  * WelcomeCard to decide whether the "Place your first pin" setup step is
@@ -44,10 +54,13 @@ export function useBuildingHasAnyAsset(buildingId: string | undefined) {
 /**
  * Stale-while-revalidate read of assets on a floor. Tries the network; on
  * success, writes back to the Dexie cache. On failure (offline, unreachable
- * Supabase), falls back to whatever's in Dexie. The audit walkaround is
- * the highest-value offline surface and depends on this.
+ * Supabase), falls back to whatever's in Dexie.
+ *
+ * The floor page passes enabled:false: there, get_floor_view is the sole fetch
+ * and seeds this query's cache, and the mutations below patch it in place — so
+ * the floor never double-fetches its assets nor re-fetches them after an edit.
  */
-export function useAssets(floorId: string | undefined) {
+export function useAssets(floorId: string | undefined, opts?: { enabled?: boolean }) {
   return useQuery({
     queryKey: floorId ? assetKeys.byFloor(floorId) : ['assets', 'by-floor', 'none'],
     queryFn: async () => {
@@ -63,7 +76,7 @@ export function useAssets(floorId: string | undefined) {
         throw err;
       }
     },
-    enabled: !!floorId,
+    enabled: (opts?.enabled ?? true) && !!floorId,
   });
 }
 
@@ -80,15 +93,21 @@ export function useCreateAsset() {
   return useMutation({
     mutationFn: (input: CreateAssetInput) => createAsset(input),
     onSuccess: (asset) => {
-      qc.invalidateQueries({ queryKey: assetKeys.byFloor(asset.floor_id) });
+      // Patch the floor list in place — no refetch. The new pin appears on the
+      // canvas immediately and the floor page (which reads this cache) updates.
+      patchFloorList(qc, asset.floor_id, (list) =>
+        list.some((a) => a.id === asset.id) ? list : [...list, asset]
+      );
+      qc.setQueryData(assetKeys.detail(asset.id), asset);
     },
   });
 }
 
 /**
  * Optimistically applies the patch to the local caches before the network
- * request lands. This is critical for the drag-to-nudge UX: without it the
- * pin "snaps back" between releasing the pointer and the refetch completing.
+ * request lands (critical for drag-to-nudge: without it the pin snaps back),
+ * then writes the authoritative server row back IN PLACE on success — no
+ * invalidate, so a pin edit never triggers a full-floor refetch.
  *
  * If the request fails, the cache is rolled back from the snapshot we took.
  */
@@ -129,24 +148,24 @@ export function useUpdateAsset(floorId: string | undefined) {
         qc.setQueryData(ctx.listKey, ctx.prevList);
       }
     },
-    onSettled: (asset) => {
-      // Re-fetch authoritative data; if the mutation succeeded our optimistic
-      // value matches and the refetch is a no-op for the user.
-      if (asset) {
-        qc.invalidateQueries({ queryKey: assetKeys.detail(asset.id) });
-      }
-      if (floorId) qc.invalidateQueries({ queryKey: assetKeys.byFloor(floorId) });
+    onSuccess: (asset) => {
+      // Write the authoritative returned row into both caches IN PLACE. No
+      // invalidate → no GET id, no GET assets?floor_id. The optimistic value
+      // already matched; this just reconciles any server-set fields.
+      if (!asset) return;
+      qc.setQueryData(assetKeys.detail(asset.id), asset);
+      patchFloorList(qc, floorId, (list) =>
+        list.map((a) => (a.id === asset.id ? asset : a))
+      );
     },
   });
 }
 
 /**
  * Lock or unlock every live pin on a floor at once (the "Lock all / Unlock all"
- * control). The RPC writes straight to the DB, bypassing the per-pin optimistic
- * path, so we invalidate the floor's asset list + the per-asset detail caches on
- * success. That refetch re-derives each pin's lock styling and draggable flag on
- * the canvas — the same live re-render the single-pin toggle gets — with no page
- * reload. Resolves to the number of pins changed (for the count toast).
+ * control). The RPC writes straight to the DB; we patch the floor list + each
+ * per-asset detail cache IN PLACE so the canvas re-derives lock styling without
+ * a refetch. Resolves to the number of pins changed (for the count toast).
  */
 export function useSetFloorPinsLocked(floorId: string | undefined) {
   const qc = useQueryClient();
@@ -155,10 +174,13 @@ export function useSetFloorPinsLocked(floorId: string | undefined) {
       if (!floorId) throw new Error('No floor');
       return setFloorPinsLocked(floorId, locked);
     },
-    onSuccess: () => {
-      if (floorId) qc.invalidateQueries({ queryKey: assetKeys.byFloor(floorId) });
-      // An open AssetDrawer reads the per-asset detail query — refresh those too.
-      qc.invalidateQueries({ queryKey: [...assetKeys.all, 'detail'] });
+    onSuccess: (_count, locked) => {
+      if (!floorId) return;
+      const list = qc.getQueryData<Asset[]>(assetKeys.byFloor(floorId)) ?? [];
+      const next = list.map((a) => ({ ...a, is_locked: locked }) as Asset);
+      qc.setQueryData(assetKeys.byFloor(floorId), next);
+      // Keep the per-asset detail caches an open drawer reads in sync too.
+      for (const a of next) qc.setQueryData(assetKeys.detail(a.id), a);
     },
   });
 }
@@ -168,8 +190,9 @@ export function useSoftDeleteAsset(floorId: string | undefined) {
   return useMutation({
     mutationFn: (id: string) => softDeleteAsset(id),
     onSuccess: (_data, id) => {
-      qc.invalidateQueries({ queryKey: assetKeys.detail(id) });
-      if (floorId) qc.invalidateQueries({ queryKey: assetKeys.byFloor(floorId) });
+      // Drop the pin from the floor list in place — no refetch.
+      patchFloorList(qc, floorId, (list) => list.filter((a) => a.id !== id));
+      qc.removeQueries({ queryKey: assetKeys.detail(id) });
       // Any open Trash view should pick up the new entry.
       qc.invalidateQueries({ queryKey: [...assetKeys.all, 'deleted-by-building'] });
     },
@@ -196,7 +219,9 @@ export function useRestoreAsset(buildingId: string | undefined) {
   return useMutation({
     mutationFn: (id: string) => restoreAsset(id),
     onSuccess: () => {
-      // Restored asset reappears on its floor, so invalidate everything.
+      // Restored asset reappears on its floor. We don't know which floor here,
+      // so re-seed any open floor via its bundle + refresh the trash list.
+      qc.invalidateQueries({ queryKey: ['floor-view'] });
       qc.invalidateQueries({ queryKey: assetKeys.all });
       if (buildingId) {
         qc.invalidateQueries({ queryKey: assetKeys.deletedByBuilding(buildingId) });

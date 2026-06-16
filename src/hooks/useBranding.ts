@@ -15,6 +15,7 @@ import {
 } from '@/lib/queries/branding';
 import { useBuildings } from '@/hooks/useBuildings';
 import { usePermissions } from '@/lib/permissions-context';
+import type { AppBoot } from '@/lib/queries/bundles';
 
 export const brandingKeys = {
   all: ['branding'] as const,
@@ -24,6 +25,11 @@ export const brandingKeys = {
 export function useOrgBranding(orgIdOverride?: string | null) {
   const { data: buildings } = useBuildings();
   const { grants } = usePermissions();
+  // Read-only subscription to the app_boot cache (populated by useAppBoot at
+  // the app root). enabled:false → never fetches here; just re-renders when the
+  // bundle lands. (A direct import of useAppBoot would cycle: useBundles imports
+  // brandingKeys from this module.)
+  const boot = useQuery<AppBoot>({ queryKey: ['app-boot'], enabled: false });
   // Resolve the org id from the early org-scope grant before falling back to the
   // (late-loading) buildings list, so branding/logo fetches in parallel with
   // boot instead of behind buildings. Same pattern as useAssetTypes.
@@ -37,22 +43,33 @@ export function useOrgBranding(orgIdOverride?: string | null) {
   }, [grants, buildings]);
   const orgId = orgIdOverride !== undefined ? orgIdOverride : derivedOrgId;
 
+  // Authed path: read this org's branding straight from the app_boot bundle (it
+  // carries branding for every org the user can see), so the AppShell logo /
+  // pin appearance don't fire a separate org_branding request. The guest path
+  // (orgIdOverride set) has no app_boot, so it keeps its own fetch.
+  const isGuest = orgIdOverride !== undefined;
+  const fromBoot =
+    !isGuest && orgId ? boot.data?.branding.find((b) => b.org_id === orgId) ?? null : null;
+
   const query = useQuery<OrgBranding | null>({
     queryKey: brandingKeys.byOrg(orgId),
     queryFn: () => (orgId ? getOrgBranding(orgId) : Promise.resolve(null)),
-    enabled: orgId !== null,
+    // Only fetch when we can't read it from app_boot (guest, or boot not yet in).
+    enabled: orgId !== null && (isGuest || (!fromBoot && !boot.isLoading)),
     staleTime: 30_000,
   });
 
+  const branding = fromBoot ?? query.data ?? null;
+
   const logoUrl = useMemo(
-    () => logoPublicUrl(query.data?.logo_path ?? null),
-    [query.data?.logo_path]
+    () => logoPublicUrl(branding?.logo_path ?? null),
+    [branding?.logo_path]
   );
 
-  const pinShape: PinShape = query.data?.pin_shape ?? DEFAULT_PIN_SHAPE;
-  const pinSize: PinSize = query.data?.pin_size ?? DEFAULT_PIN_SIZE;
+  const pinShape: PinShape = branding?.pin_shape ?? DEFAULT_PIN_SHAPE;
+  const pinSize: PinSize = branding?.pin_size ?? DEFAULT_PIN_SIZE;
 
-  return { ...query, orgId, branding: query.data ?? null, logoUrl, pinShape, pinSize };
+  return { ...query, orgId, branding, logoUrl, pinShape, pinSize };
 }
 
 export function useSaveBranding() {

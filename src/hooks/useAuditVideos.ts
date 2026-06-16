@@ -58,6 +58,9 @@ export function useAddAuditVideo() {
         qc.invalidateQueries({ queryKey: auditVideoKeys.forAsset(input.assetId) });
       }
       qc.invalidateQueries({ queryKey: ['audit_videos', 'has_for_assets', input.buildingId] });
+      // The floor reads its video badges from get_floor_view; re-seed it. Video
+      // record is a rare action, not the per-pin hot path, so a refetch is fine.
+      qc.invalidateQueries({ queryKey: ['floor-view'] });
     },
   });
 }
@@ -72,6 +75,8 @@ export function useDeleteAuditVideo(buildingId: string) {
         qc.invalidateQueries({ queryKey: auditVideoKeys.forAsset(video.asset_id) });
       }
       qc.invalidateQueries({ queryKey: ['audit_videos', 'has_for_assets', buildingId] });
+      // The floor reads its video badges from get_floor_view; re-seed it.
+      qc.invalidateQueries({ queryKey: ['floor-view'] });
     },
   });
 }

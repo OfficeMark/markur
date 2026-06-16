@@ -118,7 +118,19 @@ export async function listEffectiveAssetTypes(
   // overrides still gives org-specific types their own colours/labels, rather
   // than throwing the whole catalogue back to gray defaults.
   const overrides = orgId ? await listOverrides(orgId).catch(() => []) : [];
+  return mergeEffectiveAssetTypes(rows, overrides, orgId);
+}
 
+/**
+ * Pure merge of raw catalogue rows + overrides → the effective list. Extracted
+ * so the get_app_boot bundle (which already returns asset_types + overrides)
+ * can build the exact same result client-side without a second round trip.
+ */
+export function mergeEffectiveAssetTypes(
+  rows: OrgAssetType[],
+  overrides: OrgAssetTypeOverride[],
+  orgId: string | null
+): ListEffectiveResult {
   const overrideByKey = new Map<string, OrgAssetTypeOverride>();
   for (const o of overrides) overrideByKey.set(o.global_key, o);
 

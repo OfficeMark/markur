@@ -1,14 +1,24 @@
 import { useEffect } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { getAppBoot, getBuildingView, getFloorView } from '@/lib/queries/bundles';
+import type { FloorView } from '@/lib/queries/bundles';
 import { buildingKeys } from '@/hooks/useBuildings';
 import { floorKeys } from '@/hooks/useFloors';
 import { assetKeys } from '@/hooks/useAssets';
 import { assetPhotoKeys } from '@/hooks/useAssetPhotos';
 import { brandingKeys } from '@/hooks/useBranding';
+import { auditKeys } from '@/hooks/useAudit';
 import { signedAssetPhotoUrls } from '@/lib/queries/asset-photos';
 import { setRuntimeAssetTypes, type AssetTypeColor } from '@/lib/pin-types';
 import { useAuth } from '@/lib/auth-context';
+import {
+  getAssetsForFloor,
+  getFloor,
+  getLastAuditsForFloor,
+  putAssetsForFloor,
+  putFloor,
+  putLastAudits,
+} from '@/lib/offline';
 
 export const bundleKeys = {
   appBoot: ['app-boot'] as const,
@@ -17,11 +27,11 @@ export const bundleKeys = {
 };
 
 /**
- * One-call app boot: buildings (with nested floors) + org branding + the colour
- * catalogue. Seeds the per-entity caches the sidebar nav and lists read, so
- * BuildingNav stops re-fetching every building's floors one at a time (the
- * "buildings + floors-per-building" cascade) — that work now rides this single
- * RPC. Profile + grants stay in their own (deduped) context fetches.
+ * One-call app boot: buildings (with nested floors) + branding + org status +
+ * the asset-type catalogue. Seeds the per-entity caches the rest of the app
+ * reads, so a cold load fires this ONE call instead of the buildings / floors /
+ * branding / organizations / asset-type cascade. Profile + grants still come
+ * from their own providers (they gate auth, so we don't move them).
  */
 export function useAppBoot() {
   const qc = useQueryClient();
@@ -37,13 +47,15 @@ export function useAppBoot() {
   useEffect(() => {
     if (!data) return;
     // Buildings list (drop the nested floors to keep the plain Building[] shape).
-    qc.setQueryData(
-      buildingKeys.list(),
-      data.buildings.map(({ floors: _floors, ...b }) => b)
-    );
-    // Per-building floors — what the nav otherwise fetches one building at a time.
+    const plainBuildings = data.buildings.map(({ floors: _floors, ...b }) => b);
+    qc.setQueryData(buildingKeys.list(), plainBuildings);
+    // Per-building detail + floors — what the building page / nav otherwise
+    // fetch one at a time. Seeding detail keeps useBuilding(id) warm on the
+    // floor page so it doesn't fire its own buildings request.
     for (const b of data.buildings) {
-      qc.setQueryData(floorKeys.byBuilding(b.id), b.floors);
+      const { floors: floorsOfB, ...plain } = b;
+      qc.setQueryData(buildingKeys.detail(b.id), plain);
+      qc.setQueryData(floorKeys.byBuilding(b.id), floorsOfB);
     }
     // Org branding per org (logo + pin appearance).
     for (const br of data.branding) {
@@ -63,11 +75,9 @@ export function useAppBoot() {
 }
 
 /**
- * One-call building screen: building + floors (with pin counts) + tenants.
- * Replaces the old building-open cascade (useBuilding + useFloors + access +
- * audit-session + …) — the path that was intermittently throwing "something
- * went wrong". After it resolves we seed the per-entity caches so the sidebar
- * nav and back-navigation read warm data instead of re-fetching.
+ * One-call building screen: building + floors (with pin counts) + tenants +
+ * the user's open sessions (resume banner). Seeds the per-entity caches so the
+ * sidebar nav and back-navigation read warm data instead of re-fetching.
  */
 export function useBuildingView(buildingId: string | undefined) {
   const qc = useQueryClient();
@@ -88,17 +98,48 @@ export function useBuildingView(buildingId: string | undefined) {
 }
 
 /**
- * One-call floor screen: floor + assets + per-pin photos (grouped) + catalogue.
- * Seeds the per-entity caches the floor view and its drawer read, and — the main
- * win — collapses the per-pin photo N+1: the grid otherwise fetches every pin's
- * photo rows separately AND signs each thumbnail one at a time. Here we seed all
- * the photo rows from the bundle and batch-sign every path in a single pass.
+ * One-call floor screen: floor + assets + per-pin photos (grouped) + the audit
+ * data (active session, last-confirmed map, video flags). The floor page reads
+ * everything off this bundle (its per-table hooks are disabled there) and the
+ * pin mutations patch the seeded caches IN PLACE — so a pin action never
+ * re-fetches the floor. Offline-resilient: rebuilds floor + assets +
+ * last-confirmed from Dexie when the RPC is unreachable.
  */
-export function useFloorView(floorId: string | undefined) {
+export function useFloorView(floorId: string | undefined, userId?: string) {
   const qc = useQueryClient();
   const query = useQuery({
     queryKey: floorId ? bundleKeys.floorView(floorId) : ['floor-view', 'none'],
-    queryFn: () => getFloorView(floorId!),
+    queryFn: async (): Promise<FloorView> => {
+      try {
+        const view = await getFloorView(floorId!);
+        // Mirror into Dexie so the audit walkaround works offline even without
+        // an explicit "take offline" tap (the writeback the per-table hooks
+        // used to do, now that the floor reads from here).
+        if (view.floor) void putFloor(view.floor).catch(() => undefined);
+        void putAssetsForFloor(floorId!, view.assets).catch(() => undefined);
+        void putLastAudits(
+          floorId!,
+          new Map(Object.entries(view.last_confirmed_by_asset ?? {}))
+        ).catch(() => undefined);
+        return view;
+      } catch (err) {
+        // Offline / RPC unreachable — rebuild from Dexie. Photos are signed-URL
+        // only (not cached); active session + video flags stay undefined so the
+        // seed below leaves those caches untouched.
+        const [floor, assets, lastConfirmed] = await Promise.all([
+          getFloor(floorId!).catch(() => undefined),
+          getAssetsForFloor(floorId!).catch(() => [] as never[]),
+          getLastAuditsForFloor(floorId!).catch(() => new Map<string, string>()),
+        ]);
+        if (!floor && assets.length === 0) throw err;
+        return {
+          floor: floor ?? null,
+          assets,
+          photos: {},
+          last_confirmed_by_asset: Object.fromEntries(lastConfirmed),
+        };
+      }
+    },
     enabled: !!floorId,
   });
 
@@ -111,11 +152,25 @@ export function useFloorView(floorId: string | undefined) {
       qc.setQueryData(assetKeys.detail(a.id), a);
       qc.setQueryData(assetPhotoKeys.forAsset(a.id), data.photos[a.id] ?? []);
     }
+    // Audit caches the (disabled) floor hooks read. Seed only when present so
+    // the offline fallback — which omits the active session + video flags —
+    // doesn't clobber a warmer cached value.
+    if (userId && data.active_audit_session !== undefined) {
+      qc.setQueryData(auditKeys.activeForFloor(floorId, userId), data.active_audit_session);
+    }
+    if (data.last_confirmed_by_asset !== undefined) {
+      qc.setQueryData(
+        auditKeys.latestConfirmedByFloor(floorId),
+        new Map(Object.entries(data.last_confirmed_by_asset))
+      );
+    }
     // Batch-sign every photo path on the floor in one request, then seed the
-    // per-path URL cache so the grid thumbnails read warm (no per-pin signing).
+    // per-path URL cache so the grid thumbnails read warm. Skip already-signed
+    // paths so a re-seed (e.g. after navigating back) doesn't re-sign.
     const paths = Object.values(data.photos)
       .flat()
-      .map((p) => p.path);
+      .map((p) => p.path)
+      .filter((p) => qc.getQueryData(assetPhotoKeys.signedUrl(p)) === undefined);
     if (paths.length) {
       void signedAssetPhotoUrls(paths)
         .then((map) => {
@@ -125,7 +180,7 @@ export function useFloorView(floorId: string | undefined) {
         })
         .catch(() => undefined);
     }
-  }, [floorId, data, qc]);
+  }, [floorId, userId, data, qc]);
 
   return query;
 }

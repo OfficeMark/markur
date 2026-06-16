@@ -6,6 +6,7 @@ import {
   createAssetType,
   deleteAssetType,
   listEffectiveAssetTypes,
+  mergeEffectiveAssetTypes,
   setOverride,
   updateAssetType,
   type EffectiveAssetType,
@@ -19,6 +20,7 @@ import {
 import { setRuntimeAssetTypes, type AssetTypeColor } from '@/lib/pin-types';
 import { useBuildings } from '@/hooks/useBuildings';
 import { usePermissions } from '@/lib/permissions-context';
+import { useAppBoot } from '@/hooks/useBundles';
 
 export const assetTypeKeys = {
   all: ['asset-types'] as const,
@@ -63,16 +65,35 @@ export function useAssetTypes(orgIdOverride?: string | null) {
     return buildings?.find((b) => b.owner_org_id)?.owner_org_id ?? null;
   }, [grants, buildings]);
   const orgId = orgIdOverride !== undefined ? orgIdOverride : derivedOrgId;
+  const isGuest = orgIdOverride !== undefined;
+
+  // Authed path: build the effective catalogue from the app_boot bundle (it
+  // carries the raw asset_types + overrides), so the floor / filter UI don't
+  // fire a separate org_asset_types + overrides pair. Defensive: only trust the
+  // bundle when its rows are full catalogue rows (have id + sort_order) — older
+  // app_boot shapes fall through to the dedicated fetch, so this can't break the
+  // admin catalogue. Guests (orgIdOverride set) have no app_boot → always fetch.
+  const boot = useAppBoot();
+  const bootRows = !isGuest ? boot.data?.asset_types : undefined;
+  const bootResult = useMemo<ListEffectiveResult | null>(() => {
+    if (isGuest || orgId === null || !bootRows) return null;
+    const first = bootRows[0];
+    const full =
+      !first || ('id' in first && 'sort_order' in first && 'category' in first);
+    if (!full) return null;
+    return mergeEffectiveAssetTypes(bootRows, boot.data?.asset_type_overrides ?? [], orgId);
+  }, [isGuest, orgId, bootRows, boot.data?.asset_type_overrides]);
 
   const query = useQuery<ListEffectiveResult>({
     queryKey: assetTypeKeys.list(orgId),
     queryFn: () => listEffectiveAssetTypes(orgId),
-    // Don't fetch with a null org (no org → nothing to fetch). Waiting for the
-    // resolved org id avoids a throwaway null-org fetch firing before grants /
-    // buildings land — that was the duplicate org_asset_types call in the logs.
-    enabled: orgId !== null,
+    // Fetch only when we can't build it from app_boot: guests, or the bundle
+    // didn't carry a usable catalogue (and isn't still loading).
+    enabled: orgId !== null && !bootResult && (isGuest || !boot.isLoading),
     staleTime: 60_000,
   });
+
+  const data = bootResult ?? query.data;
 
   // Push the effective map into the module-level runtime catalog that the sync
   // colorForType()/labelForType() helpers read. Hidden entries stay in the map
@@ -84,19 +105,16 @@ export function useAssetTypes(orgIdOverride?: string | null) {
   // so pins drew before the colours existed and only recoloured on a remount
   // (the "black pins until you leave and come back" bug).
   const effectiveMap = useMemo(() => {
-    if (!query.data) return null;
+    if (!data) return null;
     const map: Record<string, AssetTypeColor> = {};
-    for (const t of query.data.effective) {
+    for (const t of data.effective) {
       map[t.key] = { fill: t.color, label: t.label, category: t.category };
     }
     return map;
-  }, [query.data]);
+  }, [data]);
   if (effectiveMap) setRuntimeAssetTypes(effectiveMap);
 
-  const list = useMemo<EffectiveAssetType[]>(
-    () => query.data?.effective ?? [],
-    [query.data]
-  );
+  const list = useMemo<EffectiveAssetType[]>(() => data?.effective ?? [], [data]);
   const signage = useMemo(
     () => list.filter((t) => t.category === 'signage' && !t.hidden),
     [list]
@@ -108,14 +126,14 @@ export function useAssetTypes(orgIdOverride?: string | null) {
 
   const raw = useMemo(
     () => ({
-      globals: query.data?.globals ?? [],
-      orgSpecific: query.data?.orgSpecific ?? [],
-      overrides: query.data?.overrides ?? [],
+      globals: data?.globals ?? [],
+      orgSpecific: data?.orgSpecific ?? [],
+      overrides: data?.overrides ?? [],
     }),
-    [query.data]
+    [data]
   );
 
-  return { ...query, list, signage, facility, raw, orgId };
+  return { ...query, data, list, signage, facility, raw, orgId };
 }
 
 // ===========================================================================
@@ -124,7 +142,12 @@ export function useAssetTypes(orgIdOverride?: string | null) {
 
 function useInvalidate() {
   const qc = useQueryClient();
-  return () => qc.invalidateQueries({ queryKey: assetTypeKeys.all });
+  return () => {
+    qc.invalidateQueries({ queryKey: assetTypeKeys.all });
+    // The catalogue is now read from the app_boot bundle, so admin edits must
+    // refresh it too (rare action — a full boot refetch is fine here).
+    qc.invalidateQueries({ queryKey: ['app-boot'] });
+  };
 }
 
 export function useCreateAssetType() {

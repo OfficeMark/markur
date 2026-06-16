@@ -20,12 +20,10 @@ import { AssetGridView } from '@/components/waymarks/AssetGridView';
 import { FilterByTypePopover } from '@/components/waymarks/FilterByTypePopover';
 import { FilterByTextInput } from '@/components/waymarks/FilterByTextInput';
 import { AuditVideoRecorderDialog } from '@/components/waymarks/AuditVideoRecorderDialog';
-import { useAssetsWithVideos } from '@/hooks/useAuditVideos';
-import { useFloor, useSoftDeleteFloor } from '@/hooks/useFloors';
-import { useBuilding } from '@/hooks/useBuildings';
+import { useSoftDeleteFloor } from '@/hooks/useFloors';
 import { useAssets, useSoftDeleteAsset, useUpdateAsset } from '@/hooks/useAssets';
 import { useAssetTypes } from '@/hooks/useAssetTypes';
-import { useFloorView } from '@/hooks/useBundles';
+import { useFloorView, useAppBoot } from '@/hooks/useBundles';
 import {
   useActiveAuditSession,
   useLatestConfirmedByFloor,
@@ -46,25 +44,32 @@ import type { Asset } from '@/types/database';
 
 export function Floor() {
   const { id } = useParams<{ id: string }>();
-  const { data: floor, isLoading: fLoading, error: fError } = useFloor(id);
-  const { data: building } = useBuilding(floor?.building_id);
+  const { user } = useAuth();
+  // get_floor_view is the floor's SOLE fetch: floor + assets + per-pin photos +
+  // audit data. The floor reads everything off it; the per-table hooks below are
+  // disabled (they just read the seeded caches), and pin mutations patch those
+  // caches in place — so a cold open fires only the bundles + signing, and a pin
+  // action fires a single PATCH with no floor refetch.
+  const floorView = useFloorView(id, user?.id);
+  const floor = floorView.data?.floor ?? null;
+  const fLoading = floorView.isLoading;
+  const fError = floorView.error as Error | null;
+  // Building comes from the app_boot bundle (it carries every building the user
+  // can see, with settings), so the floor doesn't fire its own buildings query.
+  const boot = useAppBoot();
+  const building = useMemo(
+    () => boot.data?.buildings.find((b) => b.id === floor?.building_id) ?? null,
+    [boot.data, floor?.building_id]
+  );
   const pinAppearance = useMemo(
     () => pinAppearanceFromSettings(building?.settings),
     [building?.settings]
   );
-  const { data: assets = [] } = useAssets(id);
-  // One bundled call seeds the per-pin photo rows + batch-signed thumbnail URLs
-  // (and floor/assets), collapsing the grid's per-pin photo N+1. useFloor /
-  // useAssets above stay the source of truth so the optimistic lock/drag edits
-  // keep working; this just warms the caches the grid + drawer read.
-  useFloorView(id);
-  // Subscribe the floor to the org asset-type catalog so the pin layer
-  // re-renders (and recolours) the instant the colours load. useAssetTypes
-  // writes the colour map into pin-types synchronously during its render, so
-  // when this query resolves the pins repaint in the same pass — no remount,
-  // no "black pins until you leave and come back".
+  const { data: assets = [] } = useAssets(id, { enabled: false });
+  // Subscribe to the org asset-type catalog so the pin layer recolours the
+  // instant the colours load (useAssetTypes writes the runtime colour map during
+  // render). It now reads the catalogue from app_boot — no separate fetch.
   useAssetTypes();
-  const { user } = useAuth();
 
   const canUploadPlan = useCan('upload_plan', { type: 'building', id: floor?.building_id ?? '' });
   const canCreate = useCan('create', { type: 'building', id: floor?.building_id ?? '' });
@@ -78,9 +83,12 @@ export function Floor() {
   const [deleteFloorOpen, setDeleteFloorOpen] = useState(false);
   const [deleteFloorError, setDeleteFloorError] = useState<string | null>(null);
 
-  // M6 — audit walkaround
-  const { data: lastAuditByAsset } = useLatestConfirmedByFloor(id);
-  const { data: activeSession } = useActiveAuditSession(id, user?.id);
+  // M6 — audit walkaround. These read the caches get_floor_view seeds above
+  // (enabled:false → no own fetch); start/end-audit + the confirm patch keep
+  // them live, so the floor no longer fires active-session / last-confirmed
+  // requests on open.
+  const { data: lastAuditByAsset } = useLatestConfirmedByFloor(id, { enabled: false });
+  const { data: activeSession } = useActiveAuditSession(id, user?.id, { enabled: false });
   const startAudit = useStartAudit(id, user?.id);
   const [inAudit, setInAudit] = useState(false);
   // Pin to pre-select when entering Audit Mode (set by the AssetDrawer
@@ -119,8 +127,12 @@ export function Floor() {
 
   // M27 — building-level video recording (no asset selected).
   const [videoRecorderOpen, setVideoRecorderOpen] = useState(false);
-  const assetIds = useMemo(() => assets.map((a) => a.id), [assets]);
-  const { data: assetsWithVideos } = useAssetsWithVideos(floor?.building_id, assetIds);
+  // Which pins have a video — read from the get_floor_view bundle, so the floor
+  // doesn't fire a separate assets-with-videos query. Add/delete-video re-seed it.
+  const assetsWithVideos = useMemo(
+    () => new Set(floorView.data?.asset_video_ids ?? []),
+    [floorView.data?.asset_video_ids]
+  );
 
   // Resolve a signed URL whenever the plan_url changes.
   useEffect(() => {
