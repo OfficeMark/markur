@@ -9,6 +9,8 @@ import { brandingKeys } from '@/hooks/useBranding';
 import { signedAssetPhotoUrls } from '@/lib/queries/asset-photos';
 import { setRuntimeAssetTypes, type AssetTypeColor } from '@/lib/pin-types';
 import { useAuth } from '@/lib/auth-context';
+import { getAssetsForFloor, getFloor, putAssetsForFloor, putFloor } from '@/lib/offline';
+import type { FloorView } from '@/lib/queries/bundles';
 
 export const bundleKeys = {
   appBoot: ['app-boot'] as const,
@@ -98,7 +100,27 @@ export function useFloorView(floorId: string | undefined) {
   const qc = useQueryClient();
   const query = useQuery({
     queryKey: floorId ? bundleKeys.floorView(floorId) : ['floor-view', 'none'],
-    queryFn: () => getFloorView(floorId!),
+    queryFn: async (): Promise<FloorView> => {
+      try {
+        const view = await getFloorView(floorId!);
+        // Mirror floor + assets into Dexie so the audit walkaround has them
+        // offline even without an explicit "take offline" tap — the same
+        // background writeback useAssets did before the floor read moved here.
+        if (view.floor) void putFloor(view.floor).catch(() => undefined);
+        void putAssetsForFloor(floorId!, view.assets).catch(() => undefined);
+        return view;
+      } catch (err) {
+        // Offline / RPC unreachable — rebuild floor + assets from the Dexie
+        // cache so the audit walkaround still works offline. Photos aren't
+        // cached offline (they're signed-URL only), so none are returned.
+        const [floor, assets] = await Promise.all([
+          getFloor(floorId!).catch(() => undefined),
+          getAssetsForFloor(floorId!).catch(() => [] as never[]),
+        ]);
+        if (!floor && assets.length === 0) throw err; // nothing cached → surface it
+        return { floor: floor ?? null, assets, photos: {} };
+      }
+    },
     enabled: !!floorId,
   });
 
@@ -113,9 +135,12 @@ export function useFloorView(floorId: string | undefined) {
     }
     // Batch-sign every photo path on the floor in one request, then seed the
     // per-path URL cache so the grid thumbnails read warm (no per-pin signing).
+    // Skip paths already signed in cache so a floor-view re-seed (after a pin
+    // create / delete / lock-all) doesn't re-sign the whole floor's photos.
     const paths = Object.values(data.photos)
       .flat()
-      .map((p) => p.path);
+      .map((p) => p.path)
+      .filter((p) => qc.getQueryData(assetPhotoKeys.signedUrl(p)) === undefined);
     if (paths.length) {
       void signedAssetPhotoUrls(paths)
         .then((map) => {

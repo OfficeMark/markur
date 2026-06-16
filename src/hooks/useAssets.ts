@@ -25,6 +25,12 @@ export const assetKeys = {
     [...assetKeys.all, 'building-has-any', buildingId] as const,
 };
 
+// The floor-view bundle key, inlined to avoid a circular import with
+// useBundles (which imports assetKeys from here). The non-optimistic asset
+// mutations invalidate it so the bundle re-fetches and re-seeds the floor's
+// asset list — the floor page reads that seed instead of its own fetch.
+const floorViewKey = (floorId: string) => ['floor-view', floorId] as const;
+
 /**
  * True if this building has at least one live pin on any live floor. Used by
  * WelcomeCard to decide whether the "Place your first pin" setup step is
@@ -47,7 +53,7 @@ export function useBuildingHasAnyAsset(buildingId: string | undefined) {
  * Supabase), falls back to whatever's in Dexie. The audit walkaround is
  * the highest-value offline surface and depends on this.
  */
-export function useAssets(floorId: string | undefined) {
+export function useAssets(floorId: string | undefined, opts?: { enabled?: boolean }) {
   return useQuery({
     queryKey: floorId ? assetKeys.byFloor(floorId) : ['assets', 'by-floor', 'none'],
     queryFn: async () => {
@@ -63,7 +69,11 @@ export function useAssets(floorId: string | undefined) {
         throw err;
       }
     },
-    enabled: !!floorId,
+    // The floor page passes enabled:false: there, get_floor_view is the sole
+    // fetch and seeds this query's cache (the bundle dedup). This hook then
+    // just reads that seed — and the optimistic patches below still apply to
+    // it — so the floor no longer double-fetches its assets on open.
+    enabled: (opts?.enabled ?? true) && !!floorId,
   });
 }
 
@@ -81,6 +91,8 @@ export function useCreateAsset() {
     mutationFn: (input: CreateAssetInput) => createAsset(input),
     onSuccess: (asset) => {
       qc.invalidateQueries({ queryKey: assetKeys.byFloor(asset.floor_id) });
+      // Re-seed the floor page (which reads the bundle, not its own fetch).
+      qc.invalidateQueries({ queryKey: floorViewKey(asset.floor_id) });
     },
   });
 }
@@ -156,7 +168,10 @@ export function useSetFloorPinsLocked(floorId: string | undefined) {
       return setFloorPinsLocked(floorId, locked);
     },
     onSuccess: () => {
-      if (floorId) qc.invalidateQueries({ queryKey: assetKeys.byFloor(floorId) });
+      if (floorId) {
+        qc.invalidateQueries({ queryKey: assetKeys.byFloor(floorId) });
+        qc.invalidateQueries({ queryKey: floorViewKey(floorId) });
+      }
       // An open AssetDrawer reads the per-asset detail query — refresh those too.
       qc.invalidateQueries({ queryKey: [...assetKeys.all, 'detail'] });
     },
@@ -169,7 +184,10 @@ export function useSoftDeleteAsset(floorId: string | undefined) {
     mutationFn: (id: string) => softDeleteAsset(id),
     onSuccess: (_data, id) => {
       qc.invalidateQueries({ queryKey: assetKeys.detail(id) });
-      if (floorId) qc.invalidateQueries({ queryKey: assetKeys.byFloor(floorId) });
+      if (floorId) {
+        qc.invalidateQueries({ queryKey: assetKeys.byFloor(floorId) });
+        qc.invalidateQueries({ queryKey: floorViewKey(floorId) });
+      }
       // Any open Trash view should pick up the new entry.
       qc.invalidateQueries({ queryKey: [...assetKeys.all, 'deleted-by-building'] });
     },
@@ -198,6 +216,8 @@ export function useRestoreAsset(buildingId: string | undefined) {
     onSuccess: () => {
       // Restored asset reappears on its floor, so invalidate everything.
       qc.invalidateQueries({ queryKey: assetKeys.all });
+      // Re-seed any open floor page (don't know which floor, so all floor-views).
+      qc.invalidateQueries({ queryKey: ['floor-view'] });
       if (buildingId) {
         qc.invalidateQueries({ queryKey: assetKeys.deletedByBuilding(buildingId) });
       }
