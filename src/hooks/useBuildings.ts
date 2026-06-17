@@ -15,9 +15,19 @@ import {
   type NewBuildingInput,
 } from '@/lib/queries/buildings';
 import type { PinShape, PinSize } from '@/lib/queries/branding';
+import type { Building } from '@/types/database';
 import { accessKeys } from '@/hooks/useAccess';
 import { floorKeys } from '@/hooks/useFloors';
-import { useAppBootRaw } from '@/hooks/useAppBootQuery';
+import { useAppBootRaw, patchAppBoot } from '@/hooks/useAppBootQuery';
+import type { QueryClient } from '@tanstack/react-query';
+
+/** Update one building's row in the cached app_boot, preserving its floors. */
+function patchBuildingInBoot(qc: QueryClient, b: Building) {
+  patchAppBoot(qc, (boot) => ({
+    ...boot,
+    buildings: boot.buildings.map((x) => (x.id === b.id ? { ...b, floors: x.floors } : x)),
+  }));
+}
 
 export const buildingKeys = {
   all: ['buildings'] as const,
@@ -73,9 +83,14 @@ export function useCreateBuilding() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: (input: NewBuildingInput) => createBuilding(input),
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: buildingKeys.list() });
-      qc.invalidateQueries({ queryKey: ['app-boot'] });
+    onSuccess: (b) => {
+      // Add the new building to app_boot in place (it has no floors yet).
+      patchAppBoot(qc, (boot) => ({
+        ...boot,
+        buildings: boot.buildings.some((x) => x.id === b.id)
+          ? boot.buildings
+          : [...boot.buildings, { ...b, floors: [] }],
+      }));
       qc.invalidateQueries({ queryKey: accessKeys.all });
     },
   });
@@ -127,9 +142,7 @@ export function useUploadBuildingPhoto(buildingId: string | undefined) {
       return uploadBuildingPhoto(buildingId, file);
     },
     onSuccess: (b) => {
-      qc.invalidateQueries({ queryKey: buildingKeys.detail(b.id) });
-      qc.invalidateQueries({ queryKey: buildingKeys.list() });
-      qc.invalidateQueries({ queryKey: ['app-boot'] });
+      patchBuildingInBoot(qc, b);
     },
   });
 }
@@ -147,10 +160,12 @@ export function useSoftDeleteBuilding() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: (id: string) => softDeleteBuilding(id),
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: buildingKeys.all });
-      qc.invalidateQueries({ queryKey: floorKeys.all });
-      qc.invalidateQueries({ queryKey: ['app-boot'] });
+    onSuccess: (_data, id) => {
+      // Drop the building from app_boot in place.
+      patchAppBoot(qc, (boot) => ({
+        ...boot,
+        buildings: boot.buildings.filter((x) => x.id !== id),
+      }));
       qc.invalidateQueries({ queryKey: accessKeys.all });
     },
   });
@@ -178,9 +193,7 @@ export function useSetBuildingPinAppearance(buildingId: string | undefined) {
       return setBuildingPinAppearance(buildingId, appearance);
     },
     onSuccess: (b) => {
-      qc.invalidateQueries({ queryKey: buildingKeys.detail(b.id) });
-      qc.invalidateQueries({ queryKey: buildingKeys.list() });
-      qc.invalidateQueries({ queryKey: ['app-boot'] });
+      patchBuildingInBoot(qc, b);
     },
   });
 }
@@ -194,9 +207,7 @@ export function useSetBuildingExternalLink(buildingId: string | undefined) {
       return setBuildingExternalLink(buildingId, link);
     },
     onSuccess: (b) => {
-      qc.invalidateQueries({ queryKey: buildingKeys.detail(b.id) });
-      qc.invalidateQueries({ queryKey: buildingKeys.list() });
-      qc.invalidateQueries({ queryKey: ['app-boot'] });
+      patchBuildingInBoot(qc, b);
     },
   });
 }
@@ -209,9 +220,7 @@ export function useRemoveBuildingPhoto(buildingId: string | undefined) {
       return removeBuildingPhoto(buildingId);
     },
     onSuccess: (b) => {
-      qc.invalidateQueries({ queryKey: buildingKeys.detail(b.id) });
-      qc.invalidateQueries({ queryKey: buildingKeys.list() });
-      qc.invalidateQueries({ queryKey: ['app-boot'] });
+      patchBuildingInBoot(qc, b);
     },
   });
 }

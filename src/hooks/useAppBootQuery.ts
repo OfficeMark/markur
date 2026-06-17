@@ -1,5 +1,5 @@
-import { useQuery } from '@tanstack/react-query';
-import { getAppBoot } from '@/lib/queries/bundles';
+import { useQuery, type QueryClient } from '@tanstack/react-query';
+import { getAppBoot, type AppBoot } from '@/lib/queries/bundles';
 import { useAuth } from '@/lib/auth-context';
 
 /**
@@ -22,4 +22,16 @@ export function useAppBootRaw() {
     enabled: !!user,
     staleTime: 5 * 60_000,
   });
+}
+
+/**
+ * Patch the cached app_boot IN PLACE after an edit, instead of invalidating it.
+ * Invalidating refetched the whole boot payload AND re-ran the seeding effect
+ * (dozens of setQueryData) → a re-render storm across every subscriber on every
+ * building/floor/branding edit. Patching just the changed entry keeps the UI
+ * fresh with no refetch — same pattern useAssets uses for pins. No-op until the
+ * bundle is loaded.
+ */
+export function patchAppBoot(qc: QueryClient, fn: (boot: AppBoot) => AppBoot): void {
+  qc.setQueryData<AppBoot>(APP_BOOT_KEY, (old) => (old ? fn(old) : old));
 }

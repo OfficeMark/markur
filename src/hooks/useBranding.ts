@@ -14,7 +14,7 @@ import {
   type SaveOrgBrandingInput,
 } from '@/lib/queries/branding';
 import { usePermissions } from '@/lib/permissions-context';
-import { useAppBootRaw } from '@/hooks/useAppBootQuery';
+import { useAppBootRaw, patchAppBoot } from '@/hooks/useAppBootQuery';
 
 export const brandingKeys = {
   all: ['branding'] as const,
@@ -74,10 +74,15 @@ export function useSaveBranding() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: (input: SaveOrgBrandingInput) => saveOrgBranding(input),
-    onSuccess: () => {
+    onSuccess: (br) => {
+      // Patch this org's branding into app_boot in place (no whole-boot refetch).
+      patchAppBoot(qc, (boot) => ({
+        ...boot,
+        branding: boot.branding.some((x) => x.org_id === br.org_id)
+          ? boot.branding.map((x) => (x.org_id === br.org_id ? br : x))
+          : [...boot.branding, br],
+      }));
       qc.invalidateQueries({ queryKey: brandingKeys.all });
-      // Branding is read from app_boot now — refresh it so the change shows.
-      qc.invalidateQueries({ queryKey: ['app-boot'] });
     },
   });
 }

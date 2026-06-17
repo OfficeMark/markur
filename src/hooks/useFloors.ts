@@ -9,7 +9,7 @@ import {
   type NewFloorInput,
 } from '@/lib/queries/floors';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { useAppBootRaw } from '@/hooks/useAppBootQuery';
+import { useAppBootRaw, patchAppBoot } from '@/hooks/useAppBootQuery';
 
 export const floorKeys = {
   all: ['floors'] as const,
@@ -94,11 +94,14 @@ export function useCreateFloor(buildingId: string | undefined) {
       if (sort === undefined) sort = await nextFloorSortOrder(buildingId);
       return createFloor({ building_id: buildingId, label: input.label, sort_order: sort });
     },
-    onSuccess: () => {
-      if (buildingId) qc.invalidateQueries({ queryKey: floorKeys.byBuilding(buildingId) });
-      qc.invalidateQueries({ queryKey: floorKeys.all });
-      // Floors are read from the bundles now — refresh them too.
-      qc.invalidateQueries({ queryKey: ['app-boot'] });
+    onSuccess: (floor) => {
+      // Add the new floor to its building in app_boot, in place (no refetch).
+      patchAppBoot(qc, (boot) => ({
+        ...boot,
+        buildings: boot.buildings.map((b) =>
+          b.id === floor.building_id ? { ...b, floors: [...b.floors, floor] } : b
+        ),
+      }));
       qc.invalidateQueries({ queryKey: ['building-view'] });
     },
   });
@@ -109,10 +112,16 @@ export function useSoftDeleteFloor(buildingId: string | undefined) {
   return useMutation({
     mutationFn: (id: string) => softDeleteFloor(id),
     onSuccess: (_data, id) => {
+      // Remove the floor from app_boot in place.
+      patchAppBoot(qc, (boot) => ({
+        ...boot,
+        buildings: boot.buildings.map((b) => ({
+          ...b,
+          floors: b.floors.filter((f) => f.id !== id),
+        })),
+      }));
       qc.invalidateQueries({ queryKey: floorKeys.detail(id) });
       if (buildingId) qc.invalidateQueries({ queryKey: floorKeys.byBuilding(buildingId) });
-      qc.invalidateQueries({ queryKey: floorKeys.all });
-      qc.invalidateQueries({ queryKey: ['app-boot'] });
       qc.invalidateQueries({ queryKey: ['building-view'] });
     },
   });
@@ -129,8 +138,8 @@ export function useSetFloorProvenance(floorId: string | undefined, buildingId?: 
     onSuccess: () => {
       if (floorId) qc.invalidateQueries({ queryKey: floorKeys.detail(floorId) });
       if (buildingId) qc.invalidateQueries({ queryKey: floorKeys.byBuilding(buildingId) });
-      // Floor row is read from the bundles now — refresh them.
-      qc.invalidateQueries({ queryKey: ['app-boot'] });
+      // Notes/provenance show on the floor + building screens (the view bundles),
+      // not in any app_boot-driven UI — so refresh those, not the whole boot.
       qc.invalidateQueries({ queryKey: ['building-view'] });
       if (floorId) qc.invalidateQueries({ queryKey: ['floor-view', floorId] });
     },
@@ -148,8 +157,8 @@ export function useSetFloorNotes(floorId: string | undefined, buildingId?: strin
     onSuccess: () => {
       if (floorId) qc.invalidateQueries({ queryKey: floorKeys.detail(floorId) });
       if (buildingId) qc.invalidateQueries({ queryKey: floorKeys.byBuilding(buildingId) });
-      // Floor row is read from the bundles now — refresh them.
-      qc.invalidateQueries({ queryKey: ['app-boot'] });
+      // Notes/provenance show on the floor + building screens (the view bundles),
+      // not in any app_boot-driven UI — so refresh those, not the whole boot.
       qc.invalidateQueries({ queryKey: ['building-view'] });
       if (floorId) qc.invalidateQueries({ queryKey: ['floor-view', floorId] });
     },
