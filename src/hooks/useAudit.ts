@@ -28,7 +28,8 @@ import {
   setMeta,
   type PendingAuditEvent,
 } from '@/lib/offline';
-import { useEffect, useState } from 'react';
+import { useEffect } from 'react';
+import { useLiveQuery } from 'dexie-react-hooks';
 import type { AuditEvent, AuditSession } from '@/types/database';
 import type { BuildingView } from '@/lib/queries/bundles';
 
@@ -202,31 +203,12 @@ export function useCreateAuditEvent(floorId: string | undefined) {
 }
 
 /**
- * Polls the Dexie pending count for the SyncChip. Cheap because Dexie
- * answers in <1ms.
+ * The Dexie pending-event count for the SyncChip. WO-2: event-driven via Dexie's
+ * liveQuery (re-runs only when the table actually changes) instead of a 2s poll
+ * that ran forever in the always-mounted shell.
  */
 export function usePendingAuditCount(): number {
-  const [count, setCount] = useState(0);
-  useEffect(() => {
-    let mounted = true;
-    function refresh() {
-      void pendingCount().then((n) => {
-        if (mounted) setCount(n);
-      });
-    }
-    refresh();
-    const t = window.setInterval(refresh, 2_000);
-    function onStorage() {
-      refresh();
-    }
-    window.addEventListener('storage', onStorage);
-    return () => {
-      mounted = false;
-      window.clearInterval(t);
-      window.removeEventListener('storage', onStorage);
-    };
-  }, []);
-  return count;
+  return useLiveQuery(() => pendingCount(), [], 0);
 }
 
 /**
@@ -314,27 +296,13 @@ export function useDrainPendingAuditEvents(online: boolean): void {
  * offline).
  */
 export function useSessionPendingEvents(sessionId: string | undefined): PendingAuditEvent[] {
-  const [rows, setRows] = useState<PendingAuditEvent[]>([]);
-  useEffect(() => {
-    if (!sessionId) {
-      setRows([]);
-      return;
-    }
-    const sid = sessionId;
-    let mounted = true;
-    function refresh() {
-      void listPendingForSession(sid).then((r) => {
-        if (mounted) setRows(r);
-      });
-    }
-    refresh();
-    const t = window.setInterval(refresh, 2_000);
-    return () => {
-      mounted = false;
-      window.clearInterval(t);
-    };
-  }, [sessionId]);
-  return rows;
+  // WO-2: event-driven via Dexie liveQuery — re-runs when this session's pending
+  // rows change, not on a 2s interval.
+  return useLiveQuery(
+    () => (sessionId ? listPendingForSession(sessionId) : Promise.resolve([])),
+    [sessionId],
+    []
+  );
 }
 
 /**

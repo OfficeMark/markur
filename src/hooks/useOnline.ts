@@ -17,14 +17,19 @@ import { useEffect, useState } from 'react';
  * reads like an auth bug to anyone watching devtools or error monitoring.
  */
 
-const PING_INTERVAL_MS = 30_000;
-
 export type OnlineState = {
   online: boolean;
   /** ms timestamp of the last confirmed connectivity. */
   lastSeen: number;
 };
 
+/**
+ * WO-2: event-driven, NOT a 30s poll. `navigator.onLine` + the `online`/
+ * `offline` events are the primary signal; we run ONE lightweight verification
+ * ping (captive-portal false-positive guard) on mount, on regaining `online`,
+ * and on the tab becoming visible again — never on a constant timer, and always
+ * with a 4s abort so a hung request can't wedge the UI.
+ */
 export function useOnline(): OnlineState {
   const [state, setState] = useState<OnlineState>(() => ({
     online: typeof navigator === 'undefined' ? true : navigator.onLine,
@@ -32,21 +37,12 @@ export function useOnline(): OnlineState {
   }));
 
   useEffect(() => {
-    function setOnline() {
-      setState({ online: true, lastSeen: Date.now() });
-    }
-    function setOffline() {
-      setState((prev) => ({ online: false, lastSeen: prev.lastSeen }));
-    }
-    window.addEventListener('online', setOnline);
-    window.addEventListener('offline', setOffline);
-
-    // Slow ping fallback. Avoids the captive-portal false positive.
+    let cancelled = false;
     const supabaseUrl = (import.meta.env.VITE_SUPABASE_URL ?? '').replace(/\/$/, '');
     const anonKey = import.meta.env.VITE_SUPABASE_ANON_KEY ?? '';
-    async function ping() {
-      if (document.hidden) return; // don't ping in background tabs
-      if (!supabaseUrl) return;
+
+    async function verify() {
+      if (cancelled || document.hidden || !supabaseUrl) return;
       try {
         const ctrl = new AbortController();
         const t = window.setTimeout(() => ctrl.abort(), 4_000);
@@ -55,23 +51,40 @@ export function useOnline(): OnlineState {
           mode: 'cors',
           credentials: 'omit',
           signal: ctrl.signal,
-          // Public anon key (already shipped in the bundle) so the root answers
-          // 200 rather than a noisy recurring 401. Liveness only needs a reply.
+          // Public anon key (already shipped) so the root answers 200, not a
+          // noisy 401. Liveness only needs a reply.
           headers: anonKey ? { apikey: anonKey } : undefined,
         });
         window.clearTimeout(t);
-        setState({ online: true, lastSeen: Date.now() });
+        if (!cancelled) setState({ online: true, lastSeen: Date.now() });
       } catch {
-        // Either offline or the fetch was aborted. We keep the previous
-        // lastSeen so consumers can show "last synced 5 min ago" later.
-        setState((prev) => ({ online: false, lastSeen: prev.lastSeen }));
+        // Offline or aborted — keep the previous lastSeen for "last synced …".
+        if (!cancelled) setState((prev) => ({ online: false, lastSeen: prev.lastSeen }));
       }
     }
-    const timer = window.setInterval(ping, PING_INTERVAL_MS);
+
+    function onOnline() {
+      setState({ online: true, lastSeen: Date.now() });
+      void verify(); // confirm it's real connectivity, not just a NIC flag
+    }
+    function onOffline() {
+      setState((prev) => ({ online: false, lastSeen: prev.lastSeen }));
+    }
+    function onVisible() {
+      if (!document.hidden) void verify();
+    }
+
+    window.addEventListener('online', onOnline);
+    window.addEventListener('offline', onOffline);
+    document.addEventListener('visibilitychange', onVisible);
+    // One verification at startup (captive-portal false positive on launch).
+    void verify();
+
     return () => {
-      window.removeEventListener('online', setOnline);
-      window.removeEventListener('offline', setOffline);
-      window.clearInterval(timer);
+      cancelled = true;
+      window.removeEventListener('online', onOnline);
+      window.removeEventListener('offline', onOffline);
+      document.removeEventListener('visibilitychange', onVisible);
     };
   }, []);
 
