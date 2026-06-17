@@ -4,8 +4,18 @@ import react from '@vitejs/plugin-react';
 import { VitePWA } from 'vite-plugin-pwa';
 import path from 'node:path';
 
+// Build identity, stamped into the bundle so a running device can show exactly
+// which build it is on (see UserMenu). On Netlify, COMMIT_REF is the deployed
+// commit SHA; locally it is unset, so we show 'dev'.
+const BUILD_ID = (process.env.COMMIT_REF ?? 'dev').slice(0, 7);
+const BUILD_TIME = new Date().toISOString();
+
 // https://vitejs.dev/config/
 export default defineConfig({
+  define: {
+    __BUILD_ID__: JSON.stringify(BUILD_ID),
+    __BUILD_TIME__: JSON.stringify(BUILD_TIME),
+  },
   plugins: [
     react(),
     VitePWA({

@@ -105,6 +105,11 @@ export function UserMenu() {
             <LogOut size={14} aria-hidden />
             <span>Sign out</span>
           </DropdownMenu.Item>
+          <DropdownMenu.Separator className="my-1 h-px bg-black/10" />
+          <div className="px-2 py-1.5 text-[11px] leading-tight text-text-faint">
+            <div>Build {__BUILD_ID__}</div>
+            <div>{new Date(__BUILD_TIME__).toLocaleString()}</div>
+          </div>
         </DropdownMenu.Content>
       </DropdownMenu.Portal>
     </DropdownMenu.Root>

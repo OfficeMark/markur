@@ -9,3 +9,7 @@ interface ImportMetaEnv {
 interface ImportMeta {
   readonly env: ImportMetaEnv;
 }
+
+// Stamped at build time by Vite `define` (see vite.config.ts).
+declare const __BUILD_ID__: string;
+declare const __BUILD_TIME__: string;
