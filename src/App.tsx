@@ -163,16 +163,21 @@ const queryClient = new QueryClient({
       // session-lost redirect). Network blips / 5xx get the same treatment.
       // A genuine session loss still exhausts the retries and escalates.
       retry: (failureCount, error) => {
-        if (failureCount >= 3) return false;
-        if (isAuthExpiredError(error)) return true;
+        // Auth-expired (token-refresh window): a couple of quick retries so a
+        // transient 401 recovers instead of firing a false session-lost.
+        if (isAuthExpiredError(error)) return failureCount < 2;
+        // Everything else gets AT MOST one retry — never the multi-second
+        // backoff ladder that froze every screen gated on a boot/view query.
+        if (failureCount >= 1) return false;
         const status =
           (error as { status?: number; statusCode?: number })?.status ??
           (error as { statusCode?: number })?.statusCode ??
           0;
-        if (status === 0 || status >= 500) return true; // network / server blip
-        return failureCount < 1; // one retry for everything else
+        return status === 0 || status >= 500; // one retry for a network / server blip only
       },
-      retryDelay: (attempt) => Math.min(400 * 2 ** attempt, 2000),
+      // Short backoff so a transient blip recovers in well under a second
+      // instead of stacking multi-second waits that look like a frozen app.
+      retryDelay: (attempt) => Math.min(300 * 2 ** attempt, 800),
     },
   },
 });

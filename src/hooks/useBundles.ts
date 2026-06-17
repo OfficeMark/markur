@@ -85,6 +85,10 @@ export function useBuildingView(buildingId: string | undefined) {
     queryKey: buildingId ? bundleKeys.buildingView(buildingId) : ['building-view', 'none'],
     queryFn: () => getBuildingView(buildingId!),
     enabled: !!buildingId,
+    // Cache for the session so navigating away and back doesn't re-fetch and
+    // re-seed the whole building view every time (kills the navigation churn).
+    staleTime: 5 * 60_000,
+    gcTime: 30 * 60_000,
   });
 
   const data = query.data;
@@ -141,6 +145,10 @@ export function useFloorView(floorId: string | undefined, userId?: string) {
       }
     },
     enabled: !!floorId,
+    // Cache for the session so re-opening / navigating back to a floor doesn't
+    // re-fetch and re-seed the whole floor view (kills the navigation churn).
+    staleTime: 5 * 60_000,
+    gcTime: 30 * 60_000,
   });
 
   const data = query.data;
