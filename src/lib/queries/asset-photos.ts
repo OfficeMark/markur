@@ -2,6 +2,23 @@ import { supabase } from '@/lib/supabase';
 import type { AssetPhoto } from '@/types/database';
 
 /**
+ * Image-transform options for signed URLs (WO-3). Serving photos through the
+ * Storage render endpoint converts HEIC (and resizes JPEGs) to a web format the
+ * browser can decode — so iPhone HEICs render in desktop Chrome without any
+ * client-side conversion, while the bucket stays private.
+ */
+export type PhotoTransform = {
+  width?: number;
+  height?: number;
+  quality?: number;
+  resize?: 'cover' | 'contain' | 'fill';
+};
+
+// Sensible defaults per surface.
+export const PHOTO_THUMB_TRANSFORM: PhotoTransform = { width: 480, quality: 72, resize: 'contain' };
+export const PHOTO_FULL_TRANSFORM: PhotoTransform = { width: 1400, quality: 82, resize: 'contain' };
+
+/**
  * One asset can have many photos. Path scheme is `<asset_id>/<photo_id>.<ext>`
  * (per migration 0009). The matching public.asset_photos row is the source of
  * truth — the storage object is just the binary.
@@ -117,10 +134,13 @@ export async function deleteAssetPhoto(photo: AssetPhoto): Promise<void> {
   await supabase.storage.from('asset-photos').remove([photo.path]).catch(() => {});
 }
 
-export async function signedAssetPhotoUrl(path: string): Promise<string> {
+export async function signedAssetPhotoUrl(
+  path: string,
+  transform?: PhotoTransform
+): Promise<string> {
   const { data, error } = await supabase.storage
     .from('asset-photos')
-    .createSignedUrl(path, 60 * 30);
+    .createSignedUrl(path, 60 * 30, transform ? { transform } : undefined);
   if (error) throw error;
   return data.signedUrl;
 }
@@ -131,9 +151,28 @@ export async function signedAssetPhotoUrl(path: string): Promise<string> {
  * floor load: get_floor_view hands back every photo path at once, so we sign
  * them all in a single pass instead of one createSignedUrl per thumbnail.
  */
-export async function signedAssetPhotoUrls(paths: string[]): Promise<Record<string, string>> {
+export async function signedAssetPhotoUrls(
+  paths: string[],
+  transform?: PhotoTransform
+): Promise<Record<string, string>> {
   const out: Record<string, string> = {};
   if (paths.length === 0) return out;
+  // The batch endpoint (createSignedUrls) does NOT accept a transform, so when
+  // one is requested we sign each path individually in parallel. Without a
+  // transform we use the single batch call (one request).
+  if (transform) {
+    const signed = await Promise.all(
+      paths.map((p) =>
+        supabase.storage
+          .from('asset-photos')
+          .createSignedUrl(p, 60 * 30, { transform })
+          .then((r) => [p, r.data?.signedUrl ?? null] as const)
+          .catch(() => [p, null] as const)
+      )
+    );
+    for (const [p, url] of signed) if (url) out[p] = url;
+    return out;
+  }
   const { data, error } = await supabase.storage
     .from('asset-photos')
     .createSignedUrls(paths, 60 * 30);

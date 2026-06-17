@@ -4,6 +4,7 @@ import {
   deleteAssetPhoto,
   listAssetPhotos,
   signedAssetPhotoUrl,
+  PHOTO_THUMB_TRANSFORM,
 } from '@/lib/queries/asset-photos';
 import type { AssetPhoto } from '@/types/database';
 
@@ -30,7 +31,9 @@ export function useAssetPhotos(assetId: string | undefined) {
 export function useSignedAssetPhotoUrl(path: string | null | undefined): string | null {
   const { data } = useQuery({
     queryKey: path ? assetPhotoKeys.signedUrl(path) : ['asset_photo_url', 'none'],
-    queryFn: () => (path ? signedAssetPhotoUrl(path) : Promise.resolve(null)),
+    // Thumbnail transform → grid renders a small JPEG/WebP (HEIC included) and
+    // downloads far less than the original.
+    queryFn: () => (path ? signedAssetPhotoUrl(path, PHOTO_THUMB_TRANSFORM) : Promise.resolve(null)),
     enabled: !!path,
     staleTime: 25 * 60_000,
     gcTime: 30 * 60_000,

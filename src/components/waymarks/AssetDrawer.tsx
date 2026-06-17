@@ -39,6 +39,8 @@ import {
   signedAssetPhotoDownloadUrl,
   signedAssetPhotoUrl,
   validateAssetPhotoFile,
+  PHOTO_THUMB_TRANSFORM,
+  PHOTO_FULL_TRANSFORM,
 } from '@/lib/queries/asset-photos';
 import { ensureUploadableImage, PHOTO_ACCEPT } from '@/lib/heic';
 import { computeStatus, statusLabel, type AssetStatus } from '@/lib/asset-status';
@@ -841,7 +843,7 @@ function PhotoFrame({
     let cancelled = false;
     setUrl(null);
     setErrored(false);
-    void signedAssetPhotoUrl(photo.path)
+    void signedAssetPhotoUrl(photo.path, PHOTO_FULL_TRANSFORM)
       .then((u) => !cancelled && setUrl(u))
       .catch(() => !cancelled && setErrored(true));
     return () => {
@@ -927,7 +929,7 @@ function ThumbButton({
 
   useEffect(() => {
     let cancelled = false;
-    void signedAssetPhotoUrl(photo.path)
+    void signedAssetPhotoUrl(photo.path, PHOTO_THUMB_TRANSFORM)
       .then((u) => !cancelled && setUrl(u))
       .catch(() => {});
     return () => {

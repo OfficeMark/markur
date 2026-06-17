@@ -15,7 +15,7 @@ import {
   type ReportFloorSection,
   type ReportMode,
 } from '@/lib/audit-report';
-import { signedAssetPhotoUrl } from '@/lib/queries/asset-photos';
+import { signedAssetPhotoUrl, PHOTO_FULL_TRANSFORM } from '@/lib/queries/asset-photos';
 import { signedFlagPhotoUrl } from '@/lib/queries/flags';
 import { photoToJpegDataUrl } from '@/lib/photo-to-data-url';
 
@@ -78,7 +78,7 @@ export function Report() {
       const photoEntries = await Promise.all(
         Array.from(bundle.firstPhotoByAsset.entries()).map(async ([assetId, path]) => {
           try {
-            const signed = await signedAssetPhotoUrl(path);
+            const signed = await signedAssetPhotoUrl(path, PHOTO_FULL_TRANSFORM);
             const dataUrl = await photoToJpegDataUrl(signed);
             return [assetId, dataUrl] as const;
           } catch {
@@ -495,7 +495,7 @@ function ReportPhoto({ photoPath }: { photoPath: string | null }) {
       return;
     }
     setMissing(false);
-    void signedAssetPhotoUrl(photoPath)
+    void signedAssetPhotoUrl(photoPath, PHOTO_FULL_TRANSFORM)
       .then((signed) => {
         if (!cancelled) setUrl(signed);
       })

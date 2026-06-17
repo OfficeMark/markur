@@ -8,7 +8,6 @@ import { assetKeys } from '@/hooks/useAssets';
 import { assetPhotoKeys } from '@/hooks/useAssetPhotos';
 import { brandingKeys } from '@/hooks/useBranding';
 import { auditKeys } from '@/hooks/useAudit';
-import { signedAssetPhotoUrls } from '@/lib/queries/asset-photos';
 import { setRuntimeAssetTypes, type AssetTypeColor } from '@/lib/pin-types';
 import { useAuth } from '@/lib/auth-context';
 import {
@@ -172,22 +171,12 @@ export function useFloorView(floorId: string | undefined, userId?: string) {
         new Map(Object.entries(data.last_confirmed_by_asset))
       );
     }
-    // Batch-sign every photo path on the floor in one request, then seed the
-    // per-path URL cache so the grid thumbnails read warm. Skip already-signed
-    // paths so a re-seed (e.g. after navigating back) doesn't re-sign.
-    const paths = Object.values(data.photos)
-      .flat()
-      .map((p) => p.path)
-      .filter((p) => qc.getQueryData(assetPhotoKeys.signedUrl(p)) === undefined);
-    if (paths.length) {
-      void signedAssetPhotoUrls(paths)
-        .then((map) => {
-          for (const [path, url] of Object.entries(map)) {
-            qc.setQueryData(assetPhotoKeys.signedUrl(path), url);
-          }
-        })
-        .catch(() => undefined);
-    }
+    // Photo thumbnails are NO LONGER pre-signed on floor open. They now need a
+    // per-photo transform (HEIC → web format), which the batch signer can't do,
+    // and pre-signing every floor's photos on open is wasted work when the grid
+    // isn't the default view. The grid signs each thumbnail lazily on grid-open
+    // (useSignedAssetPhotoUrl, with a thumbnail transform), keeping floor-open
+    // lean.
   }, [floorId, userId, data, qc]);
 
   return query;

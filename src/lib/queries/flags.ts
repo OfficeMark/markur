@@ -35,10 +35,16 @@ async function uploadFlagPhoto(assetId: string, file: File): Promise<string> {
   return path;
 }
 
-export async function signedFlagPhotoUrl(path: string): Promise<string> {
+export async function signedFlagPhotoUrl(
+  path: string,
+  transform?: { width?: number; height?: number; quality?: number; resize?: 'cover' | 'contain' | 'fill' }
+): Promise<string> {
   const { data, error } = await supabase.storage
     .from('flag-photos')
-    .createSignedUrl(path, 60 * 30);
+    // WO-3: default-transform so HEIC flag photos render everywhere; private bucket.
+    .createSignedUrl(path, 60 * 30, {
+      transform: transform ?? { width: 1200, quality: 80, resize: 'contain' },
+    });
   if (error) throw error;
   return data.signedUrl;
 }

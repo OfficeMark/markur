@@ -3,7 +3,7 @@ import { ArrowLeft, FileDown, ImageOff, Printer } from 'lucide-react';
 import { format } from 'date-fns';
 import { Button } from '@/components/ui/Button';
 import { colorForType } from '@/lib/pin-types';
-import { listFirstPhotoPaths, signedAssetPhotoUrl } from '@/lib/queries/asset-photos';
+import { listFirstPhotoPaths, signedAssetPhotoUrl, PHOTO_FULL_TRANSFORM } from '@/lib/queries/asset-photos';
 import { photoToJpegDataUrl } from '@/lib/photo-to-data-url';
 import {
   abortCatalogueTarget,
@@ -60,7 +60,7 @@ export function FloorCatalogueView({
       const next = new Map<string, string>();
       for (const [id, path] of paths) {
         try {
-          next.set(id, await signedAssetPhotoUrl(path));
+          next.set(id, await signedAssetPhotoUrl(path, PHOTO_FULL_TRANSFORM));
         } catch {
           /* skip a photo that won't sign */
         }
@@ -88,7 +88,7 @@ export function FloorCatalogueView({
           const path = photoPaths.get(d.assetId);
           if (path) {
             try {
-              photoDataUrl = await photoToJpegDataUrl(await signedAssetPhotoUrl(path));
+              photoDataUrl = await photoToJpegDataUrl(await signedAssetPhotoUrl(path, PHOTO_FULL_TRANSFORM));
             } catch {
               photoDataUrl = null;
             }
