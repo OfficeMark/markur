@@ -1,4 +1,4 @@
-import { useRef, useState } from 'react';
+import { memo, useCallback, useMemo, useRef, useState } from 'react';
 import type { Asset } from '@/types/database';
 import { PinMarker } from './PinMarker';
 import { computeStatus, type AssetStatus } from '@/lib/asset-status';
@@ -88,7 +88,190 @@ type DragState = {
   reposition: boolean;
 };
 
-export function PinOverlay({
+/**
+ * Stable plumbing the per-pin items call into. Memoized once in PinOverlay so a
+ * `PinItem` only re-renders when its OWN data (coords / status / selected /
+ * draggable) changes — selecting a pin then re-renders ~1 pin, not all of them.
+ */
+type PinHandlers = {
+  startDrag: (asset: Asset, isReposition: boolean, e: React.PointerEvent<HTMLButtonElement>) => void;
+  updateDrag: (e: PointerEvent) => void;
+  finishDrag: (e: PointerEvent, button: HTMLButtonElement | null) => void;
+  clearLongPress: () => void;
+  onSelectAsset: (asset: Asset) => void;
+  onLongPress?: (assetId: string) => void;
+  dragRef: React.MutableRefObject<DragState | null>;
+  longPressTimerRef: React.MutableRefObject<ReturnType<typeof setTimeout> | null>;
+  justDraggedRef: React.MutableRefObject<string | null>;
+  setPreview: (p: { assetId: string; x: number; y: number } | null) => void;
+  setTouchedAssetId: (id: string | null) => void;
+};
+
+type PinItemProps = {
+  asset: Asset;
+  status: AssetStatus;
+  x: number;
+  y: number;
+  draggable: boolean;
+  faded: boolean;
+  isRepositionTarget: boolean;
+  selected: boolean;
+  pinLabel: string | null;
+  labelVisible: boolean;
+  pinShape: PinShape;
+  pinSize: PinSize;
+  useStatusFill: boolean;
+  /** Whether ANY reposition is active (gates long-press start). */
+  repositionActive: boolean;
+  handlers: PinHandlers;
+};
+
+const PinItem = memo(function PinItem({
+  asset,
+  status,
+  x,
+  y,
+  draggable,
+  faded,
+  isRepositionTarget,
+  selected,
+  pinLabel,
+  labelVisible,
+  pinShape,
+  pinSize,
+  useStatusFill,
+  repositionActive,
+  handlers,
+}: PinItemProps) {
+  const {
+    startDrag,
+    updateDrag,
+    finishDrag,
+    clearLongPress,
+    onSelectAsset,
+    onLongPress,
+    dragRef,
+    longPressTimerRef,
+    justDraggedRef,
+    setPreview,
+    setTouchedAssetId,
+  } = handlers;
+
+  return (
+    <div
+      className="group pointer-events-auto absolute"
+      style={{ left: `${x * 100}%`, top: `${y * 100}%` }}
+      // M32 Step 1: capture-phase pointerdown beats PinMarker's
+      // e.stopPropagation in its own handler, so we can flag this pin as
+      // "touched" for the duration of the press without breaking the existing
+      // tap/drag/long-press flow. Cleared on pointerup / cancel / leave.
+      onPointerDownCapture={(e) => {
+        if (e.pointerType === 'touch') setTouchedAssetId(asset.id);
+      }}
+      onPointerUp={() => setTouchedAssetId(null)}
+      onPointerCancel={() => setTouchedAssetId(null)}
+      onPointerLeave={() => setTouchedAssetId(null)}
+    >
+      {pinLabel && !faded && (
+        <span
+          aria-hidden
+          className={cn(
+            'pointer-events-none absolute left-1/2 top-1/2 select-none whitespace-nowrap rounded-[3px] bg-waymarks-ink/85 px-1 font-mono text-[9px] font-semibold leading-[1.45] text-white shadow-sm',
+            'opacity-0 transition-opacity duration-150 ease-out group-hover:opacity-100 group-focus-within:opacity-100',
+            labelVisible && 'opacity-100'
+          )}
+          style={{
+            transform: 'translate(-50%, 17px) scale(calc(1 / var(--zoom, 1)))',
+            transformOrigin: 'center top',
+          }}
+        >
+          {pinLabel}
+        </span>
+      )}
+      <PinMarker
+        assetId={asset.id}
+        name={asset.name}
+        type={asset.type}
+        status={status}
+        shape={pinShape}
+        size={pinSize}
+        pinLabel={pinLabel}
+        fillColor={useStatusFill ? statusFillColor(status) : undefined}
+        selected={selected}
+        unlocked={draggable && !isRepositionTarget}
+        repositioning={isRepositionTarget}
+        faded={faded}
+        onPointerDownDrag={(e) => {
+          if (!draggable) return;
+          startDrag(asset, isRepositionTarget, e);
+          const button = e.currentTarget;
+          const pointerId = e.pointerId;
+          // Native pointer event listeners - `pointermove` fires after
+          // setPointerCapture even when the cursor leaves the button.
+          const onMove = (ev: PointerEvent) => updateDrag(ev);
+          const onEnd = (ev: PointerEvent) => {
+            button.removeEventListener('pointermove', onMove);
+            button.removeEventListener('pointerup', onEnd);
+            button.removeEventListener('pointercancel', onEnd);
+            finishDrag(ev, button);
+          };
+          button.addEventListener('pointermove', onMove);
+          button.addEventListener('pointerup', onEnd);
+          button.addEventListener('pointercancel', onEnd);
+
+          // M12: long-press on touch enters the deliberate reposition flow.
+          // Skipped if we're already a reposition target (the user is mid-drag
+          // inside that mode), or if the parent didn't wire a callback.
+          // Movement past threshold cancels the timer (handled in updateDrag).
+          if (
+            e.pointerType === 'touch' &&
+            onLongPress &&
+            !repositionActive &&
+            !isRepositionTarget
+          ) {
+            clearLongPress();
+            longPressTimerRef.current = setTimeout(() => {
+              longPressTimerRef.current = null;
+              const drag = dragRef.current;
+              // Fire only if the user is still holding still on this pin.
+              if (!drag || drag.pointerId !== pointerId || drag.moved) return;
+              if (drag.assetId !== asset.id) return;
+              // Tear down the in-flight quick-drag before flipping modes - the
+              // next press will start a fresh drag inside reposition mode with
+              // confirm-toast semantics.
+              dragRef.current = null;
+              setPreview(null);
+              if (button.hasPointerCapture(pointerId)) {
+                button.releasePointerCapture(pointerId);
+              }
+              button.removeEventListener('pointermove', onMove);
+              button.removeEventListener('pointerup', onEnd);
+              button.removeEventListener('pointercancel', onEnd);
+              // Optional haptic (no-op if unsupported).
+              if (typeof navigator !== 'undefined' && 'vibrate' in navigator) {
+                try {
+                  navigator.vibrate?.(20);
+                } catch {
+                  /* iOS Safari throws on vibrate; ignore */
+                }
+              }
+              onLongPress(asset.id);
+            }, LONG_PRESS_MS);
+          }
+        }}
+        onClick={() => {
+          if (justDraggedRef.current === asset.id) return;
+          // While a reposition is active, suppress click-to-open-drawer — the
+          // user is mid-action and the drawer would interrupt.
+          if (repositionActive) return;
+          onSelectAsset(asset);
+        }}
+      />
+    </div>
+  );
+});
+
+function PinOverlayInner({
   assets,
   selectedAssetId,
   onSelectAsset,
@@ -112,60 +295,57 @@ export function PinOverlay({
   // when it fires.
   const longPressTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  function clearLongPress() {
+  const clearLongPress = useCallback(() => {
     if (longPressTimerRef.current !== null) {
       clearTimeout(longPressTimerRef.current);
       longPressTimerRef.current = null;
     }
-  }
+  }, []);
   const [preview, setPreview] = useState<{ assetId: string; x: number; y: number } | null>(
     null
   );
-  // M32 Step 1: pin labels are hidden by default and revealed on desktop
-  // hover (via the `group` class on the per-pin container) and on
-  // touch press-and-hold. We track the currently-touched pin id here so the
-  // label fades in only on that one — capture-phase pointerdown beats the
-  // PinMarker's e.stopPropagation in its own handler.
+  // M32 Step 1: pin labels are hidden by default and revealed on desktop hover
+  // (via the `group` class) and on touch press-and-hold. We track the currently-
+  // touched pin id so the label fades in only on that one.
   const [touchedAssetId, setTouchedAssetId] = useState<string | null>(null);
 
-  function startDrag(
-    asset: Asset,
-    isReposition: boolean,
-    e: React.PointerEvent<HTMLButtonElement>
-  ) {
-    const layer = layerRef.current;
-    if (!layer) return;
-    const rect = layer.getBoundingClientRect();
-    if (rect.width === 0 || rect.height === 0) return;
+  const startDrag = useCallback(
+    (asset: Asset, isReposition: boolean, e: React.PointerEvent<HTMLButtonElement>) => {
+      const layer = layerRef.current;
+      if (!layer) return;
+      const rect = layer.getBoundingClientRect();
+      if (rect.width === 0 || rect.height === 0) return;
 
-    dragRef.current = {
-      assetId: asset.id,
-      pointerId: e.pointerId,
-      startClientX: e.clientX,
-      startClientY: e.clientY,
-      startX: asset.x,
-      startY: asset.y,
-      rectLeft: rect.left,
-      rectTop: rect.top,
-      rectWidth: rect.width,
-      rectHeight: rect.height,
-      moved: false,
-      curX: asset.x,
-      curY: asset.y,
-      reposition: isReposition,
-    };
-    e.currentTarget.setPointerCapture(e.pointerId);
-  }
+      dragRef.current = {
+        assetId: asset.id,
+        pointerId: e.pointerId,
+        startClientX: e.clientX,
+        startClientY: e.clientY,
+        startX: asset.x,
+        startY: asset.y,
+        rectLeft: rect.left,
+        rectTop: rect.top,
+        rectWidth: rect.width,
+        rectHeight: rect.height,
+        moved: false,
+        curX: asset.x,
+        curY: asset.y,
+        reposition: isReposition,
+      };
+      e.currentTarget.setPointerCapture(e.pointerId);
+    },
+    []
+  );
 
-  function updateDrag(e: PointerEvent) {
+  const updateDrag = useCallback((e: PointerEvent) => {
     const drag = dragRef.current;
     if (!drag || drag.pointerId !== e.pointerId) return;
     const dx = e.clientX - drag.startClientX;
     const dy = e.clientY - drag.startClientY;
     if (!drag.moved && Math.hypot(dx, dy) > DRAG_THRESHOLD_PX) {
       drag.moved = true;
-      // Movement past threshold cancels any pending long-press; the user
-      // is dragging, not holding still.
+      // Movement past threshold cancels any pending long-press; the user is
+      // dragging, not holding still.
       clearLongPress();
     }
     if (!drag.moved) return;
@@ -174,9 +354,9 @@ export function PinOverlay({
     drag.curX = x;
     drag.curY = y;
     setPreview({ assetId: drag.assetId, x, y });
-  }
+  }, [clearLongPress]);
 
-  function finishDrag(e: PointerEvent, button: HTMLButtonElement | null) {
+  const finishDrag = useCallback((e: PointerEvent, button: HTMLButtonElement | null) => {
     const drag = dragRef.current;
     if (!drag || drag.pointerId !== e.pointerId) return;
     clearLongPress();
@@ -185,8 +365,8 @@ export function PinOverlay({
       button.releasePointerCapture(e.pointerId);
     }
     if (drag.moved) {
-      // Pull the latest computed coords straight from the ref — no React
-      // state closure to go stale (lesson from M4 drag-closure incident).
+      // Pull the latest computed coords straight from the ref — no React state
+      // closure to go stale (lesson from M4 drag-closure incident).
       if (drag.reposition) {
         onRepositionDragEnd?.(drag.assetId, drag.curX, drag.curY);
       } else {
@@ -200,7 +380,27 @@ export function PinOverlay({
       }, 50);
     }
     setPreview(null);
-  }
+  }, [clearLongPress, onRepositionDragEnd, onReposition]);
+
+  const handlers = useMemo<PinHandlers>(
+    () => ({
+      startDrag,
+      updateDrag,
+      finishDrag,
+      clearLongPress,
+      onSelectAsset,
+      onLongPress,
+      dragRef,
+      longPressTimerRef,
+      justDraggedRef,
+      setPreview,
+      setTouchedAssetId,
+    }),
+    [startDrag, updateDrag, finishDrag, clearLongPress, onSelectAsset, onLongPress]
+  );
+
+  const repositionActive = !!repositionAssetId;
+  const useStatusFill = !!statusOverride;
 
   return (
     <div ref={layerRef} className="pointer-events-none absolute inset-0">
@@ -214,8 +414,8 @@ export function PinOverlay({
           });
         const isRepositionTarget = repositionAssetId === asset.id;
         // While the parent is showing the confirmation toast, keep the pin
-        // pinned at the candidate coords. Otherwise fall back to the live
-        // drag preview, then to the asset's persisted coords.
+        // pinned at the candidate coords. Otherwise fall back to the live drag
+        // preview, then to the asset's persisted coords.
         const isPreview = preview?.assetId === asset.id;
         const x =
           isRepositionTarget && pendingRepositionCoords
@@ -238,139 +438,37 @@ export function PinOverlay({
           ? true
           : !repositionAssetId && canMove && !asset.is_locked;
         const faded = !!repositionAssetId && !isRepositionTarget;
-
         const pinLabel = formatPinNumber(asset.pin_number);
-
         const labelVisible = touchedAssetId === asset.id;
 
         return (
-          <div
+          <PinItem
             key={asset.id}
-            className="group pointer-events-auto absolute"
-            style={{ left: `${x * 100}%`, top: `${y * 100}%` }}
-            // M32 Step 1: capture-phase pointerdown beats PinMarker's
-            // e.stopPropagation in its own handler, so we can flag this pin
-            // as "touched" for the duration of the press without breaking
-            // the existing tap/drag/long-press flow. Cleared on pointerup
-            // / cancel / leave so the label fades back out.
-            onPointerDownCapture={(e) => {
-              if (e.pointerType === 'touch') setTouchedAssetId(asset.id);
-            }}
-            onPointerUp={() => setTouchedAssetId(null)}
-            onPointerCancel={() => setTouchedAssetId(null)}
-            onPointerLeave={() => setTouchedAssetId(null)}
-          >
-            {/* Floor-scoped pin ID, shown just below the pin. Inverse-scaled by
-                --zoom (same trick PinMarker uses) so it stays a constant
-                viewport size as the plan zooms. Hidden while fading other pins
-                during a reposition so it doesn't clutter the focus pin's area.
-                M32 Step 1: visually hidden by default — revealed on desktop
-                hover (group-hover), keyboard focus inside the container
-                (focus-within), or touch press-and-hold (touchedAssetId state).
-                Screen readers still hear the pin number via PinMarker's
-                aria-label (the pinLabel prop). */}
-            {pinLabel && !faded && (
-              <span
-                aria-hidden
-                className={cn(
-                  'pointer-events-none absolute left-1/2 top-1/2 select-none whitespace-nowrap rounded-[3px] bg-waymarks-ink/85 px-1 font-mono text-[9px] font-semibold leading-[1.45] text-white shadow-sm',
-                  'opacity-0 transition-opacity duration-150 ease-out group-hover:opacity-100 group-focus-within:opacity-100',
-                  labelVisible && 'opacity-100'
-                )}
-                style={{
-                  transform: 'translate(-50%, 17px) scale(calc(1 / var(--zoom, 1)))',
-                  transformOrigin: 'center top',
-                }}
-              >
-                {pinLabel}
-              </span>
-            )}
-            <PinMarker
-              assetId={asset.id}
-              name={asset.name}
-              type={asset.type}
-              status={status}
-              shape={pinShape}
-              size={pinSize}
-              pinLabel={pinLabel}
-              fillColor={statusOverride ? statusFillColor(status) : undefined}
-              selected={asset.id === selectedAssetId}
-              unlocked={draggable && !isRepositionTarget}
-              repositioning={isRepositionTarget}
-              faded={faded}
-              onPointerDownDrag={(e) => {
-                if (!draggable) return;
-                startDrag(asset, isRepositionTarget, e);
-                const button = e.currentTarget;
-                const pointerId = e.pointerId;
-                // Native pointer event listeners - `pointermove` fires after
-                // setPointerCapture even when the cursor leaves the button.
-                const onMove = (ev: PointerEvent) => updateDrag(ev);
-                const onEnd = (ev: PointerEvent) => {
-                  button.removeEventListener('pointermove', onMove);
-                  button.removeEventListener('pointerup', onEnd);
-                  button.removeEventListener('pointercancel', onEnd);
-                  finishDrag(ev, button);
-                };
-                button.addEventListener('pointermove', onMove);
-                button.addEventListener('pointerup', onEnd);
-                button.addEventListener('pointercancel', onEnd);
-
-                // M12: long-press on touch enters the deliberate reposition
-                // flow. Skipped if we're already a reposition target (the
-                // user is mid-drag inside that mode), or if the parent
-                // didn't wire a callback. Movement past threshold cancels
-                // the timer (handled in updateDrag).
-                if (
-                  e.pointerType === 'touch' &&
-                  onLongPress &&
-                  !repositionAssetId &&
-                  !isRepositionTarget
-                ) {
-                  clearLongPress();
-                  longPressTimerRef.current = setTimeout(() => {
-                    longPressTimerRef.current = null;
-                    const drag = dragRef.current;
-                    // Fire only if the user is still holding still on this pin.
-                    if (!drag || drag.pointerId !== pointerId || drag.moved) return;
-                    if (drag.assetId !== asset.id) return;
-                    // Tear down the in-flight quick-drag before flipping
-                    // modes - the next press will start a fresh drag inside
-                    // reposition mode with confirm-toast semantics.
-                    dragRef.current = null;
-                    setPreview(null);
-                    if (button.hasPointerCapture(pointerId)) {
-                      button.releasePointerCapture(pointerId);
-                    }
-                    button.removeEventListener('pointermove', onMove);
-                    button.removeEventListener('pointerup', onEnd);
-                    button.removeEventListener('pointercancel', onEnd);
-                    // Optional haptic (no-op if unsupported).
-                    if (typeof navigator !== 'undefined' && 'vibrate' in navigator) {
-                      try {
-                        navigator.vibrate?.(20);
-                      } catch {
-                        /* iOS Safari throws on vibrate; ignore */
-                      }
-                    }
-                    onLongPress(asset.id);
-                  }, LONG_PRESS_MS);
-                }
-              }}
-              onClick={() => {
-                if (justDraggedRef.current === asset.id) return;
-                // While a reposition is active, suppress click-to-open-drawer
-                // — the user is mid-action and the drawer would interrupt.
-                if (repositionAssetId) return;
-                onSelectAsset(asset);
-              }}
-            />
-          </div>
+            asset={asset}
+            status={status}
+            x={x}
+            y={y}
+            draggable={draggable}
+            faded={faded}
+            isRepositionTarget={isRepositionTarget}
+            selected={asset.id === selectedAssetId}
+            pinLabel={pinLabel}
+            labelVisible={labelVisible}
+            pinShape={pinShape}
+            pinSize={pinSize}
+            useStatusFill={useStatusFill}
+            repositionActive={repositionActive}
+            handlers={handlers}
+          />
         );
       })}
     </div>
   );
 }
+
+// Memoized so a Floor/Audit re-render that doesn't change the overlay's props
+// (placing mode, signed-url, cache state, …) does NOT re-render the pins.
+export const PinOverlay = memo(PinOverlayInner);
 
 
 function statusFillColor(status: AssetStatus): string {

@@ -93,6 +93,9 @@ export function AuditModeShell({
   }, [assets, lastByAsset]);
 
   const current = currentId ? assets.find((a) => a.id === currentId) ?? null : null;
+  // Stable identity so the memoized PinOverlay isn't re-rendered by unrelated
+  // audit-shell state changes.
+  const onSelectAsset = useCallback((a: Asset) => setCurrentId(a.id), []);
 
   // The walkthrough order is pin-number order; "Start audit here" picks the
   // starting pin, and the cycle wraps from there to cover the whole floor.
@@ -268,7 +271,7 @@ export function AuditModeShell({
               selectedAssetId={currentId}
               canMove={false}
               statusOverride={statusOverride}
-              onSelectAsset={(a) => setCurrentId(a.id)}
+              onSelectAsset={onSelectAsset}
               pinShape={pinShape}
               pinSize={pinSize}
             />

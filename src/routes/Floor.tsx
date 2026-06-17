@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { ArrowLeft, Check, ChevronRight, ClipboardList, Download, Eye, FileDown, ImageOff, LayoutGrid, Map as MapIcon, Plus, RefreshCw, Trash2, Video } from 'lucide-react';
 import { AppShell } from '@/components/waymarks/AppShell';
@@ -186,24 +186,40 @@ export function Floor() {
     if (repositionAssetId && placing) setPlacing(false);
   }, [repositionAssetId, placing]);
 
-  function startReposition(assetId: string) {
+  // Stable identities so the memoized PinOverlay doesn't re-render every time
+  // Floor re-renders for unrelated state (placing, signed-url, cache state, …).
+  const startReposition = useCallback((assetId: string) => {
     setSelectedAssetId(null); // close drawer
     setPendingMove(null);
     setRepositionAssetId(assetId);
-  }
+  }, []);
   function cancelReposition() {
     setPendingMove(null);
     setRepositionAssetId(null);
   }
-  function onRepositionDragEnd(assetId: string, x: number, y: number) {
-    const a = assets.find((a) => a.id === assetId);
-    if (!a) return;
-    if (Math.abs(a.x - x) < 0.0005 && Math.abs(a.y - y) < 0.0005) {
-      setPendingMove(null);
-      return;
-    }
-    setPendingMove({ assetId, from: { x: a.x, y: a.y }, to: { x, y } });
-  }
+  const onRepositionDragEnd = useCallback(
+    (assetId: string, x: number, y: number) => {
+      const a = assets.find((a) => a.id === assetId);
+      if (!a) return;
+      if (Math.abs(a.x - x) < 0.0005 && Math.abs(a.y - y) < 0.0005) {
+        setPendingMove(null);
+        return;
+      }
+      setPendingMove({ assetId, from: { x: a.x, y: a.y }, to: { x, y } });
+    },
+    [assets]
+  );
+  const onSelectAsset = useCallback((a: Asset) => setSelectedAssetId(a.id), []);
+  const updateAssetMutate = updateAsset.mutate;
+  const onReposition = useCallback(
+    (assetId: string, x: number, y: number) =>
+      updateAssetMutate({ id: assetId, patch: { x, y } }),
+    [updateAssetMutate]
+  );
+  const pendingRepositionCoords = useMemo(
+    () => (pendingMove ? { x: pendingMove.to.x, y: pendingMove.to.y } : null),
+    [pendingMove]
+  );
   async function confirmMove() {
     if (!pendingMove) return;
     try {
@@ -646,15 +662,11 @@ export function Floor() {
                     assets={visibleAssets}
                     selectedAssetId={selectedAssetId}
                     canMove={canEdit}
-                    onSelectAsset={(a: Asset) => setSelectedAssetId(a.id)}
-                    onReposition={(assetId, x, y) =>
-                      updateAsset.mutate({ id: assetId, patch: { x, y } })
-                    }
+                    onSelectAsset={onSelectAsset}
+                    onReposition={onReposition}
                     repositionAssetId={repositionAssetId}
                     onRepositionDragEnd={onRepositionDragEnd}
-                    pendingRepositionCoords={
-                      pendingMove ? { x: pendingMove.to.x, y: pendingMove.to.y } : null
-                    }
+                    pendingRepositionCoords={pendingRepositionCoords}
                     lastAuditByAsset={lastAuditByAsset ?? null}
                     onLongPress={canEdit ? startReposition : undefined}
                     pinShape={pinAppearance.pinShape}

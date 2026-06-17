@@ -1,4 +1,4 @@
-import { forwardRef } from 'react';
+import { forwardRef, memo } from 'react';
 import { Circle, Triangle, Square } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import type { AssetStatus } from '@/lib/asset-status';
@@ -66,7 +66,7 @@ const PIN_ICON_PX: Record<PinSize, number> = {
   large: 13,
 };
 
-export const PinMarker = forwardRef<HTMLButtonElement, PinMarkerProps>(function PinMarker(
+const PinMarkerInner = forwardRef<HTMLButtonElement, PinMarkerProps>(function PinMarker(
   {
     assetId,
     name,
@@ -203,3 +203,7 @@ export const PinMarker = forwardRef<HTMLButtonElement, PinMarkerProps>(function 
     </button>
   );
 });
+
+// Memoized: with a memoized PinItem parent passing stable props, an unrelated
+// floor re-render no longer re-renders every pin.
+export const PinMarker = memo(PinMarkerInner);
