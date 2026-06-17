@@ -184,7 +184,7 @@ export function NewInvitationDialog({
         <Dialog.Overlay className="fixed inset-0 z-50 bg-black/40 data-[state=open]:animate-in data-[state=open]:fade-in-0" />
         <Dialog.Content
           aria-describedby="new-invitation-description"
-          className="fixed left-1/2 top-1/2 z-50 flex max-h-[90vh] w-[min(96vw,520px)] -translate-x-1/2 -translate-y-1/2 flex-col rounded-lg border border-black/10 bg-surface text-text shadow-sheet outline-none dark:border-white/10"
+          className="fixed left-1/2 top-1/2 z-50 flex max-h-[90dvh] w-[min(96vw,520px)] -translate-x-1/2 -translate-y-1/2 flex-col rounded-lg border border-black/10 bg-surface text-text shadow-sheet outline-none dark:border-white/10"
         >
           <header className="flex items-start justify-between gap-3 border-b border-black/10 p-4 dark:border-white/10">
             <Dialog.Title asChild>

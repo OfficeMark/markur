@@ -1,71 +1,53 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useMemo } from 'react';
 import type { ReactNode } from 'react';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { supabase } from './supabase';
 import { useAuth } from './auth-context';
 import { PermissionsContext, type PermissionsState } from './permissions-context';
 import type { Grant } from './permissions-types';
 
+async function fetchGrants(userId: string): Promise<readonly Grant[]> {
+  const { data, error } = await supabase
+    .from('access_grants')
+    .select('id, role, scope_type, scope_id, expires_at')
+    .eq('user_id', userId);
+  if (error) {
+    console.warn('[permissions] fetch failed', error);
+    return [];
+  }
+  return (data ?? []) as Grant[];
+}
+
 /**
  * Loads the signed-in user's access_grants and exposes them via context.
  *
- * NOTE: get_app_boot also returns the user's grants, but we deliberately keep
- * this dedicated fetch as the source. Grants gate EVERY capability check, and a
- * shape mismatch (or an empty list misparsed from the bundle) would silently
- * deny all access — a far worse failure than one small, fast query. Fold this
- * into app_boot only once the bundle's grants shape is verified end-to-end.
+ * WO-4: fetched through React Query with a 5-min staleTime so it's cached and
+ * deduped instead of refetching on every mount / auth-event churn. This stays
+ * the AUTHORITY for grants — deliberately NOT folded into app_boot, because a
+ * bundle shape mismatch / misparsed-empty list would silently deny all access.
  */
 export function PermissionsProvider({ children }: { children: ReactNode }) {
   const { user, loading: authLoading } = useAuth();
-  const [grants, setGrants] = useState<readonly Grant[]>([]);
-  const [loading, setLoading] = useState(true);
+  const qc = useQueryClient();
+  const userId = user?.id;
 
-  const fetchGrants = useCallback(async (userId: string): Promise<readonly Grant[]> => {
-    const { data, error } = await supabase
-      .from('access_grants')
-      .select('id, role, scope_type, scope_id, expires_at')
-      .eq('user_id', userId);
-    if (error) {
-      console.warn('[permissions] fetch failed', error);
-      return [];
-    }
-    return (data ?? []) as Grant[];
-  }, []);
+  const query = useQuery({
+    queryKey: ['access-grants', userId ?? 'none'],
+    queryFn: () => fetchGrants(userId!),
+    enabled: !!userId && !authLoading,
+    staleTime: 5 * 60_000,
+  });
 
-  useEffect(() => {
-    let cancelled = false;
-
-    if (authLoading) {
-      return;
-    }
-
-    if (!user) {
-      setGrants([]);
-      setLoading(false);
-      return;
-    }
-
-    setLoading(true);
-    void (async () => {
-      const next = await fetchGrants(user.id);
-      if (cancelled) return;
-      setGrants(next);
-      setLoading(false);
-    })();
-
-    return () => {
-      cancelled = true;
-    };
-  }, [user, authLoading, fetchGrants]);
+  const grants: readonly Grant[] = userId ? query.data ?? [] : [];
+  const loading = authLoading || (!!userId && query.isLoading);
 
   const refreshGrants = useCallback(async () => {
-    if (!user) return;
-    const next = await fetchGrants(user.id);
-    setGrants(next);
-  }, [user, fetchGrants]);
+    await qc.invalidateQueries({ queryKey: ['access-grants'] });
+  }, [qc]);
 
   const value = useMemo<PermissionsState>(
-    () => ({ grants, loading: loading || authLoading, refreshGrants }),
-    [grants, loading, authLoading, refreshGrants]
+    () => ({ grants, loading, refreshGrants }),
+    [grants, loading, refreshGrants]
   );
 
   return <PermissionsContext.Provider value={value}>{children}</PermissionsContext.Provider>;

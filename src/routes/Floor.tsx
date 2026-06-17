@@ -456,12 +456,20 @@ export function Floor() {
           )}
         </div>
 
-        {/* Name-search — its own full-width band on phones (the zone filter and
-            Catalogue are dropped on mobile per the toolbar trim). On sm+ this
-            row hides and the search box lives in the Row 1 cluster instead. */}
+        {/* Name-search + type filter band on phones (WO-5: the funnel was
+            desktop-only; a surveyor on a phone needs to filter by type/status
+            on site). On sm+ this row hides and both live in the Row 1 cluster. */}
         {floor.plan_url && assets.length > 0 && (
-          <div className="mb-2 sm:hidden">
-            <FilterByTextInput value={filterText} onChange={setFilterText} />
+          <div className="mb-2 flex items-center gap-1.5 sm:hidden">
+            <div className="min-w-0 flex-1">
+              <FilterByTextInput value={filterText} onChange={setFilterText} />
+            </div>
+            <FilterByTypePopover selectedTypes={filterTypes} onChange={setFilterTypes} />
+            {filtersActive && (
+              <span className="inline-flex h-7 shrink-0 items-center rounded-md bg-waymarks-gold-soft px-2 text-[11px] font-medium text-waymarks-ink">
+                {visibleAssets.length}/{assets.length}
+              </span>
+            )}
           </div>
         )}
 

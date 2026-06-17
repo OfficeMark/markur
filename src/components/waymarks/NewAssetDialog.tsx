@@ -420,7 +420,7 @@ export function NewAssetDialog({
     >
       <Dialog.Portal>
         <Dialog.Overlay className="fixed inset-0 z-50 bg-black/40 data-[state=open]:animate-in data-[state=open]:fade-in-0" />
-        <Dialog.Content className="fixed left-1/2 top-1/2 z-50 flex max-h-[92vh] w-[min(94vw,560px)] -translate-x-1/2 -translate-y-1/2 flex-col overflow-hidden rounded-xl border border-black/10 bg-surface text-text shadow-sheet outline-none dark:border-white/10">
+        <Dialog.Content className="fixed left-1/2 top-1/2 z-50 flex max-h-[92dvh] w-[min(94vw,560px)] -translate-x-1/2 -translate-y-1/2 flex-col overflow-hidden rounded-xl border border-black/10 bg-surface text-text shadow-sheet outline-none dark:border-white/10">
           {/* Ink header band with the orange accent bar. */}
           <div className="relative shrink-0 bg-waymarks-ink px-5 py-4 text-white">
             <span aria-hidden className="absolute inset-y-0 left-0 w-1 bg-waymarks-gold" />
