@@ -22,17 +22,23 @@ import {
   useRevokeGrant,
 } from '@/hooks/useAccess';
 import { format, formatDistanceToNow } from 'date-fns';
-import type { GrantWithProfile } from '@/lib/queries/access';
+import type { BuildingScopeRefs, GrantWithProfile } from '@/lib/queries/access';
 import type { PendingInvitation } from '@/types/database';
 import { inviteUrlFor } from '@/lib/utils';
 
 export type AccessManagementCardProps = {
   buildingId: string;
+  /**
+   * The building's floors + tenants from the get_building_view bundle. Passed in
+   * so the grant/invitation lookups skip re-fetching them (WO-7). Omit to let
+   * those queries fetch their own.
+   */
+  scopeRefs?: BuildingScopeRefs;
 };
 
-export function AccessManagementCard({ buildingId }: AccessManagementCardProps) {
-  const grants = useBuildingGrants(buildingId);
-  const invites = usePendingInvitations(buildingId);
+export function AccessManagementCard({ buildingId, scopeRefs }: AccessManagementCardProps) {
+  const grants = useBuildingGrants(buildingId, scopeRefs);
+  const invites = usePendingInvitations(buildingId, scopeRefs);
   const revoke = useRevokeGrant(buildingId);
   const cancelInv = useCancelInvitation(buildingId);
   const [inviteOpen, setInviteOpen] = useState(false);

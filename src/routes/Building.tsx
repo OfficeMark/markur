@@ -192,7 +192,10 @@ export function Building() {
         {canManageAccess && (
           <section className="mt-10">
             <SectionErrorBoundary label="Access management">
-              <AccessManagementCard buildingId={building.id} />
+              <AccessManagementCard
+                buildingId={building.id}
+                scopeRefs={{ floors: view?.floors ?? [], tenants: view?.tenants ?? [] }}
+              />
             </SectionErrorBoundary>
           </section>
         )}

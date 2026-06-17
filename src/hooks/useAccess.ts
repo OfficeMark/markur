@@ -7,6 +7,7 @@ import {
   listPendingInvitationsForBuilding,
   lookupInvitation,
   revokeGrant,
+  type BuildingScopeRefs,
   type CreateInvitationInput,
 } from '@/lib/queries/access';
 
@@ -18,23 +19,29 @@ export const accessKeys = {
   invitation: (token: string) => [...accessKeys.all, 'invitation', token] as const,
 };
 
-export function useBuildingGrants(buildingId: string | undefined) {
+export function useBuildingGrants(
+  buildingId: string | undefined,
+  refs?: BuildingScopeRefs
+) {
   return useQuery({
     queryKey: buildingId
       ? accessKeys.grantsByBuilding(buildingId)
       : ['access', 'grants', 'by-building', 'none'],
-    queryFn: () => (buildingId ? listGrantsForBuilding(buildingId) : Promise.resolve([])),
+    queryFn: () => (buildingId ? listGrantsForBuilding(buildingId, refs) : Promise.resolve([])),
     enabled: !!buildingId,
   });
 }
 
-export function usePendingInvitations(buildingId: string | undefined) {
+export function usePendingInvitations(
+  buildingId: string | undefined,
+  refs?: BuildingScopeRefs
+) {
   return useQuery({
     queryKey: buildingId
       ? accessKeys.pendingByBuilding(buildingId)
       : ['access', 'pending', 'by-building', 'none'],
     queryFn: () =>
-      buildingId ? listPendingInvitationsForBuilding(buildingId) : Promise.resolve([]),
+      buildingId ? listPendingInvitationsForBuilding(buildingId, refs) : Promise.resolve([]),
     enabled: !!buildingId,
   });
 }

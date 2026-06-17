@@ -16,6 +16,8 @@ import type { Grant } from '@/lib/permissions-types';
 
 export type BuildingViewFloor = Floor & { pin_count: number };
 
+export type BuildingViewTenant = { id: string; name: string; suite_label: string | null };
+
 /** An open session in this building, with the floor label for the resume banner. */
 export type BuildingViewResumeSession = AuditSession & {
   floor: { id: string; label: string };
@@ -24,7 +26,7 @@ export type BuildingViewResumeSession = AuditSession & {
 export type BuildingView = {
   building: Building | null;
   floors: BuildingViewFloor[];
-  tenants: unknown[];
+  tenants: BuildingViewTenant[];
   resume_sessions: BuildingViewResumeSession[];
 };
 

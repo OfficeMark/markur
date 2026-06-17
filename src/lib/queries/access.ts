@@ -21,8 +21,20 @@ export type GrantWithProfile = AccessGrant & {
   scope_label: string;
 };
 
+/**
+ * WO-7: the building's floors + tenants, used here only to resolve floor/tenant
+ * grant scopes. The caller (the access card) already has them from the
+ * get_building_view bundle, so it passes them in to skip a duplicate fetch.
+ * When omitted, we fetch them (backward-compatible / never worse).
+ */
+export type BuildingScopeRefs = {
+  floors: { id: string; label: string }[];
+  tenants: { id: string; name: string; suite_label: string | null }[];
+};
+
 export async function listGrantsForBuilding(
-  buildingId: string
+  buildingId: string,
+  refs?: BuildingScopeRefs
 ): Promise<GrantWithProfile[]> {
   // We need three fan-ins:
   //   * scope_type='building', scope_id = buildingId
@@ -31,15 +43,22 @@ export async function listGrantsForBuilding(
   // PostgREST can't OR across different filters in one call, so we issue
   // three queries in parallel and merge.
 
-  const [floorsRes, tenantsRes] = await Promise.all([
-    supabase.from('floors').select('id, label').eq('building_id', buildingId).is('deleted_at', null),
-    supabase.from('tenants').select('id, name, suite_label').eq('building_id', buildingId),
-  ]);
-  if (floorsRes.error) throw floorsRes.error;
-  if (tenantsRes.error) throw tenantsRes.error;
+  let floors: { id: string; label: string }[];
+  let tenants: { id: string; name: string; suite_label: string | null }[];
+  if (refs) {
+    floors = refs.floors;
+    tenants = refs.tenants;
+  } else {
+    const [floorsRes, tenantsRes] = await Promise.all([
+      supabase.from('floors').select('id, label').eq('building_id', buildingId).is('deleted_at', null),
+      supabase.from('tenants').select('id, name, suite_label').eq('building_id', buildingId),
+    ]);
+    if (floorsRes.error) throw floorsRes.error;
+    if (tenantsRes.error) throw tenantsRes.error;
+    floors = floorsRes.data ?? [];
+    tenants = tenantsRes.data ?? [];
+  }
 
-  const floors = floorsRes.data ?? [];
-  const tenants = tenantsRes.data ?? [];
   const floorIds = floors.map((f) => f.id);
   const tenantIds = tenants.map((t) => t.id);
 
@@ -115,16 +134,24 @@ export async function listGrantsForBuilding(
 }
 
 export async function listPendingInvitationsForBuilding(
-  buildingId: string
+  buildingId: string,
+  refs?: BuildingScopeRefs
 ): Promise<PendingInvitation[]> {
-  const [floorsRes, tenantsRes] = await Promise.all([
-    supabase.from('floors').select('id').eq('building_id', buildingId).is('deleted_at', null),
-    supabase.from('tenants').select('id').eq('building_id', buildingId),
-  ]);
-  if (floorsRes.error) throw floorsRes.error;
-  if (tenantsRes.error) throw tenantsRes.error;
-  const floorIds = (floorsRes.data ?? []).map((f) => f.id);
-  const tenantIds = (tenantsRes.data ?? []).map((t) => t.id);
+  let floorIds: string[];
+  let tenantIds: string[];
+  if (refs) {
+    floorIds = refs.floors.map((f) => f.id);
+    tenantIds = refs.tenants.map((t) => t.id);
+  } else {
+    const [floorsRes, tenantsRes] = await Promise.all([
+      supabase.from('floors').select('id').eq('building_id', buildingId).is('deleted_at', null),
+      supabase.from('tenants').select('id').eq('building_id', buildingId),
+    ]);
+    if (floorsRes.error) throw floorsRes.error;
+    if (tenantsRes.error) throw tenantsRes.error;
+    floorIds = (floorsRes.data ?? []).map((f) => f.id);
+    tenantIds = (tenantsRes.data ?? []).map((t) => t.id);
+  }
 
   // OR across multiple scope_id sets via PostgREST `or=` filter.
   const orParts: string[] = [`and(scope_type.eq.building,scope_id.eq.${buildingId})`];
