@@ -4,6 +4,7 @@ import { AlertCircle, Camera, FileImage, Flag, Trash2, X } from 'lucide-react';
 import { Button } from '@/components/ui/Button';
 import { FLAG_PHOTO_MAX, validateFlagPhotoFile } from '@/lib/queries/flags';
 import { PHOTO_ACCEPT } from '@/lib/queries/asset-photos';
+import { prepareForUpload } from '@/lib/image-convert';
 import { useContacts } from '@/hooks/useContacts';
 import { useFloor } from '@/hooks/useFloors';
 import type { Asset } from '@/types/database';
@@ -55,15 +56,17 @@ export function AuditFlagDialog({
     }
   }, [open, asset?.id]);
 
-  function addFiles(list: FileList | null) {
+  async function addFiles(list: FileList | null) {
     if (!list || list.length === 0) return;
     const accepted: File[] = [];
     let err: string | null = null;
     for (const raw of Array.from(list)) {
-      // WO-3: stash the original file (incl. HEIC); display/export transform it.
-      const v = validateFlagPhotoFile(raw);
+      // WO-3 follow-up: convert HEIC → JPEG up front (native, no freeze) so the
+      // stashed preview renders everywhere and the stored photo is a plain JPEG.
+      const file = await prepareForUpload(raw);
+      const v = validateFlagPhotoFile(file);
       if (v) err = v;
-      else accepted.push(raw);
+      else accepted.push(file);
     }
     setPhotos((prev) => {
       const room = Math.max(0, FLAG_PHOTO_MAX - prev.length);

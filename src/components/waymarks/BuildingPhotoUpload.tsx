@@ -8,6 +8,7 @@ import {
 } from '@/hooks/useBuildings';
 import { validateBuildingPhotoFile } from '@/lib/queries/buildings';
 import { PHOTO_ACCEPT } from '@/lib/queries/asset-photos';
+import { prepareForUpload } from '@/lib/image-convert';
 
 /**
  * Hero-photo manager for a building (M10b). Admins see a "Choose photo"
@@ -38,14 +39,17 @@ export function BuildingPhotoUpload({
   const remove = useRemoveBuildingPhoto(buildingId);
   const url = useBuildingPhotoUrl(photoPath);
   const [error, setError] = useState<string | null>(null);
+  // Instant local preview while the upload is in flight (WO-3 follow-up).
+  const [localPreview, setLocalPreview] = useState<string | null>(null);
+  const displayUrl = localPreview ?? url;
 
   async function onPick(list: FileList | null) {
     setError(null);
     const picked = list?.[0];
     if (!picked) return;
-    // WO-3: upload the original file (incl. HEIC) — no client-side conversion;
-    // display goes through the Storage image transform.
-    const file = picked;
+    // WO-3 follow-up: convert HEIC → JPEG once, on upload (native, no freeze), so
+    // the stored photo is a plain JPEG served fast.
+    const file = await prepareForUpload(picked);
     const v = validateBuildingPhotoFile(file);
     if (v) {
       setError(
@@ -57,19 +61,24 @@ export function BuildingPhotoUpload({
       );
       return;
     }
+    const preview = URL.createObjectURL(file);
+    setLocalPreview(preview);
     try {
       await upload.mutateAsync(file);
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Upload failed.');
+    } finally {
+      setLocalPreview(null);
+      URL.revokeObjectURL(preview);
     }
   }
 
   if (variant === 'hero') {
     return (
       <div className="relative overflow-hidden rounded-xl border border-black/10 bg-waymarks-ink dark:border-white/10">
-        {url ? (
+        {displayUrl ? (
           <img
-            src={url}
+            src={displayUrl}
             alt=""
             className="block h-48 w-full object-cover sm:h-64"
             loading="lazy"
@@ -133,8 +142,8 @@ export function BuildingPhotoUpload({
   // Compact thumbnail (used inside a Home BuildingCard, etc.)
   return (
     <div className="h-20 w-28 shrink-0 overflow-hidden rounded-md border border-black/10 bg-waymarks-ink dark:border-white/10">
-      {url ? (
-        <img src={url} alt="" className="h-full w-full object-cover" loading="lazy" />
+      {displayUrl ? (
+        <img src={displayUrl} alt="" className="h-full w-full object-cover" loading="lazy" />
       ) : (
         <div className="flex h-full w-full items-center justify-center bg-waymarks-ink">
           <Camera size={18} className="text-white/50" aria-hidden />

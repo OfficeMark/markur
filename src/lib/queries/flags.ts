@@ -34,12 +34,11 @@ export async function signedFlagPhotoUrl(
   path: string,
   transform?: { width?: number; height?: number; quality?: number; resize?: 'cover' | 'contain' | 'fill' }
 ): Promise<string> {
-  const { data, error } = await supabase.storage
-    .from('flag-photos')
-    // WO-3: default-transform so HEIC flag photos render everywhere; private bucket.
-    .createSignedUrl(path, 60 * 30, {
-      transform: transform ?? { width: 1200, quality: 80, resize: 'contain' },
-    });
+  // Stored JPEGs serve plain (fast); only legacy raw HEIC needs the transform.
+  const opts = /\.(heic|heif)$/i.test(path)
+    ? { transform: transform ?? { width: 1200, quality: 80, resize: 'contain' as const } }
+    : undefined;
+  const { data, error } = await supabase.storage.from('flag-photos').createSignedUrl(path, 60 * 30, opts);
   if (error) throw error;
   return data.signedUrl;
 }

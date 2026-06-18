@@ -43,6 +43,7 @@ import {
   PHOTO_FULL_TRANSFORM,
   PHOTO_ACCEPT,
 } from '@/lib/queries/asset-photos';
+import { prepareForUpload } from '@/lib/image-convert';
 import { computeStatus, statusLabel, type AssetStatus } from '@/lib/asset-status';
 import { formatPinNumber } from '@/lib/pin-types';
 import {
@@ -684,6 +685,10 @@ function PhotoGallery({
   // it ran started a SECOND batch and piled extra photos onto the pin. We now
   // ignore + disable new picks until the batch finishes, and show its progress.
   const [batch, setBatch] = useState<{ done: number; total: number } | null>(null);
+  // Instant local previews (WO-3 follow-up): show each picked photo from the
+  // local File the moment it's added, so the surveyor never waits on the upload
+  // round-trip. Cleared (and the object URL revoked) once its upload lands.
+  const [pending, setPending] = useState<{ localId: string; url: string }[]>([]);
 
   const safeActive = Math.min(active, Math.max(0, photos.length - 1));
   const current: AssetPhoto | undefined = photos[safeActive];
@@ -695,19 +700,27 @@ function PhotoGallery({
     setBatch({ done: 0, total: files.length });
     let done = 0;
     for (const raw of files) {
-      // WO-3: upload the original file unchanged (incl. HEIC) — no client-side
-      // conversion. Display + export go through the Storage image transform.
-      const file = raw;
+      // WO-3 follow-up: convert HEIC → JPEG once, on upload (native decode, no
+      // freeze), so stored photos are plain JPEGs and views are fast. Non-HEIC
+      // (and undecodable HEIC) pass through unchanged.
+      const file = await prepareForUpload(raw);
       const v = validateAssetPhotoFile(file);
       if (v) {
         setErrorMsg(v);
         setBatch({ done: (done += 1), total: files.length });
         continue;
       }
+      // Show the photo immediately from the local file while it uploads.
+      const localId = crypto.randomUUID();
+      const previewUrl = URL.createObjectURL(file);
+      setPending((p) => [...p, { localId, url: previewUrl }]);
       try {
         await add.mutateAsync(file);
       } catch (e) {
         setErrorMsg(e instanceof Error ? e.message : 'Upload failed.');
+      } finally {
+        setPending((p) => p.filter((x) => x.localId !== localId));
+        URL.revokeObjectURL(previewUrl);
       }
       setBatch({ done: (done += 1), total: files.length });
     }
@@ -746,6 +759,22 @@ function PhotoGallery({
           </div>
         )}
       </div>
+
+      {pending.length > 0 && (
+        <div className="flex gap-1 overflow-x-auto">
+          {pending.map((p) => (
+            <div
+              key={p.localId}
+              className="relative h-14 w-14 shrink-0 overflow-hidden rounded-md border border-black/10 dark:border-white/10"
+            >
+              <img src={p.url} alt="" className="h-full w-full object-cover opacity-70" />
+              <div className="absolute inset-0 flex items-center justify-center bg-black/25">
+                <span className="h-3.5 w-3.5 animate-spin rounded-full border-2 border-white border-t-transparent" />
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
 
       {photos.length > 1 && (
         <div className="flex gap-1 overflow-x-auto">
