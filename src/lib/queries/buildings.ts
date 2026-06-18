@@ -247,10 +247,10 @@ export async function removeBuildingPhoto(buildingId: string): Promise<Building>
 
 export async function signedBuildingPhotoUrl(path: string | null | undefined): Promise<string | null> {
   if (!path) return null;
-  // Stored JPEGs serve plain (fast); only legacy raw HEIC needs the transform.
-  const opts = /\.(heic|heif)$/i.test(path)
-    ? { transform: { width: 1000, quality: 78, resize: 'contain' as const } }
-    : undefined;
+  // Building photos are shown at card / hero (preview) size, never full-screen,
+  // so always serve a sized ~1000px transform — cheap on a stored JPEG, and the
+  // legacy-HEIC fallback. Avoids shipping the full ~3000px original.
+  const opts = { transform: { width: 1000, quality: 78, resize: 'contain' as const } };
   const { data, error } = await supabase.storage
     .from(BUILDING_PHOTO_BUCKET)
     .createSignedUrl(path, 60 * 60, opts);

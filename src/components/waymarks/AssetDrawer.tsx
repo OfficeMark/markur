@@ -40,6 +40,7 @@ import {
   signedAssetPhotoUrl,
   validateAssetPhotoFile,
   PHOTO_THUMB_TRANSFORM,
+  PHOTO_FULL_TRANSFORM,
   PHOTO_ACCEPT,
 } from '@/lib/queries/asset-photos';
 import { prepareForUpload } from '@/lib/image-convert';
@@ -862,15 +863,27 @@ function PhotoFrame({
     let cancelled = false;
     setUrl(null);
     setErrored(false);
-    // Full-screen viewer: no transform → the stored JPEG serves plain at full
-    // ~3000px (a still-raw HEIC falls back to a transform inside the signer).
-    void signedAssetPhotoUrl(photo.path)
+    // Inline drawer photo: a sized ~1400px transform (cheap on a stored JPEG) so
+    // opening a pin is fast — NOT the full ~1 MB original. Tap opens full size.
+    void signedAssetPhotoUrl(photo.path, PHOTO_FULL_TRANSFORM)
       .then((u) => !cancelled && setUrl(u))
       .catch(() => !cancelled && setErrored(true));
     return () => {
       cancelled = true;
     };
   }, [photo.path]);
+
+  // Tap-to-zoom: open the full ~3000px plain JPEG full-screen. Open the tab
+  // synchronously in the click gesture (iOS popup rule), then set its URL once
+  // the plain signed URL resolves.
+  function handleOpenFull() {
+    const w = window.open('', '_blank');
+    void signedAssetPhotoUrl(photo.path)
+      .then((full) => {
+        if (w) w.location.href = full;
+      })
+      .catch(() => w?.close());
+  }
 
   async function handleDownload() {
     setDownloading(true);
@@ -911,7 +924,14 @@ function PhotoFrame({
   }
   return (
     <div className="relative">
-      <img src={url} alt="" className="block w-full object-cover" />
+      <button
+        type="button"
+        onClick={handleOpenFull}
+        aria-label="View photo full size"
+        className="block w-full cursor-zoom-in"
+      >
+        <img src={url} alt="" className="block w-full object-cover" />
+      </button>
       {/* Download is available to anyone who can view the asset. */}
       <button
         type="button"
