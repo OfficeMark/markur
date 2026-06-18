@@ -19,10 +19,11 @@ export const PHOTO_THUMB_TRANSFORM: PhotoTransform = { width: 480, quality: 72, 
 export const PHOTO_FULL_TRANSFORM: PhotoTransform = { width: 1400, quality: 82, resize: 'contain' };
 
 /**
- * Photos are now converted to JPEG on upload (see lib/image-convert), so the
- * hot path serves them as PLAIN signed URLs (fast, no per-view convert). The
- * Storage transform is kept ONLY as a legacy fallback for any HEIC that's still
- * stored raw (e.g. uploaded from a browser that couldn't decode it).
+ * HEIC is uploaded raw and converted to a stored JPEG SERVER-SIDE after upload,
+ * so the hot path serves photos as PLAIN signed URLs (fast, no per-view convert)
+ * once converted. The Storage transform is kept ONLY as a fallback for a path
+ * that's still HEIC (the brief window before the server converts it, or if the
+ * server step is unavailable).
  */
 function isHeicPath(path: string): boolean {
   return /\.(heic|heif)$/i.test(path);

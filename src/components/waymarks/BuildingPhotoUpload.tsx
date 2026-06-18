@@ -8,7 +8,6 @@ import {
 } from '@/hooks/useBuildings';
 import { validateBuildingPhotoFile } from '@/lib/queries/buildings';
 import { PHOTO_ACCEPT } from '@/lib/queries/asset-photos';
-import { prepareForUpload } from '@/lib/image-convert';
 
 /**
  * Hero-photo manager for a building (M10b). Admins see a "Choose photo"
@@ -47,9 +46,9 @@ export function BuildingPhotoUpload({
     setError(null);
     const picked = list?.[0];
     if (!picked) return;
-    // WO-3 follow-up: convert HEIC → JPEG once, on upload (native, no freeze), so
-    // the stored photo is a plain JPEG served fast.
-    const file = await prepareForUpload(picked);
+    // Upload the original file — NO device-side conversion. HEIC is converted to
+    // a stored JPEG server-side after upload.
+    const file = picked;
     const v = validateBuildingPhotoFile(file);
     if (v) {
       setError(

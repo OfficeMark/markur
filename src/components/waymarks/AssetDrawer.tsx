@@ -43,7 +43,6 @@ import {
   PHOTO_FULL_TRANSFORM,
   PHOTO_ACCEPT,
 } from '@/lib/queries/asset-photos';
-import { prepareForUpload } from '@/lib/image-convert';
 import { computeStatus, statusLabel, type AssetStatus } from '@/lib/asset-status';
 import { formatPinNumber } from '@/lib/pin-types';
 import {
@@ -700,10 +699,10 @@ function PhotoGallery({
     setBatch({ done: 0, total: files.length });
     let done = 0;
     for (const raw of files) {
-      // WO-3 follow-up: convert HEIC → JPEG once, on upload (native decode, no
-      // freeze), so stored photos are plain JPEGs and views are fast. Non-HEIC
-      // (and undecodable HEIC) pass through unchanged.
-      const file = await prepareForUpload(raw);
+      // Upload the original file unchanged — NO device-side conversion (keeps
+      // uploads instant on the phone). HEIC is converted to a stored JPEG
+      // server-side after upload; until then it's served via the transform.
+      const file = raw;
       const v = validateAssetPhotoFile(file);
       if (v) {
         setErrorMsg(v);
