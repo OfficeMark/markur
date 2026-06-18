@@ -40,9 +40,9 @@ import {
   signedAssetPhotoUrl,
   validateAssetPhotoFile,
   PHOTO_THUMB_TRANSFORM,
-  PHOTO_FULL_TRANSFORM,
   PHOTO_ACCEPT,
 } from '@/lib/queries/asset-photos';
+import { prepareForUpload } from '@/lib/image-convert';
 import { computeStatus, statusLabel, type AssetStatus } from '@/lib/asset-status';
 import { formatPinNumber } from '@/lib/pin-types';
 import {
@@ -699,10 +699,10 @@ function PhotoGallery({
     setBatch({ done: 0, total: files.length });
     let done = 0;
     for (const raw of files) {
-      // Upload the original file unchanged — NO device-side conversion (keeps
-      // uploads instant on the phone). HEIC is converted to a stored JPEG
-      // server-side after upload; until then it's served via the transform.
-      const file = raw;
+      // Convert HEIC → JPEG on-device using the browser's NATIVE decoder (fast,
+      // async, no freeze on iOS — see lib/image-convert), so the stored object
+      // is a plain JPEG. Non-HEIC (and undecodable HEIC) pass through unchanged.
+      const file = await prepareForUpload(raw);
       const v = validateAssetPhotoFile(file);
       if (v) {
         setErrorMsg(v);
@@ -862,7 +862,9 @@ function PhotoFrame({
     let cancelled = false;
     setUrl(null);
     setErrored(false);
-    void signedAssetPhotoUrl(photo.path, PHOTO_FULL_TRANSFORM)
+    // Full-screen viewer: no transform → the stored JPEG serves plain at full
+    // ~3000px (a still-raw HEIC falls back to a transform inside the signer).
+    void signedAssetPhotoUrl(photo.path)
       .then((u) => !cancelled && setUrl(u))
       .catch(() => !cancelled && setErrored(true));
     return () => {

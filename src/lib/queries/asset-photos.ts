@@ -15,15 +15,15 @@ export type PhotoTransform = {
 };
 
 // Sensible defaults per surface.
-export const PHOTO_THUMB_TRANSFORM: PhotoTransform = { width: 480, quality: 72, resize: 'contain' };
+export const PHOTO_THUMB_TRANSFORM: PhotoTransform = { width: 400, quality: 72, resize: 'contain' };
 export const PHOTO_FULL_TRANSFORM: PhotoTransform = { width: 1400, quality: 82, resize: 'contain' };
 
 /**
- * HEIC is uploaded raw and converted to a stored JPEG SERVER-SIDE after upload,
- * so the hot path serves photos as PLAIN signed URLs (fast, no per-view convert)
- * once converted. The Storage transform is kept ONLY as a fallback for a path
- * that's still HEIC (the brief window before the server converts it, or if the
- * server step is unavailable).
+ * HEIC is converted to a stored JPEG ON-DEVICE before upload (see lib/image-
+ * convert), so stored objects are normal JPEGs. Serving rule: an explicitly
+ * requested transform ALWAYS applies (cheap on a JPEG — used for grid/PDF thumbs
+ * to keep them light); with no transform, a JPEG serves PLAIN (full res, e.g. the
+ * full-screen viewer) and a still-raw HEIC gets the transform as a fallback.
  */
 function isHeicPath(path: string): boolean {
   return /\.(heic|heif)$/i.test(path);
@@ -174,10 +174,13 @@ export async function signedAssetPhotoUrl(
   path: string,
   transform?: PhotoTransform
 ): Promise<string> {
-  // Plain URL for stored JPEGs; transform only legacy HEIC.
-  const opts = isHeicPath(path)
-    ? { transform: transform ?? PHOTO_FULL_TRANSFORM }
-    : undefined;
+  // Explicit transform (thumb/PDF) always applies; otherwise plain for a stored
+  // JPEG (full res) and the transform fallback for a still-raw HEIC.
+  const opts = transform
+    ? { transform }
+    : isHeicPath(path)
+      ? { transform: PHOTO_FULL_TRANSFORM }
+      : undefined;
   const { data, error } = await supabase.storage
     .from('asset-photos')
     .createSignedUrl(path, 60 * 30, opts);
@@ -197,12 +200,13 @@ export async function signedAssetPhotoUrls(
 ): Promise<Record<string, string>> {
   const out: Record<string, string> = {};
   if (paths.length === 0) return out;
-  // Only legacy HEIC paths need a transform (and the batch endpoint can't carry
-  // one), so sign those individually; batch-sign the plain JPEGs in one request.
-  const heicPaths = paths.filter(isHeicPath);
-  if (heicPaths.length) {
+  // An explicit transform applies to every path (and the batch endpoint can't
+  // carry one), so sign those individually; otherwise only a still-raw HEIC
+  // needs a transform — batch-sign the plain JPEGs in one request.
+  const perPhoto = transform ? paths : paths.filter(isHeicPath);
+  if (perPhoto.length) {
     const signed = await Promise.all(
-      heicPaths.map((p) =>
+      perPhoto.map((p) =>
         supabase.storage
           .from('asset-photos')
           .createSignedUrl(p, 60 * 30, { transform: transform ?? PHOTO_FULL_TRANSFORM })
@@ -212,7 +216,7 @@ export async function signedAssetPhotoUrls(
     );
     for (const [p, url] of signed) if (url) out[p] = url;
   }
-  const plainPaths = paths.filter((p) => !isHeicPath(p));
+  const plainPaths = transform ? [] : paths.filter((p) => !isHeicPath(p));
   if (plainPaths.length === 0) return out;
   const { data, error } = await supabase.storage
     .from('asset-photos')
