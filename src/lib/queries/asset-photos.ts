@@ -28,20 +28,43 @@ export const ASSET_PHOTO_MAX_BYTES = 8 * 1024 * 1024;
 export const ASSET_PHOTO_MIMES = ['image/png', 'image/jpeg', 'image/webp'] as const;
 export type AssetPhotoMime = (typeof ASSET_PHOTO_MIMES)[number];
 
+/** `accept` value for photo file inputs. HEIC/HEIF allowed — they upload raw and
+ *  are served via the Storage image transform (WO-3). */
+export const PHOTO_ACCEPT =
+  'image/png,image/jpeg,image/webp,image/heic,image/heif,.heic,.heif';
+
+/**
+ * HEIC/HEIF detection. Checks the MIME type AND the filename extension, because
+ * Windows Chrome frequently reports an empty `file.type` for `.heic` files.
+ */
+export function isHeicFile(file: File): boolean {
+  const t = (file.type || '').toLowerCase();
+  if (t === 'image/heic' || t === 'image/heif') return true;
+  return /\.(heic|heif)$/i.test(file.name);
+}
+
+/** Resolve the storage extension + contentType for an upload (HEIC-aware). */
+export function photoExtAndType(file: File): { ext: string; contentType: string } {
+  if (isHeicFile(file)) {
+    const isHeif = /\.heif$/i.test(file.name) || (file.type || '').toLowerCase() === 'image/heif';
+    return isHeif
+      ? { ext: 'heif', contentType: 'image/heif' }
+      : { ext: 'heic', contentType: 'image/heic' };
+  }
+  const t = (file.type || '').toLowerCase();
+  if (t === 'image/png') return { ext: 'png', contentType: 'image/png' };
+  if (t === 'image/webp') return { ext: 'webp', contentType: 'image/webp' };
+  return { ext: 'jpg', contentType: 'image/jpeg' };
+}
+
 export function validateAssetPhotoFile(file: File): string | null {
   if (file.size > ASSET_PHOTO_MAX_BYTES) {
     return `${file.name}: too large (limit 8 MB).`;
   }
-  if (!(ASSET_PHOTO_MIMES as readonly string[]).includes(file.type)) {
-    return `${file.name}: unsupported type. Use a JPG, PNG, or WebP — iPhone photos work too.`;
+  if (!isHeicFile(file) && !(ASSET_PHOTO_MIMES as readonly string[]).includes(file.type)) {
+    return `${file.name}: unsupported type. Use a JPG, PNG, WebP, or HEIC.`;
   }
   return null;
-}
-
-function extFromMime(mime: string): string {
-  if (mime === 'image/png') return 'png';
-  if (mime === 'image/webp') return 'webp';
-  return 'jpg';
 }
 
 export async function listAssetPhotos(assetId: string): Promise<AssetPhoto[]> {
@@ -82,13 +105,15 @@ export async function listFirstPhotoPaths(
 export async function addAssetPhoto(assetId: string, file: File): Promise<AssetPhoto> {
   // Generate the photo id ourselves so the storage path and DB row stay in sync.
   const photoId = crypto.randomUUID();
-  const ext = extFromMime(file.type);
+  const { ext, contentType } = photoExtAndType(file);
   const path = `${assetId}/${photoId}.${ext}`;
 
   const { error: uploadErr } = await supabase.storage
     .from('asset-photos')
     .upload(path, file, {
-      contentType: file.type,
+      // Explicit contentType: Windows Chrome reports empty file.type for .heic,
+      // and we must store it as image/heic so the transform endpoint reads it.
+      contentType,
       upsert: false,
       cacheControl: '0',
     });
@@ -195,9 +220,16 @@ export async function signedAssetPhotoDownloadUrl(
   path: string,
   filename: string
 ): Promise<string> {
+  // A raw HEIC won't open on Windows, so downloads go through the transform
+  // (→ JPEG) too, and the suggested filename becomes .jpg to match.
+  const isHeic = /\.(heic|heif)$/i.test(path);
+  const dlName = isHeic ? filename.replace(/\.(heic|heif)$/i, '.jpg') : filename;
   const { data, error } = await supabase.storage
     .from('asset-photos')
-    .createSignedUrl(path, 60 * 30, { download: filename });
+    .createSignedUrl(path, 60 * 30, {
+      download: dlName,
+      ...(isHeic ? { transform: { width: 2400, quality: 90 } } : {}),
+    });
   if (error) throw error;
   return data.signedUrl;
 }

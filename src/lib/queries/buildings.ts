@@ -197,17 +197,22 @@ export type BuildingPhotoValidationError =
   | 'invalid-name';
 
 export function validateBuildingPhotoFile(file: File): BuildingPhotoValidationError | null {
-  if (!file.name.match(/\.(png|jpe?g|webp)$/i)) return 'invalid-type';
+  // HEIC/HEIF allowed (WO-3): uploaded raw, served via the Storage transform.
+  if (!file.name.match(/\.(png|jpe?g|webp|heic|heif)$/i)) return 'invalid-type';
   if (file.size > 10 * 1024 * 1024) return 'too-large';
   return null;
 }
 
 export async function uploadBuildingPhoto(buildingId: string, file: File): Promise<Building> {
   const path = buildingPhotoPath(buildingId, file);
+  // Windows Chrome reports empty file.type for .heic; store it as image/heic so
+  // the transform endpoint can read it.
+  const contentType =
+    file.type || (/\.(heic|heif)$/i.test(file.name) ? 'image/heic' : 'image/jpeg');
 
   const { error: uploadErr } = await supabase.storage
     .from(BUILDING_PHOTO_BUCKET)
-    .upload(path, file, { upsert: true, contentType: file.type });
+    .upload(path, file, { upsert: true, contentType });
   if (uploadErr) throw uploadErr;
 
   const { data, error } = await supabase

@@ -41,8 +41,8 @@ import {
   validateAssetPhotoFile,
   PHOTO_THUMB_TRANSFORM,
   PHOTO_FULL_TRANSFORM,
+  PHOTO_ACCEPT,
 } from '@/lib/queries/asset-photos';
-import { ensureUploadableImage, PHOTO_ACCEPT } from '@/lib/heic';
 import { computeStatus, statusLabel, type AssetStatus } from '@/lib/asset-status';
 import { formatPinNumber } from '@/lib/pin-types';
 import {
@@ -679,7 +679,6 @@ function PhotoGallery({
   const add = useAddAssetPhoto(assetId);
   const del = useDeleteAssetPhoto(assetId);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
-  const [converting, setConverting] = useState(false);
   // Tracks an in-flight upload batch ({done, total}). Uploads are sequential, so
   // a slow batch (esp. HEIC conversion) used to look stuck — picking again while
   // it ran started a SECOND batch and piled extra photos onto the pin. We now
@@ -696,17 +695,9 @@ function PhotoGallery({
     setBatch({ done: 0, total: files.length });
     let done = 0;
     for (const raw of files) {
-      let file = raw;
-      try {
-        // HEIC/HEIF → JPEG before validate/upload (never store HEIC).
-        file = await ensureUploadableImage(raw, () => setConverting(true));
-        setConverting(false);
-      } catch {
-        setConverting(false);
-        setErrorMsg(`${raw.name}: couldn't convert this HEIC photo.`);
-        setBatch({ done: (done += 1), total: files.length });
-        continue;
-      }
+      // WO-3: upload the original file unchanged (incl. HEIC) — no client-side
+      // conversion. Display + export go through the Storage image transform.
+      const file = raw;
       const v = validateAssetPhotoFile(file);
       if (v) {
         setErrorMsg(v);
@@ -780,7 +771,7 @@ function PhotoGallery({
             <Plus size={12} aria-hidden />
             <span>
               {batch
-                ? `${converting ? 'Converting' : 'Uploading'} ${Math.min(batch.done + 1, batch.total)} of ${batch.total}…`
+                ? `Uploading ${Math.min(batch.done + 1, batch.total)} of ${batch.total}…`
                 : 'Add photo'}
             </span>
             <input

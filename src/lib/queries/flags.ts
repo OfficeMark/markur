@@ -1,6 +1,6 @@
 import { supabase } from '@/lib/supabase';
 import type { Flag } from '@/types/database';
-import { validateAssetPhotoFile } from '@/lib/queries/asset-photos';
+import { validateAssetPhotoFile, photoExtAndType } from '@/lib/queries/asset-photos';
 
 /**
  * Read/write helpers for `public.flags` — service flags raised against an
@@ -12,14 +12,8 @@ import { validateAssetPhotoFile } from '@/lib/queries/asset-photos';
 /** Max photos on a single flag — evidence, not a gallery. */
 export const FLAG_PHOTO_MAX = 5;
 
-/** Flag photos reuse the asset-photo file rules (8 MB; png / jpeg / webp). */
+/** Flag photos reuse the asset-photo file rules (8 MB; JPG/PNG/WebP/HEIC). */
 export const validateFlagPhotoFile = validateAssetPhotoFile;
-
-function extFromMime(mime: string): string {
-  if (mime === 'image/png') return 'png';
-  if (mime === 'image/webp') return 'webp';
-  return 'jpg';
-}
 
 /**
  * Upload one flag photo and return its storage path. The path scheme
@@ -27,10 +21,11 @@ function extFromMime(mime: string): string {
  * storage_asset_photo_asset_id() RLS helper resolves the owning asset.
  */
 async function uploadFlagPhoto(assetId: string, file: File): Promise<string> {
-  const path = `${assetId}/${crypto.randomUUID()}.${extFromMime(file.type)}`;
+  const { ext, contentType } = photoExtAndType(file);
+  const path = `${assetId}/${crypto.randomUUID()}.${ext}`;
   const { error } = await supabase.storage
     .from('flag-photos')
-    .upload(path, file, { contentType: file.type, upsert: false, cacheControl: '0' });
+    .upload(path, file, { contentType, upsert: false, cacheControl: '0' });
   if (error) throw error;
   return path;
 }
