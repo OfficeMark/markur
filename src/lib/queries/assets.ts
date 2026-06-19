@@ -51,6 +51,7 @@ export type CreateAssetInput = {
   x: number;
   y: number;
   tenant_scope_id?: string | null;
+  zone?: string | null;  // Feature #3a: free-text zone/department
 };
 
 export async function createAsset(input: CreateAssetInput): Promise<Asset> {
@@ -76,6 +77,7 @@ export async function createAsset(input: CreateAssetInput): Promise<Asset> {
       x: input.x,
       y: input.y,
       tenant_scope_id: input.tenant_scope_id ?? null,
+      zone: input.zone ?? null,
       created_by,
     })
     .select('*')
@@ -99,6 +101,7 @@ export type UpdateAssetInput = Partial<{
   is_locked: boolean;
   tenant_scope_id: string | null;
   contact_id: string | null;   // M34 item 1: associated directory contact
+  zone: string | null;         // Feature #3a: free-text zone/department
   x: number;
   y: number;
 }>;

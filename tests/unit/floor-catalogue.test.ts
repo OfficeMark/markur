@@ -33,6 +33,7 @@ function fakeAsset(over: Partial<Asset>): Asset {
     vendor_contact: null,
     pin_number: null,
     contact_id: null,
+    zone: null,
     ...over,
   };
 }

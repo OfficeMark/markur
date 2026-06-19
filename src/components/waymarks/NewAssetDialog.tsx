@@ -31,6 +31,7 @@ import type { Asset } from '@/types/database';
 const schema = z.object({
   type: z.string().max(60).optional(),
   name: z.string().max(80, 'Up to 80 characters').optional(),
+  zone: z.string().max(120, 'Up to 120 characters').optional(),
   location_notes: z.string().max(280, 'Up to 280 characters').optional(),
   room_number: z.string().max(80, 'Up to 80 characters').optional(),
   notes: z.string().max(4000, 'Up to 4000 characters').optional(),
@@ -108,6 +109,7 @@ export function NewAssetDialog({
     defaultValues: {
       type: '',
       name: '',
+      zone: '',
       location_notes: '',
       room_number: '',
       notes: '',
@@ -210,6 +212,7 @@ export function NewAssetDialog({
           type: finalType,
           category: finalCategory,
           name: values.name?.trim() || null,
+          zone: values.zone?.trim() || null,
           location_notes: values.location_notes?.trim() || null,
           room_number: values.room_number?.trim() || null,
           notes: values.notes?.trim() || null,
@@ -433,6 +436,22 @@ export function NewAssetDialog({
                 id="asset-name"
                 {...register('name')}
                 placeholder='e.g. "Lobby directory"'
+                className="h-11 w-full rounded-md border border-black/10 bg-surface px-3 text-sm text-text outline-none focus:border-waymarks-gold focus:ring-2 focus:ring-waymarks-gold dark:border-white/10"
+              />
+            </Field>
+
+            {/* Feature #3a — free-text zone/department, distinct from the type
+                select above. Optional; saved to assets.zone on submit. */}
+            <Field
+              label="Zone or department"
+              htmlFor="asset-zone"
+              error={errors.zone?.message}
+              hint="Optional. e.g. “North wing”, “Leasing”, “Level 3 — East”."
+            >
+              <input
+                id="asset-zone"
+                {...register('zone')}
+                placeholder='e.g. "North wing"'
                 className="h-11 w-full rounded-md border border-black/10 bg-surface px-3 text-sm text-text outline-none focus:border-waymarks-gold focus:ring-2 focus:ring-waymarks-gold dark:border-white/10"
               />
             </Field>

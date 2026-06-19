@@ -148,6 +148,7 @@ export type Database = {
           vendor_contact: Json | null
           x: number
           y: number
+          zone: string | null
         }
         Insert: {
           audit_cycle_days?: number | null
@@ -172,6 +173,7 @@ export type Database = {
           vendor_contact?: Json | null
           x: number
           y: number
+          zone?: string | null
         }
         Update: {
           audit_cycle_days?: number | null
@@ -197,6 +199,7 @@ export type Database = {
           vendor_contact?: Json | null
           x?: number
           y?: number
+          zone?: string | null
         }
         Relationships: [
           {

@@ -536,6 +536,7 @@ function EditPanel({
   onSave: (patch: {
     name: string;
     type: string;
+    zone: string | null;
     location_notes: string | null;
     manufacturer: string | null;
     installed_at: string | null;
@@ -560,12 +561,14 @@ function EditPanel({
   );
   const [status, setStatus] = useState<AssetStatus>(asset.status as AssetStatus);
   const [contactId, setContactId] = useState(asset.contact_id ?? '');
+  const [zone, setZone] = useState(asset.zone ?? '');
   const [error, setError] = useState<string | null>(null);
 
   const dirty = useMemo(() => {
     return (
       name !== asset.name ||
       type !== asset.type ||
+      (zone || '') !== (asset.zone || '') ||
       (notes || '') !== (asset.location_notes || '') ||
       (manufacturer || '') !== (asset.manufacturer || '') ||
       (installed || '') !== (asset.installed_at || '') ||
@@ -573,7 +576,7 @@ function EditPanel({
       status !== asset.status ||
       (contactId || '') !== (asset.contact_id || '')
     );
-  }, [name, type, notes, manufacturer, installed, cycle, status, contactId, asset]);
+  }, [name, type, zone, notes, manufacturer, installed, cycle, status, contactId, asset]);
 
   async function submit() {
     setError(null);
@@ -598,6 +601,7 @@ function EditPanel({
       await onSave({
         name: name.trim(),
         type,
+        zone: zone.trim() === '' ? null : zone.trim(),
         location_notes: notes.trim() === '' ? null : notes.trim(),
         manufacturer: manufacturer.trim() === '' ? null : manufacturer.trim(),
         installed_at: installed === '' ? null : installed,
@@ -679,6 +683,17 @@ function EditPanel({
             ))}
           </optgroup>
         </select>
+      </FieldLabel>
+
+      {/* Feature #3a — free-text zone/department. */}
+      <FieldLabel label="Zone or department">
+        <input
+          value={zone}
+          onChange={(e) => setZone(e.target.value)}
+          maxLength={120}
+          placeholder='e.g. "North wing"'
+          className="h-10 w-full rounded-md border border-black/10 bg-surface px-3 text-sm text-text outline-none focus:border-waymarks-gold focus:ring-2 focus:ring-waymarks-gold dark:border-white/10"
+        />
       </FieldLabel>
 
       {/* M32 Step 3: this field maps to `location_notes` (the state variable
@@ -1056,6 +1071,9 @@ function DetailsSection({
         )}
         <Chip variant="gold">{prettyType(asset.type)}</Chip>
         <Chip variant="default">{asset.category}</Chip>
+        {asset.zone && (
+          <Chip variant="default" title="Zone or department">{asset.zone}</Chip>
+        )}
         {asset.room_number && (
           <Chip variant="default" title="Room number">Rm {asset.room_number}</Chip>
         )}
