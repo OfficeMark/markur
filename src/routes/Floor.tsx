@@ -18,8 +18,10 @@ import { FilterByTypePopover } from '@/components/waymarks/FilterByTypePopover';
 import { FilterByTextInput } from '@/components/waymarks/FilterByTextInput';
 import { AuditVideoRecorderDialog } from '@/components/waymarks/AuditVideoRecorderDialog';
 import { useAssetsWithVideos } from '@/hooks/useAuditVideos';
-import { useFloor, useSoftDeleteFloor } from '@/hooks/useFloors';
+import { useFloor, useSetFloorProvenance, useSoftDeleteFloor } from '@/hooks/useFloors';
 import { useBuilding } from '@/hooks/useBuildings';
+import { PlanProvenanceCaption } from '@/components/waymarks/PlanProvenanceCaption';
+import { PLAN_PROVENANCE_OPTIONS } from '@/lib/plan-provenance';
 import { useAssets, useSoftDeleteAsset, useUpdateAsset } from '@/hooks/useAssets';
 import {
   useActiveAuditSession,
@@ -63,6 +65,7 @@ export function Floor() {
   const updateAsset = useUpdateAsset(id);
   const softDelete = useSoftDeleteAsset(id);
   const softDeleteFloor = useSoftDeleteFloor(floor?.building_id);
+  const setProvenance = useSetFloorProvenance(floor?.id, floor?.building_id);
   const navigate = useNavigate();
   const [deleteFloorOpen, setDeleteFloorOpen] = useState(false);
   const [deleteFloorError, setDeleteFloorError] = useState<string | null>(null);
@@ -523,6 +526,25 @@ export function Floor() {
               </button>
             </Tooltip>
           )}
+          {/* Feature #1 — minimal plan-provenance setter. A small dropdown
+              (labels from lib/plan-provenance.ts) that saves via the per-table
+              floor update. Admins only; the caption below reflects the value. */}
+          {canUploadPlan && (
+            <select
+              aria-label="Plan source"
+              title="How this floor's plan was sourced (shown as a caption under the plan)"
+              value={floor.plan_provenance}
+              onChange={(e) => setProvenance.mutate(e.target.value)}
+              disabled={setProvenance.isPending}
+              className="h-7 max-w-[12rem] rounded-md border border-black/15 bg-surface px-2 text-[11px] font-medium text-text outline-none focus:border-waymarks-gold focus:ring-1 focus:ring-waymarks-gold disabled:opacity-60 dark:border-white/15"
+            >
+              {PLAN_PROVENANCE_OPTIONS.map((o) => (
+                <option key={o.key} value={o.key}>
+                  {o.label}
+                </option>
+              ))}
+            </select>
+          )}
           {/* M14c - Visualize in ViewMark. Gold outline so it reads as a
               brand-aligned secondary, distinct from the gold-filled
               Audit primary. */}
@@ -579,6 +601,10 @@ export function Floor() {
               Resume
             </Button>
           </div>
+        )}
+
+        {floor.plan_url && (
+          <PlanProvenanceCaption provenance={floor.plan_provenance} className="mb-2" />
         )}
 
         {floor.plan_url ? (
