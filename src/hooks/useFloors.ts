@@ -3,6 +3,7 @@ import {
   getFloor,
   listFloorsByBuilding,
   nextFloorSortOrder,
+  setFloorNotes,
   setFloorProvenance,
   softDeleteFloor,
   type NewFloorInput,
@@ -96,6 +97,24 @@ export function useSetFloorProvenance(floorId: string | undefined, buildingId?: 
     mutationFn: (provenance: string) => {
       if (!floorId) throw new Error('No floor');
       return setFloorProvenance(floorId, provenance);
+    },
+    onSuccess: () => {
+      if (floorId) qc.invalidateQueries({ queryKey: floorKeys.detail(floorId) });
+      if (buildingId) qc.invalidateQueries({ queryKey: floorKeys.byBuilding(buildingId) });
+    },
+  });
+}
+
+/**
+ * Set the floor-wide team notes. Per-table: invalidates the floor detail + its
+ * building's floor list so the toolbar button re-reads. No bundle keys.
+ */
+export function useSetFloorNotes(floorId: string | undefined, buildingId?: string | undefined) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (notes: string) => {
+      if (!floorId) throw new Error('No floor');
+      return setFloorNotes(floorId, notes);
     },
     onSuccess: () => {
       if (floorId) qc.invalidateQueries({ queryKey: floorKeys.detail(floorId) });

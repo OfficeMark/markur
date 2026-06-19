@@ -620,6 +620,7 @@ export type Database = {
           building_id: string
           created_at: string
           deleted_at: string | null
+          floor_notes: string | null
           height_px: number | null
           id: string
           label: string
@@ -635,6 +636,7 @@ export type Database = {
           building_id: string
           created_at?: string
           deleted_at?: string | null
+          floor_notes?: string | null
           height_px?: number | null
           id?: string
           label: string
@@ -650,6 +652,7 @@ export type Database = {
           building_id?: string
           created_at?: string
           deleted_at?: string | null
+          floor_notes?: string | null
           height_px?: number | null
           id?: string
           label?: string

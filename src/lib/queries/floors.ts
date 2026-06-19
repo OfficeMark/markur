@@ -84,6 +84,19 @@ export async function setFloorProvenance(id: string, provenance: string): Promis
 }
 
 /**
+ * Set the floor-wide team notes (free text). Team-only context — never surfaced
+ * on guest share links. Writes ride the existing floors RLS (building-edit
+ * required); an empty string clears the note to null.
+ */
+export async function setFloorNotes(id: string, notes: string): Promise<void> {
+  const { error } = await supabase
+    .from('floors')
+    .update({ floor_notes: notes.trim() || null })
+    .eq('id', id);
+  if (error) throw error;
+}
+
+/**
  * Suggest the next sort_order for a new floor in a building. Caller can
  * use this to default the form value so manually-added floors land at
  * the bottom of the existing list.

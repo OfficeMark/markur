@@ -22,6 +22,7 @@ import { useFloor, useSetFloorProvenance, useSoftDeleteFloor } from '@/hooks/use
 import { useBuilding } from '@/hooks/useBuildings';
 import { PlanProvenanceCaption } from '@/components/waymarks/PlanProvenanceCaption';
 import { PLAN_PROVENANCE_OPTIONS } from '@/lib/plan-provenance';
+import { FloorNotesButton } from '@/components/waymarks/FloorNotesButton';
 import { useAssets, useSoftDeleteAsset, useUpdateAsset } from '@/hooks/useAssets';
 import {
   useActiveAuditSession,
@@ -545,6 +546,15 @@ export function Floor() {
               ))}
             </select>
           )}
+          {/* Feature #2 — floor-wide team notes. Self-gates: editors always see
+              it; viewers only when a note exists; never rendered on guest views
+              (this route is the authenticated floor view). */}
+          <FloorNotesButton
+            floorId={floor.id}
+            buildingId={floor.building_id}
+            notes={floor.floor_notes}
+            canEdit={canEdit}
+          />
           {/* M14c - Visualize in ViewMark. Gold outline so it reads as a
               brand-aligned secondary, distinct from the gold-filled
               Audit primary. */}
