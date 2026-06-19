@@ -25,6 +25,7 @@ test-results/
 .env.local
 .env.*.local
 .env.demo
+.env.rebuild
 
 # Editors
 .vscode/*

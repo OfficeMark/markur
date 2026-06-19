@@ -30,7 +30,6 @@ import {
 } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 import { Chip } from '@/components/ui/Chip';
-import { Button } from '@/components/ui/Button';
 import { useAsset, useUpdateAsset } from '@/hooks/useAssets';
 import { useBuilding } from '@/hooks/useBuildings';
 import { useFloor } from '@/hooks/useFloors';
@@ -749,8 +748,10 @@ function EditPanel({
         </div>
       )}
 
-      {/* ── Identity ─────────────────────────────────────────────── */}
-      <GroupHeading first>Identity</GroupHeading>
+      {/* Feature #3e — same banded language as the read view (near-black header
+          + orange chip + white label, white body). Fields, validation, and
+          order are unchanged; only the section chrome changes. */}
+      <Band icon={Tag} label="Identity">
 
       <FieldLabel label="Asset type">
         <select
@@ -830,8 +831,9 @@ function EditPanel({
         />
       </FieldLabel>
 
-      {/* ── Status & audit ───────────────────────────────────────── */}
-      <GroupHeading>Status &amp; audit</GroupHeading>
+      </Band>
+
+      <Band icon={ClipboardCheck} label="Status & audit">
 
       <FieldLabel label="Status">
         <div className="flex flex-wrap gap-1.5">
@@ -882,8 +884,9 @@ function EditPanel({
         </FieldLabel>
       </div>
 
-      {/* ── Vendor ───────────────────────────────────────────────── */}
-      <GroupHeading>Vendor</GroupHeading>
+      </Band>
+
+      <Band icon={Store} label="Vendor">
 
       {/* M34 item 1: associate a directory contact (person/department) with
           this pin — the "send flags to" recipient. Managed in Admin →
@@ -908,19 +911,25 @@ function EditPanel({
         </select>
       </FieldLabel>
 
+      </Band>
+
       <div className="sticky bottom-0 -mx-4 flex justify-end gap-2 border-t border-black/10 bg-surface px-4 py-3 dark:border-white/10">
-        <Button variant="secondary" onClick={onCancel} disabled={saving}>
-          Cancel
-        </Button>
-        <Button
-          type="submit"
-          variant="gold"
-          loading={saving}
-          disabled={!dirty || saving}
-          iconLeft={<Save size={14} aria-hidden />}
+        <button
+          type="button"
+          onClick={onCancel}
+          disabled={saving}
+          className="inline-flex h-10 items-center rounded-lg border-[1.5px] border-black/15 bg-surface px-4 text-sm font-medium text-text hover:bg-black/5 disabled:opacity-50 dark:border-white/15 dark:hover:bg-white/5"
         >
-          Save
-        </Button>
+          Cancel
+        </button>
+        <button
+          type="submit"
+          disabled={!dirty || saving}
+          className="inline-flex h-10 items-center gap-1.5 rounded-lg bg-accent px-4 text-sm font-semibold text-white shadow-sm hover:bg-accent/90 disabled:cursor-not-allowed disabled:opacity-50"
+        >
+          <Save size={14} aria-hidden />
+          {saving ? 'Saving…' : 'Save'}
+        </button>
       </div>
     </form>
   );
@@ -1219,20 +1228,6 @@ function ThumbButton({
         <div className="h-full w-full animate-pulse bg-black/5 dark:bg-white/5" />
       )}
     </button>
-  );
-}
-
-/** Group heading inside the edit form. `first` drops the top divider. */
-function GroupHeading({ children, first }: { children: React.ReactNode; first?: boolean }) {
-  return (
-    <p
-      className={cn(
-        'text-[11px] font-semibold uppercase tracking-[0.2em] text-waymarks-gold',
-        !first && 'border-t border-black/10 pt-3 dark:border-white/10'
-      )}
-    >
-      {children}
-    </p>
   );
 }
 

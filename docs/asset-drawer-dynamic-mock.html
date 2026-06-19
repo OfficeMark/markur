@@ -1,0 +1,137 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Markur — asset/edit window (dynamic, high-contrast)</title>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@3.7.0/dist/tabler-icons.min.css">
+<style>
+  :root{
+    --ink:#221E1A; --ink2:#332D27; --line:rgba(0,0,0,.12);
+    --page:#E7E4DF; --surface:#FFFFFF; --rail:#F3F1ED;
+    --text:#221E1A; --muted:#6E6B64; --faint:#9A978F;
+    --orange:#E0602A; --orange-deep:#B0451A; --orange-soft:#FBE6DA;
+    --green:#2F7D31; --green-soft:#E6F3E1; --green-line:#9FC98C;
+    --red:#C23B33; --red-soft:#FBE7E5;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:#D8D4CC;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;color:var(--text);padding:18px}
+  .phone{max-width:390px;margin:0 auto;background:var(--page);border-radius:24px;overflow:hidden;box-shadow:0 8px 30px rgba(0,0,0,.18)}
+  .topbar{display:flex;align-items:center;justify-content:space-between;padding:12px 15px;background:var(--ink);color:#fff}
+  .brand{font-size:17px;font-weight:700;letter-spacing:.4px}
+  .brand b{color:var(--orange)}
+  .body{padding:14px}
+  .hero{position:relative;border-radius:16px;overflow:hidden;box-shadow:0 2px 10px rgba(0,0,0,.12)}
+  .heroimg{height:140px;background:#3a342d;display:flex;align-items:center;justify-content:center;color:#7d776c;font-size:36px}
+  .heroscrim{position:absolute;left:0;right:0;bottom:0;padding:12px 14px;background:linear-gradient(to top,rgba(20,17,14,.92),rgba(20,17,14,0));color:#fff}
+  .hname{font-size:17px;font-weight:700}
+  .hsub{font-size:12px;color:#d8d2c8;margin-top:2px}
+  .badge{position:absolute;top:11px;right:11px;background:var(--green);color:#fff;font-size:12px;font-weight:700;padding:5px 11px;border-radius:999px;display:flex;gap:5px;align-items:center;box-shadow:0 1px 4px rgba(0,0,0,.2)}
+  .editbtn{position:absolute;top:11px;left:11px;background:rgba(0,0,0,.45);color:#fff;border:none;border-radius:9px;width:32px;height:32px;font-size:16px;backdrop-filter:blur(4px)}
+  .stats{display:grid;grid-template-columns:repeat(3,1fr);gap:1px;margin:13px 0;background:var(--ink);border-radius:13px;overflow:hidden}
+  .stat{background:var(--ink);padding:11px 12px;color:#fff}
+  .stat .k{font-size:10.5px;color:#b3aea4;text-transform:uppercase;letter-spacing:.09em}
+  .stat .v{font-size:19px;font-weight:700;margin-top:3px}
+  .stat .v.ok{color:#7fd07f}
+  .sec{border-radius:14px;overflow:hidden;margin-bottom:12px;box-shadow:0 1px 6px rgba(0,0,0,.08)}
+  .sechdr{display:flex;align-items:center;gap:11px;padding:11px 13px;background:var(--ink)}
+  .chip{width:32px;height:32px;border-radius:9px;display:flex;align-items:center;justify-content:center;font-size:18px;background:var(--orange);color:#fff}
+  .sechdr h3{margin:0;font-size:15px;font-weight:700;color:#fff;flex:1}
+  .sechdr .hint{font-size:11px;color:#a39e94}
+  .secbody{padding:14px;background:var(--surface)}
+  .row{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+  .b{font-size:13px;padding:9px 14px;border-radius:10px;border:1.5px solid var(--line);background:var(--surface);color:var(--text);display:inline-flex;gap:7px;align-items:center;font-weight:500;cursor:pointer}
+  .b.primary{background:var(--orange);color:#fff;border:none;box-shadow:0 1px 4px rgba(224,96,42,.4)}
+  .b.danger{color:var(--red);border-color:rgba(194,59,51,.35)}
+  .pill{font-size:13px;font-weight:700;padding:7px 14px;border-radius:999px;display:inline-flex;gap:6px;align-items:center}
+  .pill.good{background:var(--green);color:#fff}
+  .pill.flag{background:var(--surface);color:var(--muted);border:1.5px solid var(--line)}
+  .meta{font-size:13px;font-weight:600;padding:6px 12px;border-radius:999px;background:var(--ink);color:#fff}
+  .meta.ghost{background:var(--rail);color:var(--text)}
+  .thumb{width:46px;height:42px;border-radius:8px;background:#ddd8cf;display:flex;align-items:center;justify-content:center;color:#8A887F;font-size:16px;border:1px solid var(--line)}
+  .field{margin-bottom:12px}
+  .field label{display:block;font-size:11px;text-transform:uppercase;letter-spacing:.08em;color:var(--faint);margin-bottom:5px;font-weight:600}
+  .field .box{border:1.5px solid var(--line);border-radius:9px;padding:10px 12px;font-size:14px;background:var(--surface)}
+  .notes{min-height:76px;color:var(--faint)}
+  .empty{font-size:12.5px;color:var(--faint)}
+  .actrow{display:flex;align-items:center;justify-content:space-between;background:var(--orange-soft);border:1.5px solid rgba(224,96,42,.3);border-radius:11px;padding:11px 13px;margin-top:12px}
+  .actrow .t{font-size:13px;color:var(--orange-deep);font-weight:500}
+  .lockrow{display:flex;align-items:center;justify-content:space-between;background:var(--rail);border-radius:11px;padding:10px 13px;margin-bottom:12px}
+  .logitem{display:flex;gap:10px;align-items:flex-start;font-size:13px;padding:8px 0}
+  .logdot{width:9px;height:9px;border-radius:50%;background:var(--orange);margin-top:5px;flex:0 0 auto}
+</style>
+</head>
+<body>
+  <div class="phone">
+    <div class="topbar"><span class="brand"><b>◆</b> markur</span><span><i class="ti ti-x"></i></span></div>
+    <div class="body">
+
+      <div class="hero">
+        <div class="heroimg"><i class="ti ti-photo"></i></div>
+        <button class="editbtn"><i class="ti ti-edit"></i></button>
+        <span class="badge"><i class="ti ti-circle-check" style="font-size:13px"></i> Good</span>
+        <div class="heroscrim"><div class="hname">Heritage Building directory</div><div class="hsub">Signage · Lobby · Pin #007</div></div>
+      </div>
+
+      <div class="stats">
+        <div class="stat"><div class="k">Last audit</div><div class="v">Jun 12</div></div>
+        <div class="stat"><div class="k">Status</div><div class="v ok">Good</div></div>
+        <div class="stat"><div class="k">Flags</div><div class="v">0</div></div>
+      </div>
+
+      <div class="sec">
+        <div class="sechdr"><span class="chip"><i class="ti ti-camera"></i></span><h3>Media</h3><span class="hint">3 photos</span></div>
+        <div class="secbody">
+          <div class="row" style="margin-bottom:12px"><span class="thumb"><i class="ti ti-photo"></i></span><span class="thumb"><i class="ti ti-photo"></i></span><span class="thumb"><i class="ti ti-photo"></i></span></div>
+          <div class="row"><button class="b primary"><i class="ti ti-camera-plus"></i> Add photo</button><button class="b"><i class="ti ti-video"></i> Video</button><button class="b"><i class="ti ti-paperclip"></i> File</button></div>
+        </div>
+      </div>
+
+      <div class="sec">
+        <div class="sechdr"><span class="chip"><i class="ti ti-tag"></i></span><h3>Identity</h3></div>
+        <div class="secbody">
+          <div class="field"><label>Asset type</label><div class="box">Directory · Signage</div></div>
+          <div class="field"><label>Room # — Name</label><div class="box">Lobby — Heritage Building directory</div></div>
+          <div class="field"><label>Zone / department</label><div class="box">Main lobby</div></div>
+          <div class="field" style="margin-bottom:0"><label>Notes</label><div class="box notes">Install details, service history, vendor info — up to ~500 words.</div></div>
+        </div>
+      </div>
+
+      <div class="sec">
+        <div class="sechdr"><span class="chip"><i class="ti ti-map-pin"></i></span><h3>Pin</h3></div>
+        <div class="secbody">
+          <div class="row" style="margin-bottom:12px"><span class="meta">#007</span><span class="meta ghost">Other</span><span class="meta ghost">Signage</span></div>
+          <div class="lockrow"><span style="font-size:13px;color:var(--muted)"><i class="ti ti-lock-open" style="color:var(--orange)"></i> Unlocked — drag on plan to nudge</span><button class="b"><i class="ti ti-lock"></i> Lock</button></div>
+          <div class="row"><button class="b"><i class="ti ti-arrows-move"></i> Reposition</button><button class="b danger"><i class="ti ti-trash"></i> Delete</button></div>
+        </div>
+      </div>
+
+      <div class="sec">
+        <div class="sechdr"><span class="chip"><i class="ti ti-shield-check"></i></span><h3>Status &amp; audit</h3></div>
+        <div class="secbody">
+          <div class="row" style="margin-bottom:12px"><span class="pill good"><i class="ti ti-check" style="font-size:13px"></i> Good · current</span><span class="pill flag"><i class="ti ti-flag" style="font-size:13px"></i> Flag</span></div>
+          <div class="empty">No open flags · last audited Jun 12, 2026</div>
+        </div>
+      </div>
+
+      <div class="sec">
+        <div class="sechdr"><span class="chip"><i class="ti ti-building-store"></i></span><h3>Vendor</h3></div>
+        <div class="secbody">
+          <div class="empty" style="margin-bottom:11px">No vendors linked.</div>
+          <div class="row"><button class="b"><i class="ti ti-link"></i> Vendor link</button><button class="b"><i class="ti ti-plus"></i> Add vendor</button></div>
+          <div class="actrow"><span class="t">Order new or replacement signage from Officemark.</span><button class="b primary"><i class="ti ti-shopping-cart"></i> Order</button></div>
+        </div>
+      </div>
+
+      <div class="sec" style="margin-bottom:0">
+        <div class="sechdr"><span class="chip"><i class="ti ti-history"></i></span><h3>Activity</h3></div>
+        <div class="secbody">
+          <div class="logitem"><span class="logdot"></span><div><div style="font-weight:600">Created</div><div class="empty">Jun 19, 2026 · 11:58 AM</div></div></div>
+          <div class="logitem"><span class="logdot" style="background:var(--faint)"></span><div><div style="font-weight:600">Pin placed</div><div class="empty">Jun 19, 2026 · 11:58 AM</div></div></div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+</body>
+</html>
