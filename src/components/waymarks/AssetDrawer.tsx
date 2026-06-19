@@ -4,9 +4,7 @@ import { format } from 'date-fns';
 import { Tooltip } from '@/components/ui/Tooltip';
 import {
   X,
-  MapPin,
   Calendar,
-  Wrench,
   Pencil,
   Plus,
   Trash2,
@@ -179,52 +177,74 @@ export function AssetDrawer({
                     <span>This asset is flagged</span>
                   </div>
                 )}
-                <PhotoGallery
-                  assetId={asset.id}
-                  assetName={asset.name ?? 'Asset'}
-                  canEdit={canEdit}
-                />
-                {canEdit && (
-                  <>
-                    <LockBar
-                      asset={asset}
-                      busy={update.isPending}
-                      onToggleLock={() =>
-                        update.mutate({
-                          id: asset.id,
-                          patch: { is_locked: !asset.is_locked },
-                        })
-                      }
-                    />
-                    <AdminActions
-                      canReposition={canReposition && !!onStartReposition}
-                      canDelete={canDelete && !!onStartDelete}
-                      onReposition={() => onStartReposition?.(asset.id)}
-                      onDelete={() => onStartDelete?.(asset.id)}
-                    />
-                  </>
-                )}
-                <QuickActions
-                  asset={asset}
-                  canAudit={canAudit}
-                  onLogFlag={onLogFlag ? () => onLogFlag(asset.id) : undefined}
-                />
-                <VisualizeRow
-                  buildingName={building?.name ?? 'Building'}
-                  floorLabel={floor?.label ?? ''}
-                  pinValue={asset.room_number?.trim() || asset.name}
-                />
-                <OrderSignsRow asset={asset} />
-                <DetailsSection asset={asset} canEdit={canEdit} buildingId={buildingId} />
-                <StatusRow asset={asset} flagCount={asset.status === 'flagged' ? 1 : 0} />
-                <AssetAttachmentsPanel assetId={asset.id} canEdit={canEdit} />
-                <AuditVideosPanel
-                  buildingId={buildingId}
-                  assetId={asset.id}
-                  onRecordClick={canEdit ? () => setRecordOpen(true) : undefined}
-                />
-                <AttributesSection asset={asset} />
+                {/* ── Media — photos, video, files, visualize ── */}
+                <Section title="Media">
+                  <PhotoGallery
+                    assetId={asset.id}
+                    assetName={asset.name ?? 'Asset'}
+                    canEdit={canEdit}
+                  />
+                  <AuditVideosPanel
+                    buildingId={buildingId}
+                    assetId={asset.id}
+                    onRecordClick={canEdit ? () => setRecordOpen(true) : undefined}
+                  />
+                  <AssetAttachmentsPanel assetId={asset.id} canEdit={canEdit} />
+                  <VisualizeRow
+                    buildingName={building?.name ?? 'Building'}
+                    floorLabel={floor?.label ?? ''}
+                    pinValue={asset.room_number?.trim() || asset.name}
+                  />
+                </Section>
+
+                {/* ── Identity — zone, room, manufacturer, notes ── */}
+                <IdentitySection asset={asset} />
+
+                {/* ── Pin — meta + lock/reposition/delete ── */}
+                <Section title="Pin">
+                  <PinMeta asset={asset} />
+                  {canEdit && (
+                    <>
+                      <LockBar
+                        asset={asset}
+                        busy={update.isPending}
+                        onToggleLock={() =>
+                          update.mutate({
+                            id: asset.id,
+                            patch: { is_locked: !asset.is_locked },
+                          })
+                        }
+                      />
+                      <AdminActions
+                        canReposition={canReposition && !!onStartReposition}
+                        canDelete={canDelete && !!onStartDelete}
+                        onReposition={() => onStartReposition?.(asset.id)}
+                        onDelete={() => onStartDelete?.(asset.id)}
+                      />
+                    </>
+                  )}
+                </Section>
+
+                {/* ── Status & audit ── */}
+                <Section title="Status & audit">
+                  <QuickActions
+                    asset={asset}
+                    canAudit={canAudit}
+                    onLogFlag={onLogFlag ? () => onLogFlag(asset.id) : undefined}
+                  />
+                  <StatusRow asset={asset} flagCount={asset.status === 'flagged' ? 1 : 0} />
+                  <AuditAttrs asset={asset} />
+                </Section>
+
+                {/* ── Vendor — linked vendors + order signs ── */}
+                <Section title="Vendor">
+                  <VendorPanel asset={asset} canEdit={canEdit} buildingId={buildingId} />
+                  <OrderSignsRow asset={asset} />
+                </Section>
+
+                {/* ── Activity ── */}
                 <ActivitySection items={activity} />
+
                 <PermissionsFooter />
               </>
             )}
@@ -537,7 +557,8 @@ function EditPanel({
     name: string;
     type: string;
     zone: string | null;
-    location_notes: string | null;
+    room_number: string | null;
+    notes: string | null;
     manufacturer: string | null;
     installed_at: string | null;
     audit_cycle_days: number | null;
@@ -553,7 +574,8 @@ function EditPanel({
   );
   const [name, setName] = useState(asset.name);
   const [type, setType] = useState(asset.type);
-  const [notes, setNotes] = useState(asset.location_notes ?? '');
+  const [room, setRoom] = useState(asset.room_number ?? '');
+  const [noteText, setNoteText] = useState(asset.notes ?? '');
   const [manufacturer, setManufacturer] = useState(asset.manufacturer ?? '');
   const [installed, setInstalled] = useState(asset.installed_at ?? '');
   const [cycle, setCycle] = useState<string>(
@@ -569,14 +591,15 @@ function EditPanel({
       name !== asset.name ||
       type !== asset.type ||
       (zone || '') !== (asset.zone || '') ||
-      (notes || '') !== (asset.location_notes || '') ||
+      (room || '') !== (asset.room_number || '') ||
+      (noteText || '') !== (asset.notes || '') ||
       (manufacturer || '') !== (asset.manufacturer || '') ||
       (installed || '') !== (asset.installed_at || '') ||
       (cycle || '') !== (asset.audit_cycle_days != null ? String(asset.audit_cycle_days) : '') ||
       status !== asset.status ||
       (contactId || '') !== (asset.contact_id || '')
     );
-  }, [name, type, zone, notes, manufacturer, installed, cycle, status, contactId, asset]);
+  }, [name, type, zone, room, noteText, manufacturer, installed, cycle, status, contactId, asset]);
 
   async function submit() {
     setError(null);
@@ -602,7 +625,8 @@ function EditPanel({
         name: name.trim(),
         type,
         zone: zone.trim() === '' ? null : zone.trim(),
-        location_notes: notes.trim() === '' ? null : notes.trim(),
+        room_number: room.trim() === '' ? null : room.trim(),
+        notes: noteText.trim() === '' ? null : noteText.trim(),
         manufacturer: manufacturer.trim() === '' ? null : manufacturer.trim(),
         installed_at: installed === '' ? null : installed,
         audit_cycle_days: cycleNum,
@@ -627,6 +651,90 @@ function EditPanel({
           {error}
         </div>
       )}
+
+      {/* ── Identity ─────────────────────────────────────────────── */}
+      <GroupHeading first>Identity</GroupHeading>
+
+      <FieldLabel label="Asset type">
+        <select
+          value={type}
+          onChange={(e) => setType(e.target.value)}
+          className="h-10 w-full rounded-md border border-black/10 bg-surface px-3 text-sm text-text outline-none focus:border-waymarks-gold focus:ring-2 focus:ring-waymarks-gold dark:border-white/10"
+        >
+          <optgroup label="Signage">
+            {signageTypes.map((t) => (
+              <option key={t.id} value={t.key}>
+                {t.label}
+              </option>
+            ))}
+          </optgroup>
+          <optgroup label="Facility">
+            {facilityTypes.map((t) => (
+              <option key={t.id} value={t.key}>
+                {t.label}
+              </option>
+            ))}
+          </optgroup>
+        </select>
+      </FieldLabel>
+
+      <div className="grid grid-cols-2 gap-2">
+        <FieldLabel label="Room #">
+          <input
+            value={room}
+            onChange={(e) => setRoom(e.target.value)}
+            maxLength={80}
+            placeholder='e.g. "301"'
+            className="h-10 w-full rounded-md border border-black/10 bg-surface px-3 text-sm text-text outline-none focus:border-waymarks-gold focus:ring-2 focus:ring-waymarks-gold dark:border-white/10"
+          />
+        </FieldLabel>
+        <FieldLabel label="Name">
+          <input
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+            className="h-10 w-full rounded-md border border-black/10 bg-surface px-3 text-sm text-text outline-none focus:border-waymarks-gold focus:ring-2 focus:ring-waymarks-gold dark:border-white/10"
+          />
+        </FieldLabel>
+      </div>
+
+      <FieldLabel label="Zone or department">
+        <input
+          value={zone}
+          onChange={(e) => setZone(e.target.value)}
+          maxLength={120}
+          placeholder='e.g. "North wing"'
+          className="h-10 w-full rounded-md border border-black/10 bg-surface px-3 text-sm text-text outline-none focus:border-waymarks-gold focus:ring-2 focus:ring-waymarks-gold dark:border-white/10"
+        />
+      </FieldLabel>
+
+      {/* Feature #3b — generous Notes (the assets.notes column; DB caps at
+          4000 chars). The old short "Where on the floor"/location_notes field
+          is removed; the pin position already conveys location. */}
+      <FieldLabel label="Notes">
+        <textarea
+          rows={8}
+          maxLength={4000}
+          value={noteText}
+          onChange={(e) => setNoteText(e.target.value)}
+          placeholder="Install details, service history, vendor info — anything the team should know. Up to ~500 words."
+          className="min-h-[10rem] w-full rounded-md border border-black/10 bg-surface p-3 text-sm leading-relaxed text-text outline-none focus:border-waymarks-gold focus:ring-2 focus:ring-waymarks-gold dark:border-white/10"
+        />
+        <span className="mt-1 block text-right text-[11px] text-text-faint">
+          {noteText.length}/4000
+        </span>
+      </FieldLabel>
+
+      <FieldLabel label="Manufacturer">
+        <input
+          value={manufacturer}
+          onChange={(e) => setManufacturer(e.target.value)}
+          placeholder="e.g. Officemark"
+          className="h-10 w-full rounded-md border border-black/10 bg-surface px-3 text-sm text-text outline-none focus:border-waymarks-gold focus:ring-2 focus:ring-waymarks-gold dark:border-white/10"
+        />
+      </FieldLabel>
+
+      {/* ── Status & audit ───────────────────────────────────────── */}
+      <GroupHeading>Status &amp; audit</GroupHeading>
 
       <FieldLabel label="Status">
         <div className="flex flex-wrap gap-1.5">
@@ -654,95 +762,6 @@ function EditPanel({
         </div>
       </FieldLabel>
 
-      <FieldLabel label="Name">
-        <input
-          value={name}
-          onChange={(e) => setName(e.target.value)}
-          className="h-10 w-full rounded-md border border-black/10 bg-surface px-3 text-sm text-text outline-none focus:border-waymarks-gold focus:ring-2 focus:ring-waymarks-gold dark:border-white/10"
-        />
-      </FieldLabel>
-
-      <FieldLabel label="Type">
-        <select
-          value={type}
-          onChange={(e) => setType(e.target.value)}
-          className="h-10 w-full rounded-md border border-black/10 bg-surface px-3 text-sm text-text outline-none focus:border-waymarks-gold focus:ring-2 focus:ring-waymarks-gold dark:border-white/10"
-        >
-          <optgroup label="Signage">
-            {signageTypes.map((t) => (
-              <option key={t.id} value={t.key}>
-                {t.label}
-              </option>
-            ))}
-          </optgroup>
-          <optgroup label="Facility">
-            {facilityTypes.map((t) => (
-              <option key={t.id} value={t.key}>
-                {t.label}
-              </option>
-            ))}
-          </optgroup>
-        </select>
-      </FieldLabel>
-
-      {/* Feature #3a — free-text zone/department. */}
-      <FieldLabel label="Zone or department">
-        <input
-          value={zone}
-          onChange={(e) => setZone(e.target.value)}
-          maxLength={120}
-          placeholder='e.g. "North wing"'
-          className="h-10 w-full rounded-md border border-black/10 bg-surface px-3 text-sm text-text outline-none focus:border-waymarks-gold focus:ring-2 focus:ring-waymarks-gold dark:border-white/10"
-        />
-      </FieldLabel>
-
-      {/* M32 Step 3: this field maps to `location_notes` (the state variable
-          is misleadingly named `notes` — pre-existing). Renaming the label
-          to match the NewAssetDialog ("Where on the floor") so users see the
-          same wording everywhere. DB column unchanged. The dedicated
-          `notes` and `room_number` columns aren't editable here yet — flagged
-          as a follow-up for the drawer's edit view. */}
-      <FieldLabel label="Where on the floor">
-        <textarea
-          rows={3}
-          value={notes}
-          onChange={(e) => setNotes(e.target.value)}
-          placeholder='e.g. "East elevator lobby, mounted at 5′"'
-          className="w-full rounded-md border border-black/10 bg-surface p-3 text-sm text-text outline-none focus:border-waymarks-gold focus:ring-2 focus:ring-waymarks-gold dark:border-white/10"
-        />
-      </FieldLabel>
-
-      <FieldLabel label="Manufacturer">
-        <input
-          value={manufacturer}
-          onChange={(e) => setManufacturer(e.target.value)}
-          placeholder="e.g. Officemark"
-          className="h-10 w-full rounded-md border border-black/10 bg-surface px-3 text-sm text-text outline-none focus:border-waymarks-gold focus:ring-2 focus:ring-waymarks-gold dark:border-white/10"
-        />
-      </FieldLabel>
-
-      {/* M34 item 1: associate a directory contact (person/department) with
-          this pin. Managed in Admin → Contacts & Vendors. */}
-      <FieldLabel label="Contact">
-        <select
-          value={contactId}
-          onChange={(e) => setContactId(e.target.value)}
-          className="h-10 w-full rounded-md border border-black/10 bg-surface px-3 text-sm text-text outline-none focus:border-waymarks-gold focus:ring-2 focus:ring-waymarks-gold dark:border-white/10"
-        >
-          <option value="">— None —</option>
-          {/* Keep the current contact selectable even if it's out of scope or removed. */}
-          {asset.contact_id && !contactsInScope.some((c) => c.id === asset.contact_id) && (
-            <option value={asset.contact_id}>(previously selected contact)</option>
-          )}
-          {contactsInScope.map((c) => (
-            <option key={c.id} value={c.id}>
-              {c.label}
-              {c.email ? ` · ${c.email}` : ''}
-            </option>
-          ))}
-        </select>
-      </FieldLabel>
-
       <div className="grid grid-cols-2 gap-2">
         <FieldLabel label="Installed">
           <input
@@ -765,6 +784,32 @@ function EditPanel({
           />
         </FieldLabel>
       </div>
+
+      {/* ── Vendor ───────────────────────────────────────────────── */}
+      <GroupHeading>Vendor</GroupHeading>
+
+      {/* M34 item 1: associate a directory contact (person/department) with
+          this pin — the "send flags to" recipient. Managed in Admin →
+          Contacts & Vendors. */}
+      <FieldLabel label="Contact (send flags to)">
+        <select
+          value={contactId}
+          onChange={(e) => setContactId(e.target.value)}
+          className="h-10 w-full rounded-md border border-black/10 bg-surface px-3 text-sm text-text outline-none focus:border-waymarks-gold focus:ring-2 focus:ring-waymarks-gold dark:border-white/10"
+        >
+          <option value="">— None —</option>
+          {/* Keep the current contact selectable even if it's out of scope or removed. */}
+          {asset.contact_id && !contactsInScope.some((c) => c.id === asset.contact_id) && (
+            <option value={asset.contact_id}>(previously selected contact)</option>
+          )}
+          {contactsInScope.map((c) => (
+            <option key={c.id} value={c.id}>
+              {c.label}
+              {c.email ? ` · ${c.email}` : ''}
+            </option>
+          ))}
+        </select>
+      </FieldLabel>
 
       <div className="sticky bottom-0 -mx-4 flex justify-end gap-2 border-t border-black/10 bg-surface px-4 py-3 dark:border-white/10">
         <Button variant="secondary" onClick={onCancel} disabled={saving}>
@@ -1048,50 +1093,84 @@ function ThumbButton({
   );
 }
 
-function DetailsSection({
-  asset,
-  canEdit,
-  buildingId,
-}: {
-  asset: Asset;
-  canEdit: boolean;
-  buildingId: string;
-}) {
+/** Section wrapper for the read-mode drawer groups (Media, Pin, Vendor, …). */
+function Section({ title, children }: { title: string; children: React.ReactNode }) {
+  return (
+    <section className="space-y-2.5">
+      <h3 className="text-[11px] font-semibold uppercase tracking-[0.2em] text-text-faint">
+        {title}
+      </h3>
+      {children}
+    </section>
+  );
+}
+
+/** Group heading inside the edit form. `first` drops the top divider. */
+function GroupHeading({ children, first }: { children: React.ReactNode; first?: boolean }) {
+  return (
+    <p
+      className={cn(
+        'text-[11px] font-semibold uppercase tracking-[0.2em] text-waymarks-gold',
+        !first && 'border-t border-black/10 pt-3 dark:border-white/10'
+      )}
+    >
+      {children}
+    </p>
+  );
+}
+
+/** Pin meta — pin number · type · category. */
+function PinMeta({ asset }: { asset: Asset }) {
   const pinLabel = formatPinNumber(asset.pin_number);
   return (
-    <div className="space-y-2.5">
-      <div className="flex flex-wrap items-center gap-1">
-        {pinLabel && (
-          <span
-            className="inline-flex items-center rounded-md bg-waymarks-ink px-2 py-0.5 font-mono text-xs font-semibold text-white"
-            title="Pin ID — this asset's reference number on the floor"
-          >
-            #{pinLabel}
-          </span>
-        )}
-        <Chip variant="gold">{prettyType(asset.type)}</Chip>
-        <Chip variant="default">{asset.category}</Chip>
-        {asset.zone && (
-          <Chip variant="default" title="Zone or department">{asset.zone}</Chip>
-        )}
-        {asset.room_number && (
-          <Chip variant="default" title="Room number">Rm {asset.room_number}</Chip>
-        )}
-      </div>
-      {asset.location_notes && (
-        <p className="flex items-start gap-1.5 text-sm text-text-muted">
-          <MapPin size={12} aria-hidden className="mt-1 shrink-0" />
-          <span>{asset.location_notes}</span>
-        </p>
+    <div className="flex flex-wrap items-center gap-1">
+      {pinLabel && (
+        <span
+          className="inline-flex items-center rounded-md bg-waymarks-ink px-2 py-0.5 font-mono text-xs font-semibold text-white"
+          title="Pin ID — this asset's reference number on the floor"
+        >
+          #{pinLabel}
+        </span>
       )}
-      {asset.notes && (
-        <div className="rounded-md border border-black/10 bg-bg p-2.5 text-xs text-text-muted dark:border-white/10">
-          <p className="mb-1 font-medium uppercase tracking-[0.14em] text-[10px] text-text-faint">Install & service notes</p>
-          <p className="whitespace-pre-wrap text-sm text-text">{asset.notes}</p>
+      <Chip variant="gold">{prettyType(asset.type)}</Chip>
+      <Chip variant="default">{asset.category}</Chip>
+    </div>
+  );
+}
+
+/**
+ * Identity — zone / room / manufacturer chips + the Notes block. Renders
+ * nothing when none are present (preserves the prior "hidden if empty"
+ * behavior). The old "Where on the floor" / location_notes line is gone — the
+ * pin position already conveys that (Feature #3b).
+ */
+function IdentitySection({ asset }: { asset: Asset }) {
+  const hasChips = !!(asset.zone || asset.room_number || asset.manufacturer);
+  if (!hasChips && !asset.notes) return null;
+  return (
+    <Section title="Identity">
+      {hasChips && (
+        <div className="flex flex-wrap items-center gap-1">
+          {asset.zone && (
+            <Chip variant="default" title="Zone or department">{asset.zone}</Chip>
+          )}
+          {asset.room_number && (
+            <Chip variant="default" title="Room number">Rm {asset.room_number}</Chip>
+          )}
+          {asset.manufacturer && (
+            <Chip variant="default" title="Manufacturer">{asset.manufacturer}</Chip>
+          )}
         </div>
       )}
-      <VendorPanel asset={asset} canEdit={canEdit} buildingId={buildingId} />
-    </div>
+      {asset.notes && (
+        <div className="rounded-md border border-black/10 bg-bg p-2.5 dark:border-white/10">
+          <p className="mb-1 text-[10px] font-medium uppercase tracking-[0.14em] text-text-faint">
+            Notes
+          </p>
+          <p className="whitespace-pre-wrap text-sm leading-relaxed text-text">{asset.notes}</p>
+        </div>
+      )}
+    </Section>
   );
 }
 
@@ -1366,10 +1445,10 @@ function StatusRow({ asset, flagCount }: { asset: Asset; flagCount: number }) {
   );
 }
 
-function AttributesSection({ asset }: { asset: Asset }) {
+/** Audit attributes — installed date + audit cycle (Status & audit group). */
+function AuditAttrs({ asset }: { asset: Asset }) {
   return (
-    <dl className="grid grid-cols-3 gap-x-2 gap-y-2 text-sm">
-      <Attr term="Manufacturer" value={asset.manufacturer ?? '—'} icon={<Wrench size={12} />} />
+    <dl className="grid grid-cols-2 gap-x-2 gap-y-2 text-sm">
       <Attr
         term="Installed"
         value={asset.installed_at ? format(new Date(asset.installed_at), 'PP') : '—'}
