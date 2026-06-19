@@ -1,7 +1,8 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import * as Dialog from '@radix-ui/react-dialog';
 import { format } from 'date-fns';
 import { Tooltip } from '@/components/ui/Tooltip';
+import { Band } from '@/components/ui/Band';
 import {
   X,
   Calendar,
@@ -20,7 +21,14 @@ import {
   ShoppingCart,
   Download,
   ExternalLink,
+  Image as ImageIcon,
+  Tag,
+  MapPin,
+  ClipboardCheck,
+  Store,
+  History,
 } from 'lucide-react';
+import type { LucideIcon } from 'lucide-react';
 import { Chip } from '@/components/ui/Chip';
 import { MetricCard } from '@/components/ui/MetricCard';
 import { Button } from '@/components/ui/Button';
@@ -177,73 +185,111 @@ export function AssetDrawer({
                     <span>This asset is flagged</span>
                   </div>
                 )}
-                {/* ── Media — photos, video, files, visualize ── */}
-                <Section title="Media">
-                  <PhotoGallery
-                    assetId={asset.id}
-                    assetName={asset.name ?? 'Asset'}
-                    canEdit={canEdit}
-                  />
-                  <AuditVideosPanel
-                    buildingId={buildingId}
-                    assetId={asset.id}
-                    onRecordClick={canEdit ? () => setRecordOpen(true) : undefined}
-                  />
-                  <AssetAttachmentsPanel assetId={asset.id} canEdit={canEdit} />
-                  <VisualizeRow
-                    buildingName={building?.name ?? 'Building'}
-                    floorLabel={floor?.label ?? ''}
-                    pinValue={asset.room_number?.trim() || asset.name}
-                  />
-                </Section>
-
-                {/* ── Identity — zone, room, manufacturer, notes ── */}
-                <IdentitySection asset={asset} />
-
-                {/* ── Pin — meta + lock/reposition/delete ── */}
-                <Section title="Pin">
-                  <PinMeta asset={asset} />
-                  {canEdit && (
-                    <>
-                      <LockBar
-                        asset={asset}
-                        busy={update.isPending}
-                        onToggleLock={() =>
-                          update.mutate({
-                            id: asset.id,
-                            patch: { is_locked: !asset.is_locked },
-                          })
-                        }
-                      />
-                      <AdminActions
-                        canReposition={canReposition && !!onStartReposition}
-                        canDelete={canDelete && !!onStartDelete}
-                        onReposition={() => onStartReposition?.(asset.id)}
-                        onDelete={() => onStartDelete?.(asset.id)}
-                      />
-                    </>
-                  )}
-                </Section>
-
-                {/* ── Status & audit ── */}
-                <Section title="Status & audit">
-                  <QuickActions
-                    asset={asset}
-                    canAudit={canAudit}
-                    onLogFlag={onLogFlag ? () => onLogFlag(asset.id) : undefined}
-                  />
-                  <StatusRow asset={asset} flagCount={asset.status === 'flagged' ? 1 : 0} />
-                  <AuditAttrs asset={asset} />
-                </Section>
-
-                {/* ── Vendor — linked vendors + order signs ── */}
-                <Section title="Vendor">
-                  <VendorPanel asset={asset} canEdit={canEdit} buildingId={buildingId} />
-                  <OrderSignsRow asset={asset} />
-                </Section>
-
-                {/* ── Activity ── */}
-                <ActivitySection items={activity} />
+                {/* Feature #3c: each group is a Band (icon + small-caps label,
+                    alternating paper/white bodies for contrast). Built as a list
+                    so the alternation holds even when the optional Identity band
+                    is hidden. Video is folded into Media as a secondary action
+                    (photo capture primary). */}
+                {(() => {
+                  const identityShown = !!(
+                    asset.zone || asset.room_number || asset.manufacturer || asset.notes
+                  );
+                  const bands: Array<{ icon: LucideIcon; label: string; node: ReactNode }> = [
+                    {
+                      icon: ImageIcon,
+                      label: 'Media',
+                      node: (
+                        <>
+                          <PhotoGallery
+                            assetId={asset.id}
+                            assetName={asset.name ?? 'Asset'}
+                            canEdit={canEdit}
+                          />
+                          <AuditVideosPanel
+                            buildingId={buildingId}
+                            assetId={asset.id}
+                            compact
+                            onRecordClick={canEdit ? () => setRecordOpen(true) : undefined}
+                          />
+                          <AssetAttachmentsPanel assetId={asset.id} canEdit={canEdit} />
+                          <VisualizeRow
+                            buildingName={building?.name ?? 'Building'}
+                            floorLabel={floor?.label ?? ''}
+                            pinValue={asset.room_number?.trim() || asset.name}
+                          />
+                        </>
+                      ),
+                    },
+                    ...(identityShown
+                      ? [{ icon: Tag, label: 'Identity', node: <IdentityBody asset={asset} /> }]
+                      : []),
+                    {
+                      icon: MapPin,
+                      label: 'Pin',
+                      node: (
+                        <>
+                          <PinMeta asset={asset} />
+                          {canEdit && (
+                            <>
+                              <LockBar
+                                asset={asset}
+                                busy={update.isPending}
+                                onToggleLock={() =>
+                                  update.mutate({
+                                    id: asset.id,
+                                    patch: { is_locked: !asset.is_locked },
+                                  })
+                                }
+                              />
+                              <AdminActions
+                                canReposition={canReposition && !!onStartReposition}
+                                canDelete={canDelete && !!onStartDelete}
+                                onReposition={() => onStartReposition?.(asset.id)}
+                                onDelete={() => onStartDelete?.(asset.id)}
+                              />
+                            </>
+                          )}
+                        </>
+                      ),
+                    },
+                    {
+                      icon: ClipboardCheck,
+                      label: 'Status & audit',
+                      node: (
+                        <>
+                          <QuickActions
+                            asset={asset}
+                            canAudit={canAudit}
+                            onLogFlag={onLogFlag ? () => onLogFlag(asset.id) : undefined}
+                          />
+                          <StatusRow asset={asset} flagCount={asset.status === 'flagged' ? 1 : 0} />
+                          <AuditAttrs asset={asset} />
+                        </>
+                      ),
+                    },
+                    {
+                      icon: Store,
+                      label: 'Vendor',
+                      node: (
+                        <>
+                          <VendorPanel asset={asset} canEdit={canEdit} buildingId={buildingId} />
+                          <OrderSignsRow asset={asset} />
+                        </>
+                      ),
+                    },
+                    { icon: History, label: 'Activity', node: <ActivitySection items={activity} /> },
+                  ];
+                  return bands.map((b, i) => (
+                    <Band
+                      key={b.label}
+                      icon={b.icon}
+                      label={b.label}
+                      tone={i % 2 === 0 ? 'paper' : 'white'}
+                    >
+                      {b.node}
+                    </Band>
+                  ));
+                })()}
 
                 <PermissionsFooter />
               </>
@@ -1093,18 +1139,6 @@ function ThumbButton({
   );
 }
 
-/** Section wrapper for the read-mode drawer groups (Media, Pin, Vendor, …). */
-function Section({ title, children }: { title: string; children: React.ReactNode }) {
-  return (
-    <section className="space-y-2.5">
-      <h3 className="text-[11px] font-semibold uppercase tracking-[0.2em] text-text-faint">
-        {title}
-      </h3>
-      {children}
-    </section>
-  );
-}
-
 /** Group heading inside the edit form. `first` drops the top divider. */
 function GroupHeading({ children, first }: { children: React.ReactNode; first?: boolean }) {
   return (
@@ -1144,11 +1178,10 @@ function PinMeta({ asset }: { asset: Asset }) {
  * behavior). The old "Where on the floor" / location_notes line is gone — the
  * pin position already conveys that (Feature #3b).
  */
-function IdentitySection({ asset }: { asset: Asset }) {
+function IdentityBody({ asset }: { asset: Asset }) {
   const hasChips = !!(asset.zone || asset.room_number || asset.manufacturer);
-  if (!hasChips && !asset.notes) return null;
   return (
-    <Section title="Identity">
+    <>
       {hasChips && (
         <div className="flex flex-wrap items-center gap-1">
           {asset.zone && (
@@ -1170,7 +1203,7 @@ function IdentitySection({ asset }: { asset: Asset }) {
           <p className="whitespace-pre-wrap text-sm leading-relaxed text-text">{asset.notes}</p>
         </div>
       )}
-    </Section>
+    </>
   );
 }
 

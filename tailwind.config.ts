@@ -40,6 +40,12 @@ export default {
           DEFAULT: 'rgb(var(--color-surface) / <alpha-value>)',
           soft: 'rgb(var(--color-surface-soft) / <alpha-value>)',
         },
+        // Banded asset/edit sections (Feature #3c). `mist` is the header strip;
+        // bodies alternate `paper` and `surface` (white).
+        band: {
+          paper: 'rgb(var(--band-paper) / <alpha-value>)',
+          mist: 'rgb(var(--band-mist) / <alpha-value>)',
+        },
         // Asset pin status colors (per spec 02 § Status colors)
         pin: {
           good: '#6CC28A',

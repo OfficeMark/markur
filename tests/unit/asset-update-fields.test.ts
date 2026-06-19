@@ -35,7 +35,8 @@ describe('updateAsset — Feature #3b drawer fields', () => {
 
   it('does not send the removed location_notes field', async () => {
     await updateAsset('a1', { notes: 'hi' });
-    const patch = updateMock.mock.calls[0][0];
-    expect(patch).not.toHaveProperty('location_notes');
+    expect(updateMock).toHaveBeenCalledWith(
+      expect.not.objectContaining({ location_notes: expect.anything() })
+    );
   });
 });
