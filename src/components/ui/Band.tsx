@@ -1,36 +1,33 @@
 import type { ReactNode } from 'react';
 import type { LucideIcon } from 'lucide-react';
-import { cn } from '@/lib/utils';
 
 /**
- * A color-banded section (ported from standalone's asset dialog): a Mist header
- * strip with a 4px orange left bar, an icon and a small-caps label, over a body
- * tinted Paper or white. Bodies alternate so adjacent bands stay visually
- * distinct. Presentation only.
+ * Feature #3d "dynamic" high-contrast section band: a near-black header strip
+ * (`band-ink`) with an orange icon chip and a white reversed-out label, over a
+ * clean white (`surface`) body. Optional small `hint` on the right of the
+ * header. Presentation only. Theme-aware via the band-ink / surface tokens.
  */
 export function Band({
   icon: Icon,
   label,
-  tone,
+  hint,
   children,
 }: {
   icon: LucideIcon;
   label: string;
-  tone: 'paper' | 'white';
+  hint?: ReactNode;
   children: ReactNode;
 }) {
   return (
-    <section className="overflow-hidden rounded-lg border border-black/10 dark:border-white/10">
-      <header className="relative flex items-center gap-2 bg-band-mist py-2 pl-4 pr-3">
-        <span aria-hidden className="absolute inset-y-0 left-0 w-1 bg-waymarks-gold" />
-        <Icon size={13} className="text-waymarks-gold" aria-hidden />
-        <span className="text-[11px] font-semibold uppercase tracking-[0.16em] text-text-muted">
-          {label}
+    <section className="overflow-hidden rounded-xl border border-black/10 shadow-sm dark:border-white/10">
+      <header className="flex items-center gap-2.5 bg-band-ink px-3 py-2.5">
+        <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-waymarks-gold text-white">
+          <Icon size={16} aria-hidden />
         </span>
+        <h3 className="flex-1 text-sm font-bold text-white">{label}</h3>
+        {hint != null && <span className="text-[11px] text-white/60">{hint}</span>}
       </header>
-      <div className={cn('space-y-3 p-4', tone === 'paper' ? 'bg-band-paper' : 'bg-surface')}>
-        {children}
-      </div>
+      <div className="space-y-3 bg-surface p-4">{children}</div>
     </section>
   );
 }

@@ -32,6 +32,12 @@
        bodies alternate `paper` and `surface` (white) for contrast. */
     --band-paper: 245 243 238;
     --band-mist: 233 235 238;
+    /* Feature #3d "dynamic" high-contrast: near-black band headers + dark
+       stats strip, reversed-out white text, orange icon chip, white bodies. */
+    --band-ink: 34 30 26;
+    /* Filled-primary orange: deep enough that WHITE button text meets WCAG AA
+       (5.09:1). Brighter Markur gold stays for decorative chips/accents. */
+    --accent: 176 84 26;
 
     /* Pin sizing (M12 - single source of truth so future tweaks are one line).
        --pin-size-mobile applies < lg breakpoint (touch); --pin-size-desktop applies >= lg.
@@ -104,6 +110,8 @@
   /* Banded sections (Feature #3c) — dark tones. */
   --band-paper: 26 31 39;
   --band-mist: 37 45 56;
+  /* #3d dark band header — a touch lighter than the page so it still reads. */
+  --band-ink: 42 38 33;
 
   /* Status backgrounds — dimmed for dark mode */
   --color-success-bg: 28 50 40;

@@ -30,7 +30,6 @@ import {
 } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 import { Chip } from '@/components/ui/Chip';
-import { MetricCard } from '@/components/ui/MetricCard';
 import { Button } from '@/components/ui/Button';
 import { useAsset, useUpdateAsset } from '@/hooks/useAssets';
 import { useBuilding } from '@/hooks/useBuildings';
@@ -116,10 +115,46 @@ export function AssetDrawer({
   const [editing, setEditing] = useState(false);
   const [recordOpen, setRecordOpen] = useState(false);
 
+  // Photo hero state — lifted here so the hero (primary photo) and the Media
+  // band's thumbnail strip share one source + selection (Feature #3d).
+  const { data: photos = [], isLoading: photosLoading } = useAssetPhotos(assetId ?? undefined);
+  const addPhoto = useAddAssetPhoto(assetId ?? '');
+  const delPhoto = useDeleteAssetPhoto(assetId ?? '');
+  const [activePhoto, setActivePhoto] = useState(0);
+  const [photoError, setPhotoError] = useState<string | null>(null);
+
+  async function onPickPhotos(list: FileList | null) {
+    if (!list) return;
+    setPhotoError(null);
+    for (const file of Array.from(list)) {
+      const v = validateAssetPhotoFile(file);
+      if (v) {
+        setPhotoError(v);
+        continue;
+      }
+      try {
+        await addPhoto.mutateAsync(file);
+      } catch (e) {
+        setPhotoError(e instanceof Error ? e.message : 'Upload failed.');
+      }
+    }
+  }
+  async function onDeletePhoto(p: AssetPhoto) {
+    setPhotoError(null);
+    try {
+      await delPhoto.mutateAsync(p);
+      setActivePhoto(0);
+    } catch (e) {
+      setPhotoError(e instanceof Error ? e.message : 'Delete failed.');
+    }
+  }
+
   // Reset edit mode whenever the selected asset changes.
   useEffect(() => {
     setEditing(false);
     setRecordOpen(false);
+    setActivePhoto(0);
+    setPhotoError(null);
   }, [assetId]);
 
   return (
@@ -130,40 +165,26 @@ export function AssetDrawer({
           aria-describedby={undefined}
           className="fixed inset-x-0 bottom-0 z-50 flex h-[88vh] flex-col rounded-t-2xl border-t border-black/10 bg-surface text-text shadow-sheet outline-none dark:border-white/10 sm:inset-x-auto sm:right-0 sm:top-0 sm:h-full sm:w-[min(96vw,440px)] sm:rounded-t-none sm:border-l sm:border-t-0"
         >
-          <header className="flex items-start justify-between gap-3 border-b border-black/10 p-4 dark:border-white/10">
+          {/* Feature #3d: thin near-black topbar. The asset name + status badge
+              + Edit live on the photo hero below; here we keep just the title
+              (for context when scrolled) and Close. */}
+          <header className="flex items-center justify-between gap-3 bg-band-ink px-4 py-3 text-white">
             <Dialog.Title asChild>
-              <div className="min-w-0">
-                <p className="truncate font-semibold text-xl">{asset?.name ?? 'Asset'}</p>
-                {asset && (
-                  <p className="mt-0.5 truncate text-xs text-text-muted">
-                    {prettyType(asset.type)} · {asset.category}
-                  </p>
-                )}
-              </div>
+              <p className="min-w-0 truncate text-sm font-semibold text-white">
+                {asset?.name ?? 'Asset'}
+              </p>
             </Dialog.Title>
-            <div className="flex items-center gap-1">
-              {asset && canEdit && !editing && (
-                <button
-                  type="button"
-                  onClick={() => setEditing(true)}
-                  className="inline-flex h-8 items-center gap-1 rounded-md border border-black/10 px-2 text-xs hover:bg-black/5 dark:border-white/10 dark:hover:bg-white/5"
-                >
-                  <Pencil size={12} aria-hidden />
-                  <span>Edit</span>
-                </button>
-              )}
-              <Dialog.Close asChild>
-                <button
-                  aria-label="Close"
-                  className="rounded-md p-1 text-text-muted hover:bg-black/5 dark:hover:bg-white/5"
-                >
-                  <X size={16} aria-hidden />
-                </button>
-              </Dialog.Close>
-            </div>
+            <Dialog.Close asChild>
+              <button
+                aria-label="Close"
+                className="-mr-1 shrink-0 rounded-md p-1 text-white/80 hover:bg-white/10 hover:text-white"
+              >
+                <X size={18} aria-hidden />
+              </button>
+            </Dialog.Close>
           </header>
 
-          <div className="flex-1 space-y-5 overflow-y-auto p-4">
+          <div className="flex-1 space-y-4 overflow-y-auto bg-band-paper p-4">
             {isLoading || !asset ? (
               <Skeleton />
             ) : editing ? (
@@ -178,121 +199,151 @@ export function AssetDrawer({
                 }}
               />
             ) : (
-              <>
-                {asset.status === 'flagged' && (
-                  <div className="flex items-center gap-2 rounded-md border border-danger/40 bg-danger-bg px-3 py-2 text-sm font-semibold text-danger">
-                    <AlertTriangle size={15} aria-hidden className="shrink-0" />
-                    <span>This asset is flagged</span>
-                  </div>
-                )}
-                {/* Feature #3c: each group is a Band (icon + small-caps label,
-                    alternating paper/white bodies for contrast). Built as a list
-                    so the alternation holds even when the optional Identity band
-                    is hidden. Video is folded into Media as a secondary action
-                    (photo capture primary). */}
-                {(() => {
-                  const identityShown = !!(
-                    asset.zone || asset.room_number || asset.manufacturer || asset.notes
-                  );
-                  const bands: Array<{ icon: LucideIcon; label: string; node: ReactNode }> = [
-                    {
-                      icon: ImageIcon,
-                      label: 'Media',
-                      node: (
-                        <>
-                          <PhotoGallery
-                            assetId={asset.id}
-                            assetName={asset.name ?? 'Asset'}
-                            canEdit={canEdit}
-                          />
-                          <AuditVideosPanel
-                            buildingId={buildingId}
-                            assetId={asset.id}
-                            compact
-                            onRecordClick={canEdit ? () => setRecordOpen(true) : undefined}
-                          />
-                          <AssetAttachmentsPanel assetId={asset.id} canEdit={canEdit} />
-                          <VisualizeRow
-                            buildingName={building?.name ?? 'Building'}
-                            floorLabel={floor?.label ?? ''}
-                            pinValue={asset.room_number?.trim() || asset.name}
-                          />
-                        </>
-                      ),
-                    },
-                    ...(identityShown
-                      ? [{ icon: Tag, label: 'Identity', node: <IdentityBody asset={asset} /> }]
-                      : []),
-                    {
-                      icon: MapPin,
-                      label: 'Pin',
-                      node: (
-                        <>
-                          <PinMeta asset={asset} />
-                          {canEdit && (
-                            <>
-                              <LockBar
-                                asset={asset}
-                                busy={update.isPending}
-                                onToggleLock={() =>
-                                  update.mutate({
-                                    id: asset.id,
-                                    patch: { is_locked: !asset.is_locked },
-                                  })
-                                }
-                              />
-                              <AdminActions
-                                canReposition={canReposition && !!onStartReposition}
-                                canDelete={canDelete && !!onStartDelete}
-                                onReposition={() => onStartReposition?.(asset.id)}
-                                onDelete={() => onStartDelete?.(asset.id)}
-                              />
-                            </>
-                          )}
-                        </>
-                      ),
-                    },
-                    {
-                      icon: ClipboardCheck,
-                      label: 'Status & audit',
-                      node: (
-                        <>
-                          <QuickActions
-                            asset={asset}
-                            canAudit={canAudit}
-                            onLogFlag={onLogFlag ? () => onLogFlag(asset.id) : undefined}
-                          />
-                          <StatusRow asset={asset} flagCount={asset.status === 'flagged' ? 1 : 0} />
-                          <AuditAttrs asset={asset} />
-                        </>
-                      ),
-                    },
-                    {
-                      icon: Store,
-                      label: 'Vendor',
-                      node: (
-                        <>
-                          <VendorPanel asset={asset} canEdit={canEdit} buildingId={buildingId} />
-                          <OrderSignsRow asset={asset} />
-                        </>
-                      ),
-                    },
-                    { icon: History, label: 'Activity', node: <ActivitySection items={activity} /> },
-                  ];
-                  return bands.map((b, i) => (
-                    <Band
-                      key={b.label}
-                      icon={b.icon}
-                      label={b.label}
-                      tone={i % 2 === 0 ? 'paper' : 'white'}
-                    >
-                      {b.node}
-                    </Band>
-                  ));
-                })()}
-
-                <PermissionsFooter />
-              </>
+              (() => {
+                const safeActive = Math.min(activePhoto, Math.max(0, photos.length - 1));
+                const current = photos[safeActive];
+                const pinLabel = formatPinNumber(asset.pin_number);
+                const subtitle = [
+                  asset.category.charAt(0).toUpperCase() + asset.category.slice(1),
+                  asset.room_number?.trim() ? `Rm ${asset.room_number.trim()}` : null,
+                  pinLabel ? `Pin #${pinLabel}` : null,
+                ]
+                  .filter(Boolean)
+                  .join(' · ');
+                const identityShown = !!(
+                  asset.zone || asset.room_number || asset.manufacturer || asset.notes
+                );
+                // Each group is a Band (near-black header + orange chip + white
+                // label over a white body, Feature #3d). Identity is optional, so
+                // the list is filtered. Video stays secondary inside Media (#3c).
+                const bands: Array<{
+                  icon: LucideIcon;
+                  label: string;
+                  hint?: ReactNode;
+                  node: ReactNode;
+                }> = [
+                  {
+                    icon: ImageIcon,
+                    label: 'Media',
+                    hint:
+                      photos.length > 0
+                        ? `${photos.length} photo${photos.length === 1 ? '' : 's'}`
+                        : undefined,
+                    node: (
+                      <>
+                        <PhotoStrip
+                          photos={photos}
+                          active={safeActive}
+                          loading={photosLoading}
+                          canEdit={canEdit}
+                          adding={addPhoto.isPending}
+                          error={photoError}
+                          onSelect={setActivePhoto}
+                          onPick={onPickPhotos}
+                        />
+                        <AuditVideosPanel
+                          buildingId={buildingId}
+                          assetId={asset.id}
+                          compact
+                          onRecordClick={canEdit ? () => setRecordOpen(true) : undefined}
+                        />
+                        <AssetAttachmentsPanel assetId={asset.id} canEdit={canEdit} />
+                        <VisualizeRow
+                          buildingName={building?.name ?? 'Building'}
+                          floorLabel={floor?.label ?? ''}
+                          pinValue={asset.room_number?.trim() || asset.name}
+                        />
+                      </>
+                    ),
+                  },
+                  ...(identityShown
+                    ? [{ icon: Tag, label: 'Identity', node: <IdentityBody asset={asset} /> }]
+                    : []),
+                  {
+                    icon: MapPin,
+                    label: 'Pin',
+                    node: (
+                      <>
+                        <PinMeta asset={asset} />
+                        {canEdit && (
+                          <>
+                            <LockBar
+                              asset={asset}
+                              busy={update.isPending}
+                              onToggleLock={() =>
+                                update.mutate({
+                                  id: asset.id,
+                                  patch: { is_locked: !asset.is_locked },
+                                })
+                              }
+                            />
+                            <AdminActions
+                              canReposition={canReposition && !!onStartReposition}
+                              canDelete={canDelete && !!onStartDelete}
+                              onReposition={() => onStartReposition?.(asset.id)}
+                              onDelete={() => onStartDelete?.(asset.id)}
+                            />
+                          </>
+                        )}
+                      </>
+                    ),
+                  },
+                  {
+                    icon: ClipboardCheck,
+                    label: 'Status & audit',
+                    node: (
+                      <>
+                        <QuickActions
+                          asset={asset}
+                          canAudit={canAudit}
+                          onLogFlag={onLogFlag ? () => onLogFlag(asset.id) : undefined}
+                        />
+                        <AuditAttrs asset={asset} />
+                      </>
+                    ),
+                  },
+                  {
+                    icon: Store,
+                    label: 'Vendor',
+                    node: (
+                      <>
+                        <VendorPanel asset={asset} canEdit={canEdit} buildingId={buildingId} />
+                        <OrderSignsRow asset={asset} />
+                      </>
+                    ),
+                  },
+                  { icon: History, label: 'Activity', node: <ActivitySection items={activity} /> },
+                ];
+                return (
+                  <>
+                    {asset.status === 'flagged' && (
+                      <div className="flex items-center gap-2 rounded-md border border-danger/40 bg-danger-bg px-3 py-2 text-sm font-semibold text-danger">
+                        <AlertTriangle size={15} aria-hidden className="shrink-0" />
+                        <span>This asset is flagged</span>
+                      </div>
+                    )}
+                    <Hero
+                      photo={current}
+                      loading={photosLoading}
+                      name={asset.name ?? 'Asset'}
+                      subtitle={subtitle}
+                      status={asset.status as AssetStatus}
+                      assetName={asset.name ?? 'Asset'}
+                      photoIndex={safeActive}
+                      canEdit={canEdit}
+                      onEdit={() => setEditing(true)}
+                      onDeletePhoto={canEdit && current ? () => onDeletePhoto(current) : undefined}
+                    />
+                    <StatsStrip asset={asset} flagCount={asset.status === 'flagged' ? 1 : 0} />
+                    {bands.map((b) => (
+                      <Band key={b.label} icon={b.icon} label={b.label} hint={b.hint}>
+                        {b.node}
+                      </Band>
+                    ))}
+                    <PermissionsFooter />
+                  </>
+                );
+              })()
             )}
           </div>
         </Dialog.Content>
@@ -441,7 +492,7 @@ function VisualizeRow({
   // resolves so we never launch the embed with an empty ?floor= param.
   const ready = !!floorLabel;
   const btnClass =
-    'inline-flex h-8 shrink-0 items-center gap-1.5 rounded-md bg-waymarks-gold px-3 text-xs font-medium text-waymarks-ink hover:bg-waymarks-gold-deep';
+    'inline-flex h-8 shrink-0 items-center gap-1.5 rounded-md bg-accent px-3 text-xs font-medium text-white hover:bg-accent/90';
   return (
     <div className="flex items-center justify-between gap-3 rounded-md border border-waymarks-gold/30 bg-waymarks-gold-soft px-3 py-2 text-xs dark:bg-white/5">
       <div className="min-w-0">
@@ -528,7 +579,7 @@ function OrderSignsRow({ asset }: { asset: Asset }) {
       <a
         href={href}
         {...(opensExternally ? { target: '_blank', rel: 'noopener noreferrer' } : {})}
-        className="inline-flex h-8 shrink-0 items-center gap-1.5 rounded-md bg-waymarks-gold px-3 text-xs font-medium text-white hover:bg-waymarks-gold-deep"
+        className="inline-flex h-8 shrink-0 items-center gap-1.5 rounded-md bg-accent px-3 text-xs font-medium text-white hover:bg-accent/90"
       >
         <ShoppingCart size={12} aria-hidden />
         Order Signs
@@ -886,136 +937,33 @@ function FieldLabel({ label, children }: { label: string; children: React.ReactN
   );
 }
 
-function PhotoGallery({
-  assetId,
-  assetName,
-  canEdit,
-}: {
-  assetId: string;
-  assetName: string;
-  canEdit: boolean;
-}) {
-  const { data: photos = [], isLoading } = useAssetPhotos(assetId);
-  const [active, setActive] = useState(0);
-  const add = useAddAssetPhoto(assetId);
-  const del = useDeleteAssetPhoto(assetId);
-  const [errorMsg, setErrorMsg] = useState<string | null>(null);
-
-  const safeActive = Math.min(active, Math.max(0, photos.length - 1));
-  const current: AssetPhoto | undefined = photos[safeActive];
-
-  async function onPickFiles(list: FileList | null) {
-    if (!list) return;
-    setErrorMsg(null);
-    for (const file of Array.from(list)) {
-      const v = validateAssetPhotoFile(file);
-      if (v) {
-        setErrorMsg(v);
-        continue;
-      }
-      try {
-        await add.mutateAsync(file);
-      } catch (e) {
-        setErrorMsg(e instanceof Error ? e.message : 'Upload failed.');
-      }
-    }
-  }
-
-  async function onDelete(p: AssetPhoto) {
-    setErrorMsg(null);
-    try {
-      await del.mutateAsync(p);
-      setActive(0);
-    } catch (e) {
-      setErrorMsg(e instanceof Error ? e.message : 'Delete failed.');
-    }
-  }
-
-  return (
-    <div className="space-y-2">
-      <div className="overflow-hidden rounded-lg border border-black/10 bg-waymarks-gold-soft dark:border-white/10 dark:bg-white/5">
-        {isLoading ? (
-          <div className="flex h-40 animate-pulse items-center justify-center text-text-faint">
-            Loading photos…
-          </div>
-        ) : current ? (
-          <PhotoFrame
-            photo={current}
-            assetName={assetName}
-            index={safeActive}
-            canDelete={canEdit}
-            onDelete={() => onDelete(current)}
-          />
-        ) : (
-          <div className="flex h-32 flex-col items-center justify-center gap-1 text-text-faint">
-            <ImageOff size={20} aria-hidden />
-            <span className="text-xs">No photos yet</span>
-          </div>
-        )}
-      </div>
-
-      {photos.length > 1 && (
-        <div className="flex gap-1 overflow-x-auto">
-          {photos.map((p, i) => (
-            <ThumbButton
-              key={p.id}
-              photo={p}
-              active={i === safeActive}
-              onSelect={() => setActive(i)}
-            />
-          ))}
-        </div>
-      )}
-
-      {canEdit && (
-        <div className="flex gap-1">
-          <label className="inline-flex h-8 cursor-pointer items-center gap-1 rounded-md border border-black/10 px-2 text-xs hover:bg-black/5 dark:border-white/10 dark:hover:bg-white/5">
-            <Plus size={12} aria-hidden />
-            <span>{add.isPending ? 'Uploading…' : 'Add photo'}</span>
-            <input
-              type="file"
-              accept="image/*"
-              capture="environment"
-              className="sr-only"
-              onChange={(e) => {
-                void onPickFiles(e.target.files);
-                e.target.value = '';
-              }}
-            />
-          </label>
-          <label className="inline-flex h-8 cursor-pointer items-center gap-1 rounded-md border border-black/10 px-2 text-xs hover:bg-black/5 dark:border-white/10 dark:hover:bg-white/5">
-            <Pencil size={12} aria-hidden />
-            <span>Choose files</span>
-            <input
-              type="file"
-              accept="image/png,image/jpeg,image/webp"
-              multiple
-              className="sr-only"
-              onChange={(e) => {
-                void onPickFiles(e.target.files);
-                e.target.value = '';
-              }}
-            />
-          </label>
-        </div>
-      )}
-      {errorMsg && <p className="text-xs text-danger">{errorMsg}</p>}
-    </div>
-  );
-}
-
-function PhotoFrame({
+/**
+ * Photo hero (Feature #3d) — the active photo as a banner with a dark bottom
+ * scrim (name + subtitle), a status badge, an Edit control, and Save / Delete
+ * photo actions. Graceful empty state when there is no photo.
+ */
+function Hero({
   photo,
+  loading,
+  name,
+  subtitle,
+  status,
   assetName,
-  index,
-  canDelete,
-  onDelete,
+  photoIndex,
+  canEdit,
+  onEdit,
+  onDeletePhoto,
 }: {
-  photo: AssetPhoto;
+  photo: AssetPhoto | undefined;
+  loading: boolean;
+  name: string;
+  subtitle: string;
+  status: AssetStatus;
   assetName: string;
-  index: number;
-  canDelete: boolean;
-  onDelete: () => void;
+  photoIndex: number;
+  canEdit: boolean;
+  onEdit: () => void;
+  onDeletePhoto?: () => void;
 }) {
   const [url, setUrl] = useState<string | null>(null);
   const [errored, setErrored] = useState(false);
@@ -1025,23 +973,23 @@ function PhotoFrame({
     let cancelled = false;
     setUrl(null);
     setErrored(false);
+    if (!photo) return;
     void signedAssetPhotoUrl(photo.path)
       .then((u) => !cancelled && setUrl(u))
       .catch(() => !cancelled && setErrored(true));
     return () => {
       cancelled = true;
     };
-  }, [photo.path]);
+  }, [photo?.path]);
 
   async function handleDownload() {
+    if (!photo) return;
     setDownloading(true);
     try {
       const dlUrl = await signedAssetPhotoDownloadUrl(
         photo.path,
-        assetPhotoDownloadName(assetName, index, photo.path)
+        assetPhotoDownloadName(assetName, photoIndex, photo.path)
       );
-      // The signed URL carries Content-Disposition: attachment, so a plain
-      // anchor click saves the file — works cross-origin to Supabase Storage.
       const a = document.createElement('a');
       a.href = dlUrl;
       a.rel = 'noopener';
@@ -1049,51 +997,186 @@ function PhotoFrame({
       a.click();
       a.remove();
     } catch {
-      // Fall back to opening the inline photo in a new tab.
       if (url) window.open(url, '_blank', 'noopener');
     } finally {
       setDownloading(false);
     }
   }
 
-  if (errored) {
-    return (
-      <div className="flex h-40 items-center justify-center text-xs text-danger">
-        Could not load photo
-      </div>
-    );
-  }
-  if (!url) {
-    return (
-      <div className="flex h-40 animate-pulse items-center justify-center text-text-faint">
-        Loading…
-      </div>
-    );
-  }
+  const badge =
+    status === 'flagged'
+      ? { label: 'Flagged', cls: 'bg-danger', Icon: Flag }
+      : status === 'attention'
+        ? { label: 'Attention', cls: 'bg-warning', Icon: AlertTriangle }
+        : { label: 'Good', cls: 'bg-success', Icon: Check };
+  const BadgeIcon = badge.Icon;
+
   return (
-    <div className="relative">
-      <img src={url} alt="" className="block w-full object-cover" />
-      {/* Download is available to anyone who can view the asset. */}
-      <button
-        type="button"
-        onClick={handleDownload}
-        disabled={downloading}
-        aria-label="Download this photo"
-        className="absolute left-2 top-2 inline-flex h-7 items-center gap-1 rounded-md bg-waymarks-ink/80 px-2 text-[11px] font-medium text-white hover:bg-waymarks-ink disabled:opacity-60"
-      >
-        <Download size={12} aria-hidden />
-        {downloading ? 'Saving…' : 'Save'}
-      </button>
-      {canDelete && (
+    <div className="relative overflow-hidden rounded-2xl border border-black/10 shadow-sm dark:border-white/10">
+      <div className="flex h-40 items-center justify-center bg-band-ink text-white/40">
+        {loading ? (
+          <div
+            className="h-6 w-6 animate-spin rounded-full border-2 border-white/30 border-t-white/70"
+            aria-hidden
+          />
+        ) : photo && url && !errored ? (
+          <img src={url} alt="" className="h-40 w-full object-cover" />
+        ) : (
+          <ImageOff size={32} aria-hidden />
+        )}
+      </div>
+
+      {/* Edit (top-left) */}
+      {canEdit && (
         <button
           type="button"
-          onClick={onDelete}
-          aria-label="Delete this photo"
-          className="absolute right-2 top-2 inline-flex h-7 w-7 items-center justify-center rounded-full bg-waymarks-ink/80 text-white hover:bg-danger"
+          onClick={onEdit}
+          aria-label="Edit asset"
+          className="absolute left-3 top-3 inline-flex h-8 w-8 items-center justify-center rounded-lg bg-black/45 text-white backdrop-blur-sm hover:bg-black/65"
         >
-          <Trash2 size={12} aria-hidden />
+          <Pencil size={15} aria-hidden />
         </button>
       )}
+
+      {/* Status badge (top-right) */}
+      <span
+        className={cn(
+          'absolute right-3 top-3 inline-flex items-center gap-1 rounded-full px-3 py-1 text-xs font-bold text-white shadow',
+          badge.cls
+        )}
+      >
+        <BadgeIcon size={13} aria-hidden />
+        {badge.label}
+      </span>
+
+      {/* Scrim: name + subtitle (left), photo actions (right) */}
+      <div className="absolute inset-x-0 bottom-0 flex items-end justify-between gap-2 bg-gradient-to-t from-black/85 via-black/45 to-transparent p-3 pt-10">
+        <div className="min-w-0">
+          <p className="truncate text-base font-bold text-white">{name}</p>
+          <p className="truncate text-xs text-white/75">{subtitle}</p>
+        </div>
+        {photo && !errored && (
+          <div className="flex shrink-0 items-center gap-1">
+            <button
+              type="button"
+              onClick={handleDownload}
+              disabled={downloading}
+              aria-label="Download this photo"
+              className="inline-flex h-7 items-center gap-1 rounded-md bg-white/15 px-2 text-[11px] font-medium text-white backdrop-blur-sm hover:bg-white/25 disabled:opacity-60"
+            >
+              <Download size={12} aria-hidden />
+              {downloading ? 'Saving…' : 'Save'}
+            </button>
+            {onDeletePhoto && (
+              <button
+                type="button"
+                onClick={onDeletePhoto}
+                aria-label="Delete this photo"
+                className="inline-flex h-7 w-7 items-center justify-center rounded-md bg-white/15 text-white backdrop-blur-sm hover:bg-danger"
+              >
+                <Trash2 size={12} aria-hidden />
+              </button>
+            )}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+/** Dark quick-stats strip under the hero (Last audit · Status · Flags). */
+function StatsStrip({ asset, flagCount }: { asset: Asset; flagCount: number }) {
+  const status = computeStatus({ asset, lastAuditAt: null, openFlagCount: flagCount });
+  return (
+    <div className="grid grid-cols-3 gap-px overflow-hidden rounded-xl bg-band-ink">
+      <Stat k="Last audit" v="—" />
+      <Stat k="Status" v={statusLabel(status)} tone={status === 'good' ? 'ok' : 'bad'} />
+      <Stat k="Flags" v={String(flagCount)} tone={flagCount > 0 ? 'bad' : 'plain'} />
+    </div>
+  );
+}
+
+function Stat({ k, v, tone = 'plain' }: { k: string; v: string; tone?: 'ok' | 'bad' | 'plain' }) {
+  return (
+    <div className="bg-band-ink px-3 py-2.5">
+      <p className="text-[10px] uppercase tracking-[0.09em] text-white/55">{k}</p>
+      <p
+        className={cn(
+          'mt-0.5 text-lg font-bold',
+          tone === 'ok' ? 'text-pin-good' : tone === 'bad' ? 'text-pin-flagged' : 'text-white'
+        )}
+      >
+        {v}
+      </p>
+    </div>
+  );
+}
+
+/** Media photo strip — thumbnails (switch the hero) + Add photo / Choose files. */
+function PhotoStrip({
+  photos,
+  active,
+  loading,
+  canEdit,
+  adding,
+  error,
+  onSelect,
+  onPick,
+}: {
+  photos: AssetPhoto[];
+  active: number;
+  loading: boolean;
+  canEdit: boolean;
+  adding: boolean;
+  error: string | null;
+  onSelect: (i: number) => void;
+  onPick: (list: FileList | null) => void;
+}) {
+  return (
+    <div className="space-y-2.5">
+      {photos.length > 0 ? (
+        <div className="flex gap-1.5 overflow-x-auto">
+          {photos.map((p, i) => (
+            <ThumbButton key={p.id} photo={p} active={i === active} onSelect={() => onSelect(i)} />
+          ))}
+        </div>
+      ) : (
+        !loading && <p className="text-xs text-text-faint">No photos yet.</p>
+      )}
+
+      {canEdit && (
+        <div className="flex flex-wrap gap-2">
+          <label className="inline-flex h-9 cursor-pointer items-center gap-1.5 rounded-lg bg-accent px-3 text-xs font-semibold text-white shadow-sm hover:bg-accent/90">
+            <Plus size={13} aria-hidden />
+            <span>{adding ? 'Uploading…' : 'Add photo'}</span>
+            <input
+              type="file"
+              accept="image/*"
+              capture="environment"
+              className="sr-only"
+              onChange={(e) => {
+                onPick(e.target.files);
+                e.target.value = '';
+              }}
+            />
+          </label>
+          <label className="inline-flex h-9 cursor-pointer items-center gap-1.5 rounded-lg border-[1.5px] border-black/15 bg-surface px-3 text-xs font-medium text-text hover:bg-black/5 dark:border-white/15 dark:hover:bg-white/5">
+            <Pencil size={13} aria-hidden />
+            <span>Choose files</span>
+            <input
+              type="file"
+              accept="image/png,image/jpeg,image/webp"
+              multiple
+              className="sr-only"
+              onChange={(e) => {
+                onPick(e.target.files);
+                e.target.value = '';
+              }}
+            />
+          </label>
+        </div>
+      )}
+      {error && <p className="text-xs text-danger">{error}</p>}
     </div>
   );
 }
@@ -1452,31 +1535,6 @@ function VendorPanel({
   );
 }
 
-function StatusRow({ asset, flagCount }: { asset: Asset; flagCount: number }) {
-  const status: AssetStatus = computeStatus({
-    asset,
-    lastAuditAt: null,
-    openFlagCount: flagCount,
-  });
-
-  return (
-    <div className="grid grid-cols-3 gap-2">
-      <MetricCard label="Last audit" value="—" />
-      <MetricCard
-        label="Status"
-        value={statusLabel(status)}
-        status={
-          status === 'good' ? 'success' : status === 'attention' ? 'warning' : 'danger'
-        }
-      />
-      <MetricCard
-        label="Flags"
-        value={flagCount}
-        status={flagCount > 0 ? 'danger' : 'neutral'}
-      />
-    </div>
-  );
-}
 
 /** Audit attributes — installed date + audit cycle (Status & audit group). */
 function AuditAttrs({ asset }: { asset: Asset }) {

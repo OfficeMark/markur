@@ -45,7 +45,10 @@ export default {
         band: {
           paper: 'rgb(var(--band-paper) / <alpha-value>)',
           mist: 'rgb(var(--band-mist) / <alpha-value>)',
+          ink: 'rgb(var(--band-ink) / <alpha-value>)',
         },
+        // Filled-primary orange (white text AA, #3d). Deeper than waymarks-gold.
+        accent: 'rgb(var(--accent) / <alpha-value>)',
         // Asset pin status colors (per spec 02 § Status colors)
         pin: {
           good: '#6CC28A',
