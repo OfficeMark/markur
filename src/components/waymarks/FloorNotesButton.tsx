@@ -19,11 +19,14 @@ export function FloorNotesButton({
   buildingId,
   notes,
   canEdit,
+  trigger,
 }: {
   floorId: string;
   buildingId?: string;
   notes: string | null;
   canEdit: boolean;
+  /** Optional custom trigger so the floor toolbar can render this as a segment. */
+  trigger?: React.ReactNode;
 }) {
   const save = useSetFloorNotes(floorId, buildingId);
   const [open, setOpen] = useState(false);
@@ -44,19 +47,21 @@ export function FloorNotesButton({
   return (
     <Popover.Root open={open} onOpenChange={setOpen}>
       <Popover.Trigger asChild>
-        <button
-          type="button"
-          className="inline-flex h-7 items-center gap-1 rounded-md border border-black/15 bg-surface px-2.5 text-[11px] font-medium text-text hover:bg-black/5 dark:border-white/15 dark:hover:bg-white/5"
-        >
-          <NotebookPen size={11} aria-hidden />
-          Notes
-          {hasNotes && (
-            <span
-              aria-hidden
-              className="ml-0.5 inline-block h-1.5 w-1.5 rounded-full bg-waymarks-gold"
-            />
-          )}
-        </button>
+        {trigger ?? (
+          <button
+            type="button"
+            className="inline-flex h-7 items-center gap-1 rounded-md border border-black/15 bg-surface px-2.5 text-[11px] font-medium text-text hover:bg-black/5 dark:border-white/15 dark:hover:bg-white/5"
+          >
+            <NotebookPen size={11} aria-hidden />
+            Notes
+            {hasNotes && (
+              <span
+                aria-hidden
+                className="ml-0.5 inline-block h-1.5 w-1.5 rounded-full bg-waymarks-gold"
+              />
+            )}
+          </button>
+        )}
       </Popover.Trigger>
       <Popover.Portal>
         <Popover.Content

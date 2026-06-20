@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
-import { ArrowLeft, Check, ChevronRight, ClipboardList, Download, Eye, FileDown, ImageOff, LayoutGrid, Map as MapIcon, Plus, RefreshCw, Trash2, Video } from 'lucide-react';
+import { ArrowLeft, Check, ChevronRight, ClipboardCheck, Download, Eye, ImageOff, LayoutGrid, Map as MapIcon, MapPin, NotebookPen, Shapes, Trash2 } from 'lucide-react';
 import { AppShell } from '@/components/waymarks/AppShell';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { Button } from '@/components/ui/Button';
@@ -15,14 +15,14 @@ import { StepUpDialog } from '@/components/waymarks/StepUpDialog';
 import { AuditModeShell } from '@/components/waymarks/AuditModeShell';
 import { AssetGridView } from '@/components/waymarks/AssetGridView';
 import { FilterByTypePopover } from '@/components/waymarks/FilterByTypePopover';
+import { FilterByZonePopover } from '@/components/waymarks/FilterByZonePopover';
 import { FilterByTextInput } from '@/components/waymarks/FilterByTextInput';
-import { AuditVideoRecorderDialog } from '@/components/waymarks/AuditVideoRecorderDialog';
+import { FloorMoreMenu } from '@/components/waymarks/FloorMoreMenu';
+import { FloorNotesButton } from '@/components/waymarks/FloorNotesButton';
 import { useAssetsWithVideos } from '@/hooks/useAuditVideos';
-import { useFloor, useSetFloorProvenance, useSoftDeleteFloor } from '@/hooks/useFloors';
+import { useFloor, useSoftDeleteFloor } from '@/hooks/useFloors';
 import { useBuilding } from '@/hooks/useBuildings';
 import { PlanProvenanceCaption } from '@/components/waymarks/PlanProvenanceCaption';
-import { PLAN_PROVENANCE_OPTIONS } from '@/lib/plan-provenance';
-import { FloorNotesButton } from '@/components/waymarks/FloorNotesButton';
 import { useAssets, useSoftDeleteAsset, useUpdateAsset } from '@/hooks/useAssets';
 import {
   useActiveAuditSession,
@@ -33,16 +33,6 @@ import { useAuth } from '@/lib/auth-context';
 import { useCan } from '@/lib/permissions-context';
 import { planKindForPath, signedUrlForPlan } from '@/lib/upload';
 import { pinNumberMatchesQuery } from '@/lib/pin-types';
-import { photoToJpegDataUrl } from '@/lib/photo-to-data-url';
-import { listFirstPhotoPaths, signedAssetPhotoUrl } from '@/lib/queries/asset-photos';
-import {
-  buildCatalogueDoc,
-  catalogueDownloadName,
-  pickCatalogueSaveTarget,
-  prepareCatalogueEntries,
-  writeCatalogue,
-  type CatalogueEntry,
-} from '@/lib/floor-catalogue';
 import {
   putAssetsForFloor,
   putBuilding,
@@ -66,7 +56,6 @@ export function Floor() {
   const updateAsset = useUpdateAsset(id);
   const softDelete = useSoftDeleteAsset(id);
   const softDeleteFloor = useSoftDeleteFloor(floor?.building_id);
-  const setProvenance = useSetFloorProvenance(floor?.id, floor?.building_id);
   const navigate = useNavigate();
   const [deleteFloorOpen, setDeleteFloorOpen] = useState(false);
   const [deleteFloorError, setDeleteFloorError] = useState<string | null>(null);
@@ -93,6 +82,9 @@ export function Floor() {
   // M22 (#6) — additional free-text filter that ANDs with the type filter.
   const [viewMode, setViewMode] = useState<'map' | 'grid'>('map');
   const [filterTypes, setFilterTypes] = useState<Set<string>>(new Set());
+  // Reskin: a real zone facet alongside type + free-text. '' (NO_ZONE) selects
+  // pins with a blank zone. Empty set = all visible.
+  const [filterZones, setFilterZones] = useState<Set<string>>(new Set());
   const [filterText, setFilterText] = useState('');
 
   // M9 — take this floor offline (pre-cache for the audit walkaround).
@@ -100,10 +92,6 @@ export function Floor() {
     'idle'
   );
   const [cacheError, setCacheError] = useState<string | null>(null);
-
-  // Floor photo catalogue export (markur-changes #4).
-  const [catalogueState, setCatalogueState] = useState<'idle' | 'building' | 'error'>('idle');
-  const [catalogueError, setCatalogueError] = useState<string | null>(null);
 
   // Deliberate-reposition state machine (M5).
   const [repositionAssetId, setRepositionAssetId] = useState<string | null>(null);
@@ -114,8 +102,6 @@ export function Floor() {
   // Soft-delete confirmation state (M5).
   const [deleteAssetId, setDeleteAssetId] = useState<string | null>(null);
 
-  // M27 — building-level video recording (no asset selected).
-  const [videoRecorderOpen, setVideoRecorderOpen] = useState(false);
   const assetIds = useMemo(() => assets.map((a) => a.id), [assets]);
   const { data: assetsWithVideos } = useAssetsWithVideos(floor?.building_id, assetIds);
 
@@ -261,69 +247,31 @@ export function Floor() {
     }
   }
 
-  // Build + save a PDF catalogue of every asset on this floor. Photo failures
-  // degrade gracefully to a "No photo" box rather than aborting.
-  async function handleExportCatalogue() {
-    if (!floor || !building) return;
-    setCatalogueError(null);
-
-    // Open the OS "Save As" dialog up front, while the click's user activation
-    // is still live -- the photo loading below can outlast the activation
-    // window. On browsers without the File System Access API this resolves to
-    // a plain download instead.
-    const generatedOn = new Date();
-    const fileName = catalogueDownloadName(building.name, floor.label, generatedOn);
-    const target = await pickCatalogueSaveTarget(fileName);
-    if (target.kind === 'cancelled') return;
-
-    setCatalogueState('building');
-    try {
-      const drafts = prepareCatalogueEntries(assets);
-      const photoPaths = await listFirstPhotoPaths(assets.map((a) => a.id));
-      const entries: CatalogueEntry[] = await Promise.all(
-        drafts.map(async (d) => {
-          let photoDataUrl: string | null = null;
-          const path = photoPaths.get(d.assetId);
-          if (path) {
-            try {
-              const signed = await signedAssetPhotoUrl(path);
-              photoDataUrl = await photoToJpegDataUrl(signed);
-            } catch {
-              photoDataUrl = null;
-            }
-          }
-          return { ...d, photoDataUrl };
-        })
-      );
-      const addressLine =
-        [building.address, building.city, building.region].filter(Boolean).join(', ') || null;
-      const doc = buildCatalogueDoc({
-        buildingName: building.name,
-        floorLabel: floor.label,
-        addressLine,
-        generatedOn,
-        entries,
-      });
-      await writeCatalogue(doc, target, fileName);
-      setCatalogueState('idle');
-    } catch (e) {
-      setCatalogueError(e instanceof Error ? e.message : 'Could not build the catalogue.');
-      setCatalogueState('error');
-    }
-  }
-
   const planKind = useMemo(() => planKindForPath(floor?.plan_url), [floor?.plan_url]);
 
   const baseSet = assets;
   const trimmedFilterText = filterText.trim().toLowerCase();
+  // Distinct zone values present on this floor (for the zone filter). '' marks
+  // pins with no zone so they can be filtered too; sorted, blank-last.
+  const zoneOptions = useMemo(() => {
+    const set = new Set<string>();
+    for (const a of baseSet) set.add((a.zone ?? '').trim());
+    return Array.from(set).sort((x, y) => {
+      if (x === '') return 1;
+      if (y === '') return -1;
+      return x.localeCompare(y);
+    });
+  }, [baseSet]);
   const visibleAssets = useMemo(() => {
     return baseSet.filter((a) => {
       if (filterTypes.size > 0 && !filterTypes.has(a.type)) return false;
+      if (filterZones.size > 0 && !filterZones.has((a.zone ?? '').trim())) return false;
       if (trimmedFilterText && !matchesAssetText(a, trimmedFilterText)) return false;
       return true;
     });
-  }, [baseSet, filterTypes, trimmedFilterText]);
-  const filtersActive = filterTypes.size > 0 || trimmedFilterText.length > 0;
+  }, [baseSet, filterTypes, filterZones, trimmedFilterText]);
+  const filtersActive =
+    filterTypes.size > 0 || filterZones.size > 0 || trimmedFilterText.length > 0;
 
   if (fLoading) {
     return (
@@ -361,6 +309,10 @@ export function Floor() {
   const buildingId = floor.building_id;
   const showAuditCta = Boolean(floor.plan_url) && canAudit;
 
+  // Floor-wide pin state for the "⋯ More" menu's Lock all / Unlock all toggle.
+  const hasPins = assets.length > 0;
+  const allPinsLocked = hasPins && assets.every((a) => a.is_locked);
+
   // Visualize-in-ViewMark URL. The deeper integration (auth bridge,
   // floor-context handoff) lands in a later milestone; for now this
   // is a stub that opens the visualizer with the building name as a
@@ -370,230 +322,285 @@ export function Floor() {
     ? `https://viewmark-app.netlify.app/?building=${encodeURIComponent(building.name)}`
     : 'https://viewmark-app.netlify.app/';
 
+  // ── Reskinned toolbar controls ────────────────────────────────────────────
+  // Defined once and placed in BOTH the desktop two-row layout and the mobile
+  // uniform stack, so the two layouts stay in lock-step without duplicating JSX.
+  const showFilters = Boolean(floor.plan_url) && assets.length > 0;
+  // Mirror FloorNotesButton's own gate so the segment's rounded corner is right.
+  const notesVisible = canEdit || !!floor.floor_notes?.trim();
+
+  const segCls = (active: boolean) =>
+    'inline-flex h-9 flex-1 items-center justify-center gap-1.5 px-3 text-xs font-medium transition-colors sm:flex-none ' +
+    (active
+      ? 'bg-waymarks-ink text-white'
+      : 'text-text-muted hover:bg-black/5 dark:hover:bg-white/5');
+  const filterSegCls = (active: boolean) =>
+    'inline-flex h-9 flex-1 items-center justify-center gap-1.5 px-3 text-xs font-medium transition-colors sm:flex-none ' +
+    (active
+      ? 'bg-waymarks-gold-soft text-waymarks-ink'
+      : 'text-text-muted hover:bg-black/5 dark:hover:bg-white/5');
+  const countBadge = (n: number) => (
+    <span className="rounded bg-waymarks-ink px-1 font-mono text-[10px] text-white">{n}</span>
+  );
+
+  const breadcrumb = (
+    <nav
+      aria-label="Breadcrumb"
+      className="flex min-w-0 items-center gap-1.5 text-xs text-text-muted"
+    >
+      <Link
+        to="/"
+        className="inline-flex items-center gap-1 rounded px-1 py-0.5 hover:bg-black/5 hover:text-text dark:hover:bg-white/5"
+      >
+        Home
+      </Link>
+      <ChevronRight size={12} aria-hidden className="shrink-0 text-text-faint" />
+      <Link
+        to={`/buildings/${floor.building_id}`}
+        className="truncate rounded px-1 py-0.5 hover:bg-black/5 hover:text-text dark:hover:bg-white/5"
+      >
+        {building?.name ?? 'Building'}
+      </Link>
+      <ChevronRight size={12} aria-hidden className="shrink-0 text-text-faint" />
+      <span className="truncate font-semibold text-text">Floor {floor.label}</span>
+    </nav>
+  );
+
+  // Two primary circles — the focal actions (orange Add pin, dark Audit).
+  const addPinCircle = floor.plan_url && canCreate && (
+    <Tooltip text={placing ? 'Cancel placing a pin' : 'Place a new pin by clicking the floor plan'}>
+      <button
+        type="button"
+        onClick={() => setPlacing((p) => !p)}
+        className={
+          'flex h-[68px] w-[68px] shrink-0 flex-col items-center justify-center gap-0.5 rounded-full border-[3px] border-white text-[12px] font-bold leading-tight shadow-md transition-colors ' +
+          (placing
+            ? 'bg-waymarks-ink text-white hover:bg-waymarks-ink/90'
+            : 'bg-accent text-white hover:bg-accent/90')
+        }
+      >
+        <MapPin size={18} aria-hidden />
+        {placing ? 'Cancel' : 'Add pin'}
+      </button>
+    </Tooltip>
+  );
+  const auditCircle = showAuditCta && (
+    <Tooltip text={activeSession ? 'Resume the audit walkaround you started' : 'Walk the floor and confirm every sign'}>
+      <button
+        type="button"
+        onClick={() => void startOrResumeAudit()}
+        disabled={startAudit.isPending}
+        className="flex h-[68px] w-[68px] shrink-0 flex-col items-center justify-center gap-0.5 rounded-full border-[3px] border-white bg-waymarks-ink text-[12px] font-bold leading-tight text-white shadow-md transition-colors hover:bg-waymarks-ink/90 disabled:opacity-60"
+      >
+        <ClipboardCheck size={18} aria-hidden />
+        {activeSession ? 'Resume' : 'Audit'}
+      </button>
+    </Tooltip>
+  );
+  const hasPrimary = Boolean(addPinCircle || auditCircle);
+
+  // View segment — Map / Grid / Notes in one bordered control.
+  const viewSeg = floor.plan_url ? (
+    <div
+      role="group"
+      aria-label="View mode"
+      className="flex w-full overflow-hidden rounded-lg border border-black/15 sm:inline-flex sm:w-auto dark:border-white/15"
+    >
+      <button
+        type="button"
+        onClick={() => setViewMode('map')}
+        aria-pressed={viewMode === 'map'}
+        className={segCls(viewMode === 'map')}
+      >
+        <MapIcon size={13} aria-hidden /> Map
+      </button>
+      <button
+        type="button"
+        onClick={() => setViewMode('grid')}
+        aria-pressed={viewMode === 'grid'}
+        className={'border-l border-black/10 dark:border-white/10 ' + segCls(viewMode === 'grid')}
+      >
+        <LayoutGrid size={13} aria-hidden /> Grid
+      </button>
+      {notesVisible && (
+        <FloorNotesButton
+          floorId={floor.id}
+          buildingId={floor.building_id}
+          notes={floor.floor_notes}
+          canEdit={canEdit}
+          trigger={
+            <button
+              type="button"
+              className={'border-l border-black/10 dark:border-white/10 ' + segCls(false)}
+            >
+              <NotebookPen size={13} aria-hidden /> Notes
+              {!!floor.floor_notes?.trim() && (
+                <span aria-hidden className="inline-block h-1.5 w-1.5 rounded-full bg-waymarks-gold" />
+              )}
+            </button>
+          }
+        />
+      )}
+    </div>
+  ) : null;
+
+  // "⋯ More" overflow — Replace plan, Plan source, Lock all, Delete floor.
+  const moreMenu =
+    floor.plan_url && (canUploadPlan || canDeleteFloor || (canEdit && hasPins)) ? (
+      <FloorMoreMenu
+        floorId={floor.id}
+        buildingId={floor.building_id}
+        provenance={floor.plan_provenance}
+        allPinsLocked={allPinsLocked}
+        hasPins={hasPins}
+        canUploadPlan={canUploadPlan}
+        canEditPins={canEdit}
+        canDeleteFloor={canDeleteFloor}
+        onReplacePlan={() => setUploadOpen(true)}
+        onDeleteFloor={() => {
+          setDeleteFloorError(null);
+          setDeleteFloorOpen(true);
+        }}
+      />
+    ) : null;
+
+  // Filter segment — Zone / Type, each opening its popover.
+  const filterSeg = showFilters ? (
+    <div className="flex w-full overflow-hidden rounded-lg border border-black/15 sm:inline-flex sm:w-auto dark:border-white/15">
+      <FilterByZonePopover
+        zones={zoneOptions}
+        selectedZones={filterZones}
+        onChange={setFilterZones}
+        trigger={
+          <button type="button" aria-label="Filter pins by zone" className={filterSegCls(filterZones.size > 0)}>
+            <MapIcon size={13} aria-hidden /> Zone {filterZones.size > 0 && countBadge(filterZones.size)}
+          </button>
+        }
+      />
+      <FilterByTypePopover
+        selectedTypes={filterTypes}
+        onChange={setFilterTypes}
+        trigger={
+          <button
+            type="button"
+            aria-label="Filter pins by type"
+            className={'border-l border-black/10 dark:border-white/10 ' + filterSegCls(filterTypes.size > 0)}
+          >
+            <Shapes size={13} aria-hidden /> Type {filterTypes.size > 0 && countBadge(filterTypes.size)}
+          </button>
+        }
+      />
+    </div>
+  ) : null;
+
+  const offlineBtn = floor.plan_url ? (
+    <Tooltip text={cacheState === 'cached' ? 'This floor is saved for offline use — tap to refresh' : 'Save this floor and its plan for offline use'}>
+      <button
+        type="button"
+        onClick={() => void takeOffline()}
+        disabled={cacheState === 'caching'}
+        aria-pressed={cacheState === 'cached'}
+        className={
+          'inline-flex h-9 items-center justify-center gap-1.5 rounded-lg border px-3 text-xs font-medium transition-colors disabled:opacity-60 ' +
+          (cacheState === 'cached'
+            ? 'border-success bg-success-bg text-success'
+            : 'border-black/15 bg-surface text-text hover:bg-black/5 dark:border-white/15 dark:hover:bg-white/5')
+        }
+      >
+        {cacheState === 'cached' ? <Check size={13} aria-hidden /> : <Download size={13} aria-hidden />}
+        {cacheState === 'cached' ? 'Cached' : 'Offline'}
+      </button>
+    </Tooltip>
+  ) : null;
+
+  const visualizeBtn = (
+    <Tooltip text="Open ViewMark to mock up signage on a wall photo">
+      <button
+        type="button"
+        onClick={() => window.open(viewmarkUrl, '_blank', 'noopener,noreferrer')}
+        className="inline-flex h-9 items-center justify-center gap-1.5 rounded-lg border border-accent bg-surface px-3 text-xs font-medium text-accent transition-colors hover:bg-waymarks-gold-soft dark:bg-transparent"
+      >
+        <Eye size={13} aria-hidden />
+        Visualize
+      </button>
+    </Tooltip>
+  );
+
+  const filterLabel = showFilters ? (
+    <span className="text-[10px] font-medium uppercase tracking-[0.12em] text-text-faint">
+      Filter
+    </span>
+  ) : null;
+  const visibleBadge = showFilters && filtersActive ? (
+    <span className="inline-flex h-9 shrink-0 items-center rounded-lg bg-waymarks-gold-soft px-2 text-[11px] font-medium text-waymarks-ink">
+      {visibleAssets.length} of {assets.length} visible
+    </span>
+  ) : null;
+
   return (
     <AppShell>
       <div className="mx-auto w-full max-w-5xl px-4 py-4 sm:px-6 sm:py-5">
-        {/* Row 1 - breadcrumb left, Map/Grid + Filter right.
-            One row instead of three (was: back link + eyebrow + giant
-            H1 + boxed toolbar). The big floor label is duplicative of
-            the left sidebar highlight. */}
-        <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
-          <nav aria-label="Breadcrumb" className="flex items-center gap-1.5 text-xs text-text-muted">
-            <Link
-              to="/"
-              className="inline-flex items-center gap-1 rounded px-1 py-0.5 hover:bg-black/5 hover:text-text dark:hover:bg-white/5"
-            >
-              Home
-            </Link>
-            <ChevronRight size={12} aria-hidden className="text-text-faint" />
-            <Link
-              to={`/buildings/${floor.building_id}`}
-              className="rounded px-1 py-0.5 hover:bg-black/5 hover:text-text dark:hover:bg-white/5"
-            >
-              {building?.name ?? 'Building'}
-            </Link>
-            <ChevronRight size={12} aria-hidden className="text-text-faint" />
-            <span className="font-semibold text-text">Floor {floor.label}</span>
-          </nav>
-          <div className="flex items-center gap-1.5">
-            {/* Map / Grid toggle - now compact (24px tall) */}
-            {floor.plan_url && (
-              <div role="group" aria-label="View mode" className="inline-flex h-7 rounded-md border border-black/15 text-[11px] font-medium dark:border-white/15">
-                <button
-                  type="button"
-                  onClick={() => setViewMode('map')}
-                  aria-pressed={viewMode === 'map'}
-                  className={
-                    'inline-flex h-full items-center gap-1 rounded-l-md px-2.5 transition-colors ' +
-                    (viewMode === 'map'
-                      ? 'bg-waymarks-ink text-white'
-                      : 'text-text-muted hover:bg-black/5 dark:hover:bg-white/5')
-                  }
-                >
-                  <MapIcon size={11} aria-hidden /> Map
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setViewMode('grid')}
-                  aria-pressed={viewMode === 'grid'}
-                  className={
-                    'inline-flex h-full items-center gap-1 rounded-r-md border-l border-black/10 px-2.5 transition-colors dark:border-white/10 ' +
-                    (viewMode === 'grid'
-                      ? 'bg-waymarks-ink text-white'
-                      : 'text-text-muted hover:bg-black/5 dark:hover:bg-white/5')
-                  }
-                >
-                  <LayoutGrid size={11} aria-hidden /> Grid
-                </button>
+        {/* Reskinned toolbar (Slice 1): breadcrumb · two primary circles
+            (Add pin / Audit) · secondary controls. Desktop lays the secondaries
+            in two right-aligned rows under the user pill; mobile stacks them
+            full-width so nothing is oversized (the long-standing phone bug).
+            All data stays per-table — no bundle hooks. */}
+        <div className="mb-3 rounded-xl border border-black/10 bg-surface-soft px-3 py-3 dark:border-white/10 dark:bg-white/5">
+          {/* ── Desktop / tablet (sm+) ── */}
+          <div className="hidden items-start gap-4 sm:flex">
+            <div className="min-w-0 flex-1">{breadcrumb}</div>
+            {hasPrimary && (
+              <div className="flex shrink-0 items-center gap-3 self-center">
+                {addPinCircle}
+                {auditCircle}
               </div>
             )}
-            {/* Free-text filter (M22 #6) */}
-            {floor.plan_url && assets.length > 0 && (
-              <FilterByTextInput value={filterText} onChange={setFilterText} />
-            )}
-            {/* Filter by type */}
-            {floor.plan_url && assets.length > 0 && (
-              <FilterByTypePopover selectedTypes={filterTypes} onChange={setFilterTypes} />
-            )}
-            {/* "X of Y visible" indicator when any filter is active */}
-            {floor.plan_url && filtersActive && assets.length > 0 && (
-              <span className="inline-flex h-7 items-center rounded-md bg-waymarks-gold-soft px-2 text-[11px] font-medium text-waymarks-ink">
-                {visibleAssets.length} of {assets.length} visible
-              </span>
-            )}
+            <div className="flex flex-1 flex-col items-end gap-2">
+              <div className="flex items-center gap-2">
+                {viewSeg}
+                {moreMenu}
+              </div>
+              {(showFilters || offlineBtn) && (
+                <div className="flex flex-wrap items-center justify-end gap-2">
+                  {filterLabel}
+                  {showFilters && (
+                    <FilterByTextInput value={filterText} onChange={setFilterText} />
+                  )}
+                  {filterSeg}
+                  {visibleBadge}
+                  {offlineBtn}
+                  {visualizeBtn}
+                </div>
+              )}
+            </div>
           </div>
-        </div>
 
-        {/* Row 2 - action buttons right-justified, all 28px tall.
-            No surrounding card; the actions sit naturally on the page. */}
-        <div className="mb-3 flex flex-wrap items-center justify-end gap-1.5">
-          {showAuditCta && (
-            <Tooltip text={activeSession ? 'Resume the audit walkaround you started' : 'Walk the floor and confirm every sign'}>
-              <button
-                type="button"
-                onClick={() => void startOrResumeAudit()}
-                disabled={startAudit.isPending}
-                className="inline-flex h-7 items-center gap-1 rounded-md bg-waymarks-gold px-2.5 text-[11px] font-medium text-waymarks-ink hover:bg-waymarks-gold-deep disabled:opacity-60"
-              >
-                <ClipboardList size={11} aria-hidden />
-                {activeSession ? 'Resume audit' : 'Audit'}
-              </button>
-            </Tooltip>
-          )}
-          {assets.length > 0 && (
-            <Tooltip text="Download a PDF catalogue of every asset on this floor">
-              <button
-                type="button"
-                onClick={() => void handleExportCatalogue()}
-                disabled={catalogueState === 'building'}
-                className="inline-flex h-7 items-center gap-1 rounded-md border border-black/15 bg-surface px-2.5 text-[11px] font-medium text-text hover:bg-black/5 disabled:opacity-60 dark:border-white/15 dark:hover:bg-white/5"
-              >
-                <FileDown size={11} aria-hidden />
-                {catalogueState === 'building' ? 'Building…' : 'Catalogue'}
-              </button>
-            </Tooltip>
-          )}
-          {canEdit && (
-            <Tooltip text="Record a video walkthrough of the building">
-              <button
-                type="button"
-                onClick={() => setVideoRecorderOpen(true)}
-                className="inline-flex h-7 items-center gap-1 rounded-md border border-black/15 bg-surface px-2.5 text-[11px] font-medium text-text hover:bg-black/5 dark:border-white/15 dark:hover:bg-white/5"
-              >
-                <Video size={11} aria-hidden />
-                Record
-              </button>
-            </Tooltip>
-          )}
-          {floor.plan_url && canCreate && (
-            <Tooltip text={placing ? 'Cancel placing a new asset' : 'Place a new asset by clicking on the floor plan'}>
-              <button
-                type="button"
-                onClick={() => setPlacing((p) => !p)}
-                className={
-                  'inline-flex h-7 items-center gap-1 rounded-md px-2.5 text-[11px] font-medium ' +
-                  (placing
-                    ? 'bg-waymarks-gold text-waymarks-ink hover:bg-waymarks-gold-deep'
-                    : 'border border-black/15 bg-surface text-text hover:bg-black/5 dark:border-white/15 dark:hover:bg-white/5')
-                }
-              >
-                <Plus size={11} aria-hidden />
-                {placing ? 'Cancel' : 'Add asset'}
-              </button>
-            </Tooltip>
-          )}
-          {floor.plan_url && (
-            <Tooltip text={cacheState === 'cached' ? 'This floor is saved for offline use — tap to refresh' : 'Save this floor and its plan for offline use'}>
-              <button
-                type="button"
-                onClick={() => void takeOffline()}
-                disabled={cacheState === 'caching'}
-                className="inline-flex h-7 items-center gap-1 rounded-md border border-black/15 bg-surface px-2.5 text-[11px] font-medium text-text hover:bg-black/5 disabled:opacity-60 dark:border-white/15 dark:hover:bg-white/5"
-              >
-                {cacheState === 'cached' ? <Check size={11} aria-hidden /> : <Download size={11} aria-hidden />}
-                {cacheState === 'cached' ? 'Cached' : 'Offline'}
-              </button>
-            </Tooltip>
-          )}
-          {floor.plan_url && canUploadPlan && (
-            <Tooltip text="Replace the floor plan image">
-              <button
-                type="button"
-                onClick={() => setUploadOpen(true)}
-                className="inline-flex h-7 items-center gap-1 rounded-md border border-black/15 bg-surface px-2.5 text-[11px] font-medium text-text hover:bg-black/5 dark:border-white/15 dark:hover:bg-white/5"
-              >
-                <RefreshCw size={11} aria-hidden />
-                Replace
-              </button>
-            </Tooltip>
-          )}
-          {/* Feature #1 — minimal plan-provenance setter. A small dropdown
-              (labels from lib/plan-provenance.ts) that saves via the per-table
-              floor update. Admins only; the caption below reflects the value. */}
-          {canUploadPlan && (
-            <select
-              aria-label="Plan source"
-              title="How this floor's plan was sourced (shown as a caption under the plan)"
-              value={floor.plan_provenance}
-              onChange={(e) => setProvenance.mutate(e.target.value)}
-              disabled={setProvenance.isPending}
-              className="h-7 max-w-[12rem] rounded-md border border-black/15 bg-surface px-2 text-[11px] font-medium text-text outline-none focus:border-waymarks-gold focus:ring-1 focus:ring-waymarks-gold disabled:opacity-60 dark:border-white/15"
-            >
-              {PLAN_PROVENANCE_OPTIONS.map((o) => (
-                <option key={o.key} value={o.key}>
-                  {o.label}
-                </option>
-              ))}
-            </select>
-          )}
-          {/* Feature #2 — floor-wide team notes. Self-gates: editors always see
-              it; viewers only when a note exists; never rendered on guest views
-              (this route is the authenticated floor view). */}
-          <FloorNotesButton
-            floorId={floor.id}
-            buildingId={floor.building_id}
-            notes={floor.floor_notes}
-            canEdit={canEdit}
-          />
-          {/* M14c - Visualize in ViewMark. Gold outline so it reads as a
-              brand-aligned secondary, distinct from the gold-filled
-              Audit primary. */}
-          <Tooltip text="Open ViewMark to mock up signage on a wall photo">
-            <button
-              type="button"
-              onClick={() => window.open(viewmarkUrl, '_blank', 'noopener,noreferrer')}
-              className="inline-flex h-7 items-center gap-1 rounded-md border border-waymarks-gold bg-surface px-2.5 text-[11px] font-medium text-waymarks-gold hover:bg-waymarks-gold-soft"
-            >
-              <Eye size={11} aria-hidden />
-              Visualize
-            </button>
-          </Tooltip>
-          {canDeleteFloor && (
-            <Tooltip text="Soft-delete this floor (recoverable)">
-              <button
-                type="button"
-                onClick={() => {
-                  setDeleteFloorError(null);
-                  setDeleteFloorOpen(true);
-                }}
-                className="ml-1 inline-flex h-7 items-center gap-1 rounded-md border border-black/15 bg-surface px-2.5 text-[11px] font-medium text-text-muted hover:border-danger hover:bg-danger-bg hover:text-danger dark:border-white/15"
-              >
-                <Trash2 size={11} aria-hidden />
-                Delete floor
-              </button>
-            </Tooltip>
-          )}
+          {/* ── Mobile (< sm): uniform full-width stack, no oversizing ── */}
+          <div className="space-y-2.5 sm:hidden">
+            <div className="flex items-center justify-between gap-2">
+              {breadcrumb}
+              {visibleBadge}
+            </div>
+            {hasPrimary && (
+              <div className="flex justify-center gap-4 py-1">
+                {addPinCircle}
+                {auditCircle}
+              </div>
+            )}
+            {viewSeg}
+            {showFilters && <FilterByTextInput value={filterText} onChange={setFilterText} />}
+            {filterSeg}
+            <div className="flex items-stretch gap-1.5 [&>*]:flex-1 [&_button]:w-full">
+              {offlineBtn}
+              {visualizeBtn}
+              {moreMenu}
+            </div>
+          </div>
         </div>
 
         {cacheError && (
           <div className="mb-4 rounded-md border border-danger/30 bg-danger-bg p-3 text-xs text-danger">
             Could not cache this floor: {cacheError}
-          </div>
-        )}
-
-        {catalogueError && (
-          <div className="mb-4 rounded-md border border-danger/30 bg-danger-bg p-3 text-xs text-danger">
-            Could not build the catalogue: {catalogueError}
           </div>
         )}
 
@@ -603,7 +610,7 @@ export function Floor() {
             aria-live="polite"
             className="mb-4 flex flex-wrap items-center gap-2 rounded-md border border-waymarks-gold bg-waymarks-gold-soft p-3 text-sm dark:bg-white/5"
           >
-            <ClipboardList size={14} aria-hidden className="text-waymarks-gold" />
+            <ClipboardCheck size={14} aria-hidden className="text-waymarks-gold" />
             <p className="flex-1 text-waymarks-ink dark:text-white">
               You have an audit in progress on this floor.
             </p>
@@ -760,16 +767,6 @@ export function Floor() {
           planKind={planKind}
           initialAssetId={auditInitialAssetId}
           onClose={() => setInAudit(false)}
-        />
-      )}
-
-      {canEdit && floor.building_id && (
-        <AuditVideoRecorderDialog
-          open={videoRecorderOpen}
-          onOpenChange={setVideoRecorderOpen}
-          buildingId={floor.building_id}
-          assetId={null}
-          scopeLabel={`${building?.name ?? 'Building'} · Floor ${floor.label}`}
         />
       )}
 

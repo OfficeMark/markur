@@ -126,6 +126,20 @@ export async function softDeleteAsset(id: string): Promise<void> {
 }
 
 /**
+ * Lock or unlock every live pin on a floor in one shot (the "Lock all /
+ * Unlock all" control). Server-side RPC so it's a single round-trip and the
+ * assets RLS still authorizes the write. Returns the number of pins changed.
+ */
+export async function setFloorPinsLocked(floorId: string, locked: boolean): Promise<number> {
+  const { data, error } = await supabase.rpc('set_floor_pins_locked', {
+    p_floor_id: floorId,
+    p_locked: locked,
+  });
+  if (error) throw error;
+  return typeof data === 'number' ? data : 0;
+}
+
+/**
  * List soft-deleted assets in a building, deleted within the last `withinDays`
  * days. The Trash view (super_admin only) uses this to surface restorable
  * pins. We join against floors so we can scope by building.

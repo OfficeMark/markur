@@ -945,6 +945,10 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      set_floor_pins_locked: {
+        Args: { p_floor_id: string; p_locked: boolean }
+        Returns: number
+      }
       storage_asset_photo_asset_id: {
         Args: { p_name: string }
         Returns: string

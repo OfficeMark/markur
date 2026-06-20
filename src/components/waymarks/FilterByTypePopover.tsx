@@ -13,9 +13,11 @@ import { useAssetTypes } from '@/hooks/useAssetTypes';
 export type FilterByTypePopoverProps = {
   selectedTypes: Set<string>;
   onChange: (next: Set<string>) => void;
+  /** Optional custom trigger so the floor toolbar can render this as a segment. */
+  trigger?: React.ReactNode;
 };
 
-export function FilterByTypePopover({ selectedTypes, onChange }: FilterByTypePopoverProps) {
+export function FilterByTypePopover({ selectedTypes, onChange, trigger }: FilterByTypePopoverProps) {
   const { signage, facility, list } = useAssetTypes();
   const all = list.map((t) => t.key);
 
@@ -33,24 +35,26 @@ export function FilterByTypePopover({ selectedTypes, onChange }: FilterByTypePop
   return (
     <Popover.Root>
       <Popover.Trigger asChild>
-        <button
-          type="button"
-          aria-label="Filter pins by type"
-          className={
-            'inline-flex h-9 items-center gap-1.5 rounded-md border px-3 text-xs font-medium transition-colors ' +
-            (isFiltering
-              ? 'border-waymarks-gold bg-waymarks-gold-soft text-waymarks-ink'
-              : 'border-black/15 bg-surface text-text-muted hover:border-black/25 hover:text-text')
-          }
-        >
-          <Filter size={12} aria-hidden />
-          <span>Filter</span>
-          {isFiltering && (
-            <span className="rounded bg-waymarks-ink px-1 font-mono text-[10px] text-white">
-              {selectedTypes.size}
-            </span>
-          )}
-        </button>
+        {trigger ?? (
+          <button
+            type="button"
+            aria-label="Filter pins by type"
+            className={
+              'inline-flex h-9 items-center gap-1.5 rounded-md border px-3 text-xs font-medium transition-colors ' +
+              (isFiltering
+                ? 'border-waymarks-gold bg-waymarks-gold-soft text-waymarks-ink'
+                : 'border-black/15 bg-surface text-text-muted hover:border-black/25 hover:text-text')
+            }
+          >
+            <Filter size={12} aria-hidden />
+            <span>Filter</span>
+            {isFiltering && (
+              <span className="rounded bg-waymarks-ink px-1 font-mono text-[10px] text-white">
+                {selectedTypes.size}
+              </span>
+            )}
+          </button>
+        )}
       </Popover.Trigger>
       <Popover.Portal>
         <Popover.Content

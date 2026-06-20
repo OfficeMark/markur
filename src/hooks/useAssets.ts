@@ -6,6 +6,7 @@ import {
   listAssetsByFloor,
   listDeletedAssetsForBuilding,
   restoreAsset,
+  setFloorPinsLocked,
   softDeleteAsset,
   updateAsset,
   type CreateAssetInput,
@@ -135,6 +136,30 @@ export function useUpdateAsset(floorId: string | undefined) {
         qc.invalidateQueries({ queryKey: assetKeys.detail(asset.id) });
       }
       if (floorId) qc.invalidateQueries({ queryKey: assetKeys.byFloor(floorId) });
+    },
+  });
+}
+
+/**
+ * Lock or unlock every live pin on a floor at once (PlanSettingsMenu's
+ * "Lock all / Unlock all"). Resolves to the number of pins changed (for the
+ * count toast). Invalidates the floor list + detail caches so the canvas and
+ * any open drawer re-derive lock styling — consistent with the per-table
+ * refetch pattern used across the rebuild hooks.
+ */
+export function useSetFloorPinsLocked(floorId: string | undefined) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (locked: boolean) => {
+      if (!floorId) throw new Error('No floor');
+      return setFloorPinsLocked(floorId, locked);
+    },
+    onSuccess: () => {
+      if (!floorId) return;
+      // The list the canvas reads, plus every per-asset detail cache an open
+      // drawer might be showing (prefix match on ['assets','detail']).
+      qc.invalidateQueries({ queryKey: assetKeys.byFloor(floorId) });
+      qc.invalidateQueries({ queryKey: [...assetKeys.all, 'detail'] });
     },
   });
 }
