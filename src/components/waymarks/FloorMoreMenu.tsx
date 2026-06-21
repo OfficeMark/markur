@@ -5,7 +5,6 @@ import {
   Map as MapIcon,
   Lock,
   LockOpen,
-  Trash2,
   ChevronRight,
   Check,
   Download,
@@ -18,9 +17,8 @@ import { useSetFloorPinsLocked } from '@/hooks/useAssets';
 /**
  * Floor toolbar "⋯ More" overflow (reskin). A single Radix DropdownMenu holding
  * the rarely-used plan actions the tightened header tucks away: Replace plan,
- * Plan source (provenance, as a radio submenu), Lock/Unlock all pins, and —
- * temporarily — Delete floor (its real home is the building page's Danger zone,
- * ported in the next slice; kept here as a stopgap so the capability isn't lost).
+ * Plan source (provenance, as a radio submenu), and Lock/Unlock all pins.
+ * Delete-floor lives on the building Trash page now — not here (Slice 3).
  *
  * All data goes through the per-table floor/asset hooks — no bundles.
  */
@@ -32,9 +30,7 @@ export function FloorMoreMenu({
   hasPins,
   canUploadPlan,
   canEditPins,
-  canDeleteFloor,
   onReplacePlan,
-  onDeleteFloor,
   offline,
   onVisualize,
 }: {
@@ -45,9 +41,7 @@ export function FloorMoreMenu({
   hasPins: boolean;
   canUploadPlan: boolean;
   canEditPins: boolean;
-  canDeleteFloor: boolean;
   onReplacePlan: () => void;
-  onDeleteFloor: () => void;
   /**
    * When provided, an Offline (take-offline) item is shown at the top — used by
    * the narrow (<lg) toolbar where Offline collapses into this menu.
@@ -104,7 +98,7 @@ export function FloorMoreMenu({
             </DropdownMenu.Item>
           )}
 
-          {(offline || onVisualize) && (canUploadPlan || canEditPins || canDeleteFloor) && (
+          {(offline || onVisualize) && (canUploadPlan || canEditPins) && (
             <DropdownMenu.Separator className="my-1 h-px bg-black/10 dark:bg-white/10" />
           )}
 
@@ -168,19 +162,6 @@ export function FloorMoreMenu({
               )}
               {allPinsLocked ? 'Unlock all pins' : 'Lock all pins'}
             </DropdownMenu.Item>
-          )}
-
-          {canDeleteFloor && (
-            <>
-              <DropdownMenu.Separator className="my-1 h-px bg-black/10 dark:bg-white/10" />
-              <DropdownMenu.Item
-                className="flex cursor-pointer items-center gap-2 rounded-md px-2 py-1.5 text-sm text-danger outline-none data-[highlighted]:bg-danger-bg"
-                onSelect={onDeleteFloor}
-              >
-                <Trash2 size={14} aria-hidden />
-                Delete floor
-              </DropdownMenu.Item>
-            </>
           )}
         </DropdownMenu.Content>
       </DropdownMenu.Portal>

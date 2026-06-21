@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Link, useNavigate, useParams } from 'react-router-dom';
+import { Link, useParams } from 'react-router-dom';
 import { ArrowLeft, Check, ChevronRight, ClipboardCheck, Download, Eye, ImageOff, LayoutGrid, Map as MapIcon, Maximize2, MapPin, Minimize2, NotebookPen, Shapes, Trash2 } from 'lucide-react';
 import { AppShell } from '@/components/waymarks/AppShell';
 import { EmptyState } from '@/components/ui/EmptyState';
@@ -20,7 +20,7 @@ import { FloorFilterSheet } from '@/components/waymarks/FloorFilterSheet';
 import { FloorMoreMenu } from '@/components/waymarks/FloorMoreMenu';
 import { FloorNotesButton } from '@/components/waymarks/FloorNotesButton';
 import { useAssetsWithVideos } from '@/hooks/useAuditVideos';
-import { useFloor, useSoftDeleteFloor } from '@/hooks/useFloors';
+import { useFloor } from '@/hooks/useFloors';
 import { useBuilding } from '@/hooks/useBuildings';
 import { PlanProvenanceCaption } from '@/components/waymarks/PlanProvenanceCaption';
 import { useAssets, useSoftDeleteAsset, useUpdateAsset } from '@/hooks/useAssets';
@@ -52,13 +52,8 @@ export function Floor() {
   const canCreate = useCan('create', { type: 'building', id: floor?.building_id ?? '' });
   const canEdit = useCan('edit', { type: 'building', id: floor?.building_id ?? '' });
   const canAudit = useCan('audit', { type: 'floor', id: id ?? '' });
-  const canDeleteFloor = useCan('delete', { type: 'floor', id: id ?? '' });
   const updateAsset = useUpdateAsset(id);
   const softDelete = useSoftDeleteAsset(id);
-  const softDeleteFloor = useSoftDeleteFloor(floor?.building_id);
-  const navigate = useNavigate();
-  const [deleteFloorOpen, setDeleteFloorOpen] = useState(false);
-  const [deleteFloorError, setDeleteFloorError] = useState<string | null>(null);
 
   // M6 — audit walkaround
   const { data: lastAuditByAsset } = useLatestConfirmedByFloor(id);
@@ -456,7 +451,7 @@ export function Floor() {
   //    as the screen narrows (they sit in the toolbar only at lg+).
   const onVisualize = () => window.open(viewmarkUrl, '_blank', 'noopener,noreferrer');
   const moreMenuBase =
-    floor.plan_url && (canUploadPlan || canDeleteFloor || (canEdit && hasPins)) ? (
+    floor.plan_url && (canUploadPlan || (canEdit && hasPins)) ? (
       <FloorMoreMenu
         floorId={floor.id}
         buildingId={floor.building_id}
@@ -465,12 +460,7 @@ export function Floor() {
         hasPins={hasPins}
         canUploadPlan={canUploadPlan}
         canEditPins={canEdit}
-        canDeleteFloor={canDeleteFloor}
         onReplacePlan={() => setUploadOpen(true)}
-        onDeleteFloor={() => {
-          setDeleteFloorError(null);
-          setDeleteFloorOpen(true);
-        }}
       />
     ) : null;
   // Narrow variant always renders — it carries Visualize (always available) and,
@@ -484,12 +474,7 @@ export function Floor() {
       hasPins={hasPins}
       canUploadPlan={canUploadPlan}
       canEditPins={canEdit}
-      canDeleteFloor={canDeleteFloor}
       onReplacePlan={() => setUploadOpen(true)}
-      onDeleteFloor={() => {
-        setDeleteFloorError(null);
-        setDeleteFloorOpen(true);
-      }}
       offline={
         floor.plan_url
           ? { cached: cacheState === 'cached', busy: cacheState === 'caching', onToggle: () => void takeOffline() }
@@ -864,40 +849,6 @@ export function Floor() {
         />
       )}
 
-      <StepUpDialog
-        open={deleteFloorOpen}
-        onOpenChange={(o) => {
-          if (!softDeleteFloor.isPending) setDeleteFloorOpen(o);
-        }}
-        title={`Delete Floor ${floor.label}?`}
-        description={
-          `This soft-deletes the floor and hides it for everyone with access. ` +
-          (assets.length === 0
-            ? `There are no pins on this floor yet. `
-            : assets.length === 1
-              ? `1 asset pin and any audit history go with it. `
-              : `${assets.length} asset pins and any audit history go with them. `) +
-          `Records are kept in the database; support can restore the floor if needed.`
-        }
-        confirmWord="DELETE"
-        confirmLabel="Delete floor"
-        confirmVariant="danger"
-        confirmIcon={<Trash2 size={14} aria-hidden />}
-        busy={softDeleteFloor.isPending}
-        errorMessage={deleteFloorError}
-        onConfirm={async () => {
-          setDeleteFloorError(null);
-          try {
-            await softDeleteFloor.mutateAsync(floor.id);
-            setDeleteFloorOpen(false);
-            navigate(`/buildings/${buildingId}`);
-          } catch (err) {
-            setDeleteFloorError(
-              err instanceof Error ? err.message : 'Could not delete the floor.'
-            );
-          }
-        }}
-      />
     </AppShell>
   );
 }

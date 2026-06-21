@@ -71,6 +71,34 @@ export async function softDeleteFloor(id: string): Promise<void> {
 }
 
 /**
+ * Soft-deleted floors for a building, newest first. The Trash page lists these
+ * so an admin can restore them. RLS: building_admin/super_admin on the building
+ * see them via `floors_admin_write`/select; non-admins return [].
+ */
+export async function listDeletedFloorsByBuilding(buildingId: string): Promise<Floor[]> {
+  const { data, error } = await supabase
+    .from('floors')
+    .select('*')
+    .eq('building_id', buildingId)
+    .not('deleted_at', 'is', null)
+    .order('deleted_at', { ascending: false });
+  if (error) throw error;
+  return data ?? [];
+}
+
+/**
+ * Restore a soft-deleted floor (clear deleted_at). Its pins/audit history
+ * reappear via the same `deleted_at` visibility filters. Building-edit gated.
+ */
+export async function restoreFloor(id: string): Promise<void> {
+  const { error } = await supabase
+    .from('floors')
+    .update({ deleted_at: null })
+    .eq('id', id);
+  if (error) throw error;
+}
+
+/**
  * Set the floor's plan provenance (how the plan was sourced). Writes ride the
  * existing floors RLS (building-edit required). Value is one of the keys in
  * lib/plan-provenance.ts; the floors CHECK constraint enforces the valid set.

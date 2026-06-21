@@ -5,16 +5,21 @@ import {
   createBuildingNoReturn,
   getBuilding,
   listBuildings,
+  listDeletedBuildings,
   removeBuildingPhoto,
+  restoreBuilding,
   signedBuildingPhotoUrl,
+  softDeleteBuilding,
   uploadBuildingPhoto,
   type NewBuildingInput,
 } from '@/lib/queries/buildings';
 import { accessKeys } from '@/hooks/useAccess';
+import { floorKeys } from '@/hooks/useFloors';
 
 export const buildingKeys = {
   all: ['buildings'] as const,
   list: () => [...buildingKeys.all, 'list'] as const,
+  deleted: () => [...buildingKeys.all, 'deleted'] as const,
   detail: (id: string) => [...buildingKeys.all, 'detail', id] as const,
   photoUrl: (path: string) => ['building-photos', 'signed', path] as const,
 };
@@ -61,6 +66,45 @@ export function useCreateBuildingNoReturn() {
     mutationFn: (input: NewBuildingInput) => createBuildingNoReturn(input),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: buildingKeys.list() });
+      qc.invalidateQueries({ queryKey: accessKeys.all });
+    },
+  });
+}
+
+/** Soft-deleted buildings (super-admin Trash / restore). Per-table. */
+export function useDeletedBuildings() {
+  return useQuery({
+    queryKey: buildingKeys.deleted(),
+    queryFn: listDeletedBuildings,
+  });
+}
+
+/**
+ * Soft-delete a building + cascade its floors. Per-table: invalidates the
+ * building lists, the floor cache, and the access/grants cache (no bundle/
+ * app_boot patching — the standalone version mutated app_boot in place).
+ */
+export function useSoftDeleteBuilding() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) => softDeleteBuilding(id),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: buildingKeys.all });
+      qc.invalidateQueries({ queryKey: floorKeys.all });
+      qc.invalidateQueries({ queryKey: accessKeys.all });
+    },
+  });
+}
+
+/** Restore a soft-deleted building + its cascade-deleted floors. Per-table. */
+export function useRestoreBuilding() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (vars: { id: string; deletedAt: string }) =>
+      restoreBuilding(vars.id, vars.deletedAt),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: buildingKeys.all });
+      qc.invalidateQueries({ queryKey: floorKeys.all });
       qc.invalidateQueries({ queryKey: accessKeys.all });
     },
   });

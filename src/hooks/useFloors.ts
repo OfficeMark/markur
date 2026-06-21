@@ -1,8 +1,10 @@
 import {
   createFloor,
   getFloor,
+  listDeletedFloorsByBuilding,
   listFloorsByBuilding,
   nextFloorSortOrder,
+  restoreFloor,
   setFloorNotes,
   setFloorProvenance,
   softDeleteFloor,
@@ -13,6 +15,8 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 export const floorKeys = {
   all: ['floors'] as const,
   byBuilding: (buildingId: string) => [...floorKeys.all, 'by-building', buildingId] as const,
+  deletedByBuilding: (buildingId: string) =>
+    [...floorKeys.all, 'deleted-by-building', buildingId] as const,
   detail: (id: string) => [...floorKeys.all, 'detail', id] as const,
 };
 
@@ -81,7 +85,38 @@ export function useSoftDeleteFloor(buildingId: string | undefined) {
     mutationFn: (id: string) => softDeleteFloor(id),
     onSuccess: (_data, id) => {
       qc.invalidateQueries({ queryKey: floorKeys.detail(id) });
-      if (buildingId) qc.invalidateQueries({ queryKey: floorKeys.byBuilding(buildingId) });
+      if (buildingId) {
+        qc.invalidateQueries({ queryKey: floorKeys.byBuilding(buildingId) });
+        qc.invalidateQueries({ queryKey: floorKeys.deletedByBuilding(buildingId) });
+      }
+      qc.invalidateQueries({ queryKey: floorKeys.all });
+    },
+  });
+}
+
+/** Soft-deleted floors for a building (Trash page restore list). Per-table. */
+export function useDeletedFloors(buildingId: string | undefined) {
+  return useQuery({
+    queryKey: buildingId
+      ? floorKeys.deletedByBuilding(buildingId)
+      : ['floors', 'deleted-by-building', 'none'],
+    queryFn: () =>
+      buildingId ? listDeletedFloorsByBuilding(buildingId) : Promise.resolve([]),
+    enabled: !!buildingId,
+  });
+}
+
+/** Restore a soft-deleted floor. Invalidates the active + deleted floor lists. */
+export function useRestoreFloor(buildingId: string | undefined) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) => restoreFloor(id),
+    onSuccess: (_data, id) => {
+      qc.invalidateQueries({ queryKey: floorKeys.detail(id) });
+      if (buildingId) {
+        qc.invalidateQueries({ queryKey: floorKeys.byBuilding(buildingId) });
+        qc.invalidateQueries({ queryKey: floorKeys.deletedByBuilding(buildingId) });
+      }
       qc.invalidateQueries({ queryKey: floorKeys.all });
     },
   });
