@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { ArrowDown, ArrowUp, ArrowUpDown, ImageOff, Video } from 'lucide-react';
+import { ArrowDown, ArrowUp, ArrowUpDown, FileDown, ImageOff, Video } from 'lucide-react';
 import { format, formatDistanceToNow } from 'date-fns';
 import { useAssetPhotos } from '@/hooks/useAssetPhotos';
 import { signedAssetPhotoUrl } from '@/lib/queries/asset-photos';
@@ -25,6 +25,10 @@ export type AssetGridViewProps = {
   lastAuditByAsset?: ReadonlyMap<string, string> | null;
   /** Set of asset ids known to have at least one audit video — drives the M27 Gold badge. */
   assetsWithVideos?: ReadonlySet<string> | null;
+  /** When provided, shows a "Print / Export PDF" action that builds the floor catalogue. */
+  onExportPdf?: () => void;
+  /** True while the catalogue PDF is being generated (disables the button). */
+  exporting?: boolean;
 };
 
 type SortKey = 'name' | 'type' | 'status' | 'last_audit';
@@ -37,6 +41,8 @@ export function AssetGridView({
   onSelectAsset,
   lastAuditByAsset,
   assetsWithVideos,
+  onExportPdf,
+  exporting,
 }: AssetGridViewProps) {
   const [sort, setSort] = useState<SortState>({ key: 'name', dir: 'asc' });
 
@@ -86,7 +92,21 @@ export function AssetGridView({
   }
 
   return (
-    <div className="overflow-hidden rounded-lg border border-black/10 bg-surface dark:border-white/10">
+    <div className="space-y-2">
+      {onExportPdf && (
+        <div className="flex justify-end">
+          <button
+            type="button"
+            onClick={onExportPdf}
+            disabled={exporting}
+            className="inline-flex h-9 items-center justify-center gap-1.5 rounded-lg border border-black/15 bg-surface px-3 text-xs font-medium text-text transition-colors hover:bg-black/5 disabled:opacity-60 dark:border-white/15 dark:hover:bg-white/5"
+          >
+            <FileDown size={13} aria-hidden />
+            {exporting ? 'Preparing PDF…' : 'Print / Export PDF'}
+          </button>
+        </div>
+      )}
+      <div className="overflow-hidden rounded-lg border border-black/10 bg-surface dark:border-white/10">
       <div className="overflow-x-auto">
         <table className="w-full text-left text-sm">
           <thead className="border-b border-black/10 bg-surface-soft text-text-muted dark:border-white/10">
@@ -114,6 +134,7 @@ export function AssetGridView({
             ))}
           </tbody>
         </table>
+      </div>
       </div>
     </div>
   );

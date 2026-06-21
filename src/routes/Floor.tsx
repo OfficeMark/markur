@@ -39,6 +39,15 @@ import {
   putFloor,
   putLastAudits,
 } from '@/lib/offline';
+import {
+  buildCatalogueDoc,
+  catalogueDownloadName,
+  pickCatalogueSaveTarget,
+  prepareCatalogueEntries,
+  writeCatalogue,
+} from '@/lib/floor-catalogue';
+import { listFirstPhotoPaths, signedAssetPhotoUrl } from '@/lib/queries/asset-photos';
+import { photoToJpegDataUrl } from '@/lib/photo-to-data-url';
 import type { Asset } from '@/types/database';
 
 export function Floor() {
@@ -54,6 +63,7 @@ export function Floor() {
   const canAudit = useCan('audit', { type: 'floor', id: id ?? '' });
   const updateAsset = useUpdateAsset(id);
   const softDelete = useSoftDeleteAsset(id);
+  const [exportingPdf, setExportingPdf] = useState(false);
 
   // M6 — audit walkaround
   const { data: lastAuditByAsset } = useLatestConfirmedByFloor(id);
@@ -266,6 +276,54 @@ export function Floor() {
     });
   }, [baseSet, filterTypes, filterZones]);
   const filtersActive = filterTypes.size > 0 || filterZones.size > 0;
+
+  // S7 — surface the existing floor-catalogue PDF generator from the grid.
+  // Per-table: one query for first-photo paths, then sign + inline each as a
+  // JPEG data URL (same path Report.tsx uses). Photo-less assets render a "No
+  // photo" placeholder card. Entries keep the generator's pin-number order;
+  // grouping by Layer would need generator changes, so it's left as-is.
+  async function exportCatalogue() {
+    if (!floor) return;
+    const when = new Date();
+    const fileName = catalogueDownloadName(building?.name ?? 'Building', floor.label, when);
+    // pickCatalogueSaveTarget must run on the click's user activation, before
+    // the slow photo work — so call it first, then load.
+    const target = await pickCatalogueSaveTarget(fileName);
+    if (target.kind === 'cancelled') return;
+    setExportingPdf(true);
+    try {
+      const drafts = prepareCatalogueEntries(visibleAssets);
+      const photoPaths = await listFirstPhotoPaths(drafts.map((d) => d.assetId));
+      const entries = await Promise.all(
+        drafts.map(async (d) => {
+          const path = photoPaths.get(d.assetId);
+          let photoDataUrl: string | null = null;
+          if (path) {
+            try {
+              photoDataUrl = await photoToJpegDataUrl(await signedAssetPhotoUrl(path));
+            } catch {
+              photoDataUrl = null;
+            }
+          }
+          return { ...d, photoDataUrl };
+        })
+      );
+      const addressLine =
+        [building?.address, building?.city].filter(Boolean).join(', ') || null;
+      const doc = buildCatalogueDoc({
+        buildingName: building?.name ?? 'Building',
+        floorLabel: floor.label,
+        addressLine,
+        generatedOn: when,
+        entries,
+      });
+      await writeCatalogue(doc, target, fileName);
+    } catch {
+      // Generation/write failed; the button re-enables so the user can retry.
+    } finally {
+      setExportingPdf(false);
+    }
+  }
 
   if (fLoading) {
     return (
@@ -722,6 +780,8 @@ export function Floor() {
               onSelectAsset={(a: Asset) => setSelectedAssetId(a.id)}
               lastAuditByAsset={lastAuditByAsset ?? null}
               assetsWithVideos={assetsWithVideos ?? null}
+              onExportPdf={() => void exportCatalogue()}
+              exporting={exportingPdf}
             />
           ) : (
             <div className="relative min-h-0 flex-1">
