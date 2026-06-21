@@ -336,7 +336,7 @@ export function NewAssetDialog({
             )}
 
             <Field
-              label="Zone / asset type"
+              label="Asset type"
               htmlFor="asset-type"
               error={errors.type?.message}
               hint="Optional. Pick from the list, add a custom one, or skip."
@@ -345,7 +345,7 @@ export function NewAssetDialog({
                 type="text"
                 value={typeQuery}
                 onChange={(e) => setTypeQuery(e.target.value)}
-                placeholder="Enter zone or department if applicable"
+                placeholder="Pick a type, or add a new one — Directory, Stairwell ID, Fire extinguisher…"
                 className="mb-1.5 h-9 w-full rounded-md border border-black/10 bg-surface px-3 text-sm text-text outline-none focus:border-waymarks-gold focus:ring-2 focus:ring-waymarks-gold dark:border-white/10"
               />
               <select
