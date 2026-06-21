@@ -48,7 +48,9 @@ export function StepUpDialog({
     if (!open) setTyped('');
   }, [open]);
 
-  const matches = typed === confirmWord;
+  // Case-insensitive + trimmed: an exact-case match traps users, especially on
+  // mobile where auto-capitalize fights the typed confirmation.
+  const matches = typed.trim().toLowerCase() === confirmWord.trim().toLowerCase();
 
   return (
     <Dialog.Root open={open} onOpenChange={onOpenChange}>
@@ -77,7 +79,7 @@ export function StepUpDialog({
           <label className="mt-4 block space-y-1.5">
             <span className="block text-xs font-medium uppercase tracking-[0.18em] text-text-faint">
               Type{' '}
-              <code className="rounded bg-black/5 px-1 font-mono text-[11px] dark:bg-white/10">
+              <code className="rounded bg-black/5 px-1 font-mono text-[11px] normal-case dark:bg-white/10">
                 {confirmWord}
               </code>{' '}
               to confirm

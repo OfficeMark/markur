@@ -22,7 +22,7 @@ describe('StepUpDialog', () => {
     return { onConfirm, onOpenChange };
   }
 
-  it('keeps the confirm button disabled until the user types the exact word', async () => {
+  it('keeps the confirm button disabled until the word matches (case-insensitive + trimmed)', async () => {
     const user = userEvent.setup();
     const { onConfirm } = renderDialog();
 
@@ -30,27 +30,28 @@ describe('StepUpDialog', () => {
     expect(confirmBtn).toBeDisabled();
 
     const input = screen.getByRole('textbox');
-    await user.type(input, 'delete');
-    expect(confirmBtn).toBeDisabled(); // case-sensitive
+    await user.type(input, 'nope');
+    expect(confirmBtn).toBeDisabled(); // non-matching word
 
+    // Lowercase + surrounding whitespace still matches "DELETE".
     await user.clear(input);
-    await user.type(input, 'DELETE');
+    await user.type(input, '  delete  ');
     expect(confirmBtn).toBeEnabled();
 
     await user.click(confirmBtn);
     expect(onConfirm).toHaveBeenCalledTimes(1);
   });
 
-  it('Enter submits when matched, but does nothing when not matched', async () => {
+  it('Enter submits when the word matches (any case), but does nothing otherwise', async () => {
     const user = userEvent.setup();
     const { onConfirm } = renderDialog();
 
     const input = screen.getByRole('textbox');
-    await user.type(input, 'delete{Enter}'); // wrong case
+    await user.type(input, 'nope{Enter}'); // non-matching
     expect(onConfirm).not.toHaveBeenCalled();
 
     await user.clear(input);
-    await user.type(input, 'DELETE{Enter}');
+    await user.type(input, 'delete{Enter}'); // lowercase now matches
     expect(onConfirm).toHaveBeenCalledTimes(1);
   });
 
