@@ -5,6 +5,32 @@
 
 ---
 
+## Status — 2026-06-20 (end of day; Randy on holiday ~2 weeks, Brookfield meeting on return)
+
+**Floorplan view: DONE** — rebuilt to the approved mock, responsive (progressive-disclosure toolbar), focus mode added, recenter fixed, primary buttons fire. Commits on `rebuild`: `e01d958` (S1) → `a56d5b5` (S1-fix responsive) → `9da7eb0` (S1-fix-2: no-overlap desktop + contain-fit recenter + focus mode). All verified clean (0 bundle hooks, per-table, `.env.rebuild` out).
+
+**Slice 2 (pin-detail re-group)** handed to CC — in progress; verify against `docs/pin-detail-window-mock.html` when it reports.
+
+**Decisions made today:** data belongs to the client (full-access demo link, no copy); the **demo/share link** (`docs/demo-share-flow-mock.html`, build spec = BUILD-QUEUE S9) replaces *both* old trial-enforcement (#11) and guest-share (#12), built on `access_grants.expires_at` + `pending_invitations`; **responsive progressive-disclosure** principle for all bars; pin terminology ("pin detail window," "add a pin"); vendor = add-any-vendor-with-a-link (no Officemark CTA). Pin-shape (#5) + suggest-a-feature (#9) kept but low priority.
+
+**How to resume:** read this doc + `docs/BUILD-QUEUE.md` (the ordered, ready-to-paste CC prompts) + the per-slice smoke-test/sign-off gate. Hand CC one slice at a time; Cowork verifies each (per-table/no-bundle/scope) + Randy runs the 6-tap lag check before the next. Mocks for every redesigned surface live in `docs/`. Prod (`main`/markur.ca/`drclmnql…`) untouched throughout. Brookfield-priority order: S2 → S9 (polished pin detail + a working share link to put in front of them).
+
+---
+
+## Status — 2026-06-19 (end of day)
+
+Foundation stood up clean and verified: branch `rebuild` off `main`, fresh Supabase `markur-rebuild` (`hlfkfkyglfzrbeuzyojm`, prod-schema clone, no bundle/demo cruft), fresh Netlify site `markur-rebuild`. Test login `demo@rancherdesign.ca` / `MarkurRebuild2026!`.
+
+Shipped slices (all per-table, zero bundle hooks, prod untouched):
+- #1 plan provenance label · #2 floor-wide team notes · #3a Zone/Department field
+- #3b drawer regrouped into sections + Notes raised to 4000 chars · #3c banded sections + video demoted into Media (photo primary) · #3d high-contrast "dynamic" treatment on the read view · #3e same treatment on the edit form (high-contrast bands, orange accent #B0541A meets WCAG AA).
+- Design reference: `docs/asset-drawer-dynamic-mock.html` (Randy-approved look).
+
+Pick up here tomorrow:
+1. Confirm CC committed #3e **and the untracked seed scripts** (`supabase/seed_rebuild.sql`, `seed_rebuild_plans.mjs`) + the rebuild docs. `.env.rebuild` must stay gitignored (secrets).
+2. Run the **feature review** — decide keep/cut/reorder on the backlog. Claude's nominations to cut: pin-shape options (#5) and the "suggest a feature" box (#9). Defer trial enforcement (#11) to monetization time. Guest share (#12) only if client-sharing is core to the pitch. Likely keepers: type-aware action card (#4), per-building external order link (#6), printable grid (#7), start-audit-at-pin (#8), photos (#10).
+3. Optional small slice: bring the add-a-sign dialog (`NewAssetDialog`) into the new banded look for add/edit consistency.
+
 ## The one rule
 
 🚫 **The original prod is sacred and untouched.** Prod = `main` branch + **markur.ca** (Netlify `markur`, site `ba310662…`) + Supabase **`drclmnqlurvwqpnnpgzb`**.
@@ -86,6 +112,43 @@ Only after the foundation is confirmed fast and clean do we start feature #1.
 ## Open items (parking lot — recorded so they're not forgotten)
 
 - **`handle_new_user` mints an unhonored grant.** The signup trigger (migration `20260603141055_phase2_signup_provisioning`) auto-creates a `building_admin / scope_type='organization'` grant for every new user, but the current permission model (`user_can` / phase2c) does **not** honor `organization`-scope — so a fresh signup gets zero usable capabilities until granted another way. This is pre-existing behavior on **prod (`main`)**, so it is OFF-LIMITS to change now and must not be touched on prod. Revisit deliberately later (likely: align the signup grant with a scope the model honors, or add an org-scope branch to `user_can`). For the rebuild test admin we work around it with a `super_admin / global` seed grant. Surfaced 2026-06-19 while cleaning the rebuild seed.
+
+## Share vs Demo — two distinct things on one primitive (clarified 2026-06-21)
+
+Real use case: Officemark surveys a building for a client (a national installer); the installer adds production info and shares down to *their* installers and to *their* end client, who reviews/edits. So there are three access contexts, all built on the **same primitive — invite a person to a building with a role + optional expiry** (`access_grants`):
+
+1. **Internal use** — a property manager / org team managing their own buildings (core; normal multi-user roles within the org).
+2. **Share (collaboration)** — invite an external party (your client) to **review/edit** a building's pins, with a role (Edit / View), **no expiry**, and it can **cascade** (each party re-shares to their own people). This is the installer-chain case. **Already exists on `standalone`** — the access-management + invitations system (`AccessManagementCard`, `NewInvitationDialog`, `PendingInvitationsCard`, `MembersCard`, `useAccess`, `AcceptInvitation`). So Share = a **port**, and it's the foundation Demo builds on. Port it FIRST.
+3. **Demo (sales)** — a thin preset of Share for *prospects*: full access + **30-day expiry** + a **"sign up to keep your building" conversion** CTA. The link IS the trial; conversion = subscribing.
+
+## Data ownership + demo/share link (decided 2026-06-20)
+
+**Principle: the client owns their data** — even when Officemark entered the signage for them, it belongs to the client. If they want to view, edit, or change it, let them.
+
+**Demo/share link model** (replaces the heavy "guest read-only share" plan #12 AND the old trial-enforcement #11): it's a **sales / demo-to-signup tool**. Officemark loads a prospect's building, sends a **link** granting a **30-day, full-access, building-scoped grant** on their **real** building — no sandboxed copy (it's their data). Built on existing infra: `access_grants` (with `expires_at`) + `pending_invitations`. Access lapses automatically at expiry. **The link IS the trial; conversion = subscribing.** So include a clear **"sign up to keep your building" conversion path** as the demo winds down (and available anytime) — that's the whole purpose: get them using the real thing, then convert. Framing/copy is "try Markur on your building," not "share with your tenants." Strong Brookfield play. Assumptions: lightweight account on claim (email + password, edits attributed, works across devices); grant role = full building-admin-level on that one building only; on conversion the time limit comes off and the building stays theirs.
+
+## Naming / terminology (decided 2026-06-19)
+
+- **Pin filtering = two dropdowns only: "Layer" and "Type"** (decided 2026-06-21). **"Layer"** (singular) is the user-facing name for the zone/area/department filter (dropdown of the building's zones/departments; data field stays `assets.zone`). **"Type"** is the asset-type filter. Chosen for lean/intuitive/fast — "Layer" is clearer than "Zone" and distinct from "Type." The **free-text search box is removed** (three ways to find pins was too much). Underlying fields unchanged; `FilterByZonePopover` component name can stay. **"Layer" replaces "Zone" in ALL user-facing copy** — the filter, the pin-detail "Where it is" field (was "Zone or department"), and empty-state text. The **DB column stays `assets.zone`** — this is label/copy only, never a column rename.
+
+- The window shown when you tap an existing pin is the **"pin detail window"** — not "sign detail" or "asset detail." A pin is the neutral primitive; signage is only one kind of pin (facility/service pins exist too). The flow should guide the user the same way regardless of *why* the pin exists.
+- The add flow is **"add a pin" / "new pin,"** not "add a sign."
+- This is a **user-facing copy** convention: neutralize signage-specific wording in the UI. Internal code names (`AssetDrawer`, `NewAssetDialog`) and the `assets` DB table stay as-is for now — an optional clean rename is deferred churn, not required.
+
+## Pin detail window — intended flow (decided 2026-06-20)
+
+The pin detail window follows a narrative the same way the floorplan view does: **see it → what it is → where it is → is there a problem or a change.** Concretely:
+1. **Photos & video** (see the item)
+2. **What it is** — asset type, name, notes
+3. **Where it is** — room # & name, zone/department, and the pin itself (number, lock/unlock, reposition, delete)
+4. **A problem or a change?** — status & audit (flags), vendor, activity (history)
+   - **Vendor behavior:** add any vendor (Officemark or any other supplier) with a **link**; following that link is the order/replace path. No hardcoded "Order from Officemark" CTA — Officemark is just one vendor you can add. Once a vendor is added, the section lists it with its clickable link. (Generalizes the old per-building "configurable order link" idea down to the vendor level.)
+
+This splits the old "Identity" group into *what* vs *where*, folds pin-position controls into *where*, and gathers status/vendor/activity into the closing beat. Mock: `docs/pin-detail-window-mock.html`. Floorplan header mock (Visualize added to row 2, controls stacked + right-justified): `docs/floorplan-header-tightened-mock.html`.
+
+## Mobile "screen too large" — root cause + fix (for the floorplan slice)
+
+The floor toolbar's action buttons are content-width flex items, so the longest label renders wider than the rest — reading as "a button too large" on phones. Fixed on `standalone` (commits `2f96752`, then `4344eee`) by laying the controls out as a **uniform grid on phones** (equal width via `[&>*]:w-full`, equal height, smaller text so labels fit), reverting to the desktop right-aligned layout at `sm+`. That fix never came to `main`, so the rebuild regressed. The floorplan-view redesign slice must build the new toolbar responsively using this pattern (no horizontal overflow, no oversized buttons; Add pin + Audit stay prominent on mobile).
 
 ## Notes on existing capabilities
 

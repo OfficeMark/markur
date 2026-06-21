@@ -1,0 +1,105 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Markur — demo / share link flow</title>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@3.7.0/dist/tabler-icons.min.css">
+<style>
+  :root{
+    --ink:#221E1A; --navy:#222B3A; --line:rgba(0,0,0,.12);
+    --page:#E7E4DF; --surface:#FFFFFF; --rail:#F3F1ED;
+    --text:#221E1A; --muted:#6E6B64; --faint:#9A978F;
+    --orange:#E0602A; --orange-deep:#B0541A; --orange-soft:#FBE6DA;
+    --green:#2F7D31; --green-soft:#E6F3E1;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:#D8D4CC;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;color:var(--text);padding:22px}
+  .wrap{display:flex;flex-wrap:wrap;gap:26px;justify-content:center;align-items:flex-start}
+  .col{width:360px}
+  .cap{font-size:12px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:var(--muted);margin:0 4px 9px}
+  .card{background:var(--surface);border-radius:16px;overflow:hidden;box-shadow:0 8px 26px rgba(0,0,0,.16)}
+  .dlghdr{display:flex;align-items:center;justify-content:space-between;padding:14px 16px;background:var(--ink);color:#fff}
+  .dlghdr h3{margin:0;font-size:15px;font-weight:700}
+  .dlgbody{padding:16px}
+  .lead{font-size:13.5px;color:var(--muted);line-height:1.5;margin:0 0 14px}
+  .lead b{color:var(--text)}
+  .field{margin-bottom:13px}
+  .label{display:block;font-size:11px;text-transform:uppercase;letter-spacing:.08em;color:var(--faint);margin-bottom:5px;font-weight:700}
+  .seg{display:flex;background:#EDEDF0;border-radius:10px;padding:3px}
+  .seg button{flex:1;border:none;background:transparent;color:var(--muted);font-size:13px;font-weight:600;padding:8px;border-radius:8px;cursor:pointer}
+  .seg button.active{background:var(--ink);color:#fff}
+  .linkbox{display:flex;align-items:center;gap:8px;border:1.5px solid var(--line);border-radius:10px;padding:6px 6px 6px 12px;background:var(--rail)}
+  .linkbox input{flex:1;border:none;background:transparent;font-size:13px;color:var(--text);outline:none}
+  .b{font-size:13px;padding:9px 14px;border-radius:10px;border:1.5px solid var(--line);background:var(--surface);color:var(--text);display:inline-flex;gap:7px;align-items:center;font-weight:600;cursor:pointer}
+  .b.primary{background:var(--orange);color:#fff;border:none}
+  .b.block{width:100%;justify-content:center;padding:12px}
+  .note{display:flex;gap:8px;align-items:flex-start;font-size:12.5px;color:var(--muted);background:var(--green-soft);border:1px solid #9FC98C;border-radius:10px;padding:10px 12px;margin-top:6px}
+  .note .ti{color:var(--green);font-size:16px;margin-top:1px}
+  .active-list{margin-top:16px;border-top:1px solid var(--line);padding-top:12px}
+  .share-row{display:flex;align-items:center;justify-content:space-between;font-size:13px;padding:7px 0}
+  .pill{font-size:11px;font-weight:700;padding:3px 9px;border-radius:999px;background:var(--orange-soft);color:var(--orange-deep)}
+
+  /* client */
+  .client .top{background:var(--navy);color:#fff;padding:16px;text-align:center}
+  .client .top .brand{font-size:22px;font-weight:700}.client .top .brand b{color:var(--orange)}
+  .hero{height:130px;background:#3a342d;display:flex;align-items:center;justify-content:center;color:#7d776c;font-size:34px}
+  .welcome{padding:18px 16px;text-align:center}
+  .welcome h2{margin:0 0 6px;font-size:19px;font-weight:700}
+  .welcome .sub{font-size:13.5px;color:var(--muted);line-height:1.55;margin:0 0 4px}
+  .badge{display:inline-flex;gap:6px;align-items:center;background:var(--green-soft);color:var(--green);border:1px solid #9FC98C;border-radius:999px;font-size:12px;font-weight:700;padding:5px 12px;margin:10px 0 16px}
+  .form{padding:0 16px 18px}
+  .inp{width:100%;border:1.5px solid var(--line);border-radius:10px;padding:11px 12px;font-size:14px;margin-bottom:10px;background:var(--surface)}
+  .trust{text-align:center;font-size:11.5px;color:var(--faint);margin-top:12px;display:flex;gap:6px;align-items:center;justify-content:center}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <div class="col">
+    <p class="cap">Admin — share a building</p>
+    <div class="card">
+      <div class="dlghdr"><h3>Share “Crescent School”</h3><i class="ti ti-x"></i></div>
+      <div class="dlgbody">
+        <p class="lead">Send your client a link to <b>their building</b>, fully loaded. They can view, edit, and audit it — <b>it’s their data</b>. Access ends automatically.</p>
+        <div class="field">
+          <span class="label">Access period</span>
+          <div class="seg"><button>14 days</button><button class="active">30 days</button><button>90 days</button></div>
+        </div>
+        <div class="field">
+          <span class="label">Share link</span>
+          <div class="linkbox"><input readonly value="https://markur.ca/welcome/crescent-7f3a9c…" /><button class="b primary"><i class="ti ti-copy"></i> Copy</button></div>
+        </div>
+        <div class="note"><i class="ti ti-shield-lock"></i><span>Full access to <b>this building only</b>, for 30 days. Expires on its own — no cleanup needed.</span></div>
+        <div class="active-list">
+          <span class="label">Active links</span>
+          <div class="share-row"><span><i class="ti ti-mail" style="color:var(--muted);vertical-align:-2px"></i> facilities@brookfield.com</span><span class="pill">28 days left</span></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="col client">
+    <p class="cap">Client — opening the link</p>
+    <div class="card">
+      <div class="top"><span class="brand"><b>◆</b> markur</span></div>
+      <div class="hero"><i class="ti ti-building"></i></div>
+      <div class="welcome">
+        <h2>Crescent School</h2>
+        <p class="sub">Officemark has shared this building’s signage with you on Markur.</p>
+        <span class="badge"><i class="ti ti-key"></i> Full access · 30 days</span>
+        <p class="sub">View every sign on every floor, edit details, run an audit — it’s your data to use.</p>
+      </div>
+      <div class="form">
+        <input class="inp" placeholder="Your name" />
+        <input class="inp" placeholder="Work email" value="facilities@brookfield.com" />
+        <input class="inp" type="password" placeholder="Choose a password" />
+        <button class="b primary block"><i class="ti ti-arrow-right"></i> Enter Crescent School</button>
+        <div class="trust"><i class="ti ti-lock"></i> Encrypted · your data stays yours</div>
+      </div>
+    </div>
+  </div>
+
+</div>
+</body>
+</html>
