@@ -18,10 +18,9 @@ import {
   LockOpen,
   Move,
   Eye,
-  ShoppingCart,
   Download,
   ExternalLink,
-  Image as ImageIcon,
+  Camera,
   Tag,
   MapPin,
   ClipboardCheck,
@@ -209,21 +208,23 @@ export function AssetDrawer({
                 ]
                   .filter(Boolean)
                   .join(' · ');
-                const identityShown = !!(
-                  asset.zone || asset.room_number || asset.manufacturer || asset.notes
-                );
-                // Each group is a Band (near-black header + orange chip + white
-                // label over a white body, Feature #3d). Identity is optional, so
-                // the list is filtered. Video stays secondary inside Media (#3c).
+                // Slice 2 — narrative flow per the approved mock. The drawer keeps
+                // its banded styling; sections are re-ordered/re-grouped into:
+                // 1·See it (Photos & video) · 2·What it is (type/name/notes) ·
+                // 3·Where it is (room/zone + pin controls) · 4·A problem or a
+                // change? (Status & audit, then Vendor, then Activity). Step
+                // markers sit above the relevant bands. Presentation only.
                 const bands: Array<{
+                  step?: string;
                   icon: LucideIcon;
                   label: string;
                   hint?: ReactNode;
                   node: ReactNode;
                 }> = [
                   {
-                    icon: ImageIcon,
-                    label: 'Media',
+                    step: '1 · See it',
+                    icon: Camera,
+                    label: 'Photos & video',
                     hint:
                       photos.length > 0
                         ? `${photos.length} photo${photos.length === 1 ? '' : 's'}`
@@ -255,39 +256,33 @@ export function AssetDrawer({
                       </>
                     ),
                   },
-                  ...(identityShown
-                    ? [{ icon: Tag, label: 'Identity', node: <IdentityBody asset={asset} /> }]
-                    : []),
                   {
+                    step: '2 · What it is',
+                    icon: Tag,
+                    label: 'What it is',
+                    node: <WhatItIsBody asset={asset} />,
+                  },
+                  {
+                    step: '3 · Where it is',
                     icon: MapPin,
-                    label: 'Pin',
+                    label: 'Where it is',
                     node: (
-                      <>
-                        <PinMeta asset={asset} />
-                        {canEdit && (
-                          <>
-                            <LockBar
-                              asset={asset}
-                              busy={update.isPending}
-                              onToggleLock={() =>
-                                update.mutate({
-                                  id: asset.id,
-                                  patch: { is_locked: !asset.is_locked },
-                                })
-                              }
-                            />
-                            <AdminActions
-                              canReposition={canReposition && !!onStartReposition}
-                              canDelete={canDelete && !!onStartDelete}
-                              onReposition={() => onStartReposition?.(asset.id)}
-                              onDelete={() => onStartDelete?.(asset.id)}
-                            />
-                          </>
-                        )}
-                      </>
+                      <WhereItIsBody
+                        asset={asset}
+                        canEdit={canEdit}
+                        busy={update.isPending}
+                        onToggleLock={() =>
+                          update.mutate({ id: asset.id, patch: { is_locked: !asset.is_locked } })
+                        }
+                        canReposition={canReposition && !!onStartReposition}
+                        canDelete={canDelete && !!onStartDelete}
+                        onReposition={() => onStartReposition?.(asset.id)}
+                        onDelete={() => onStartDelete?.(asset.id)}
+                      />
                     ),
                   },
                   {
+                    step: '4 · A problem or a change?',
                     icon: ClipboardCheck,
                     label: 'Status & audit',
                     node: (
@@ -304,12 +299,7 @@ export function AssetDrawer({
                   {
                     icon: Store,
                     label: 'Vendor',
-                    node: (
-                      <>
-                        <VendorPanel asset={asset} canEdit={canEdit} buildingId={buildingId} />
-                        <OrderSignsRow asset={asset} />
-                      </>
-                    ),
+                    node: <VendorPanel asset={asset} canEdit={canEdit} buildingId={buildingId} />,
                   },
                   { icon: History, label: 'Activity', node: <ActivitySection items={activity} /> },
                 ];
@@ -335,9 +325,16 @@ export function AssetDrawer({
                     />
                     <StatsStrip asset={asset} flagCount={asset.status === 'flagged' ? 1 : 0} />
                     {bands.map((b) => (
-                      <Band key={b.label} icon={b.icon} label={b.label} hint={b.hint}>
-                        {b.node}
-                      </Band>
+                      <div key={b.label}>
+                        {b.step && (
+                          <p className="mb-1.5 ml-0.5 text-[11px] font-bold uppercase tracking-[0.08em] text-accent">
+                            {b.step}
+                          </p>
+                        )}
+                        <Band icon={b.icon} label={b.label} hint={b.hint}>
+                          {b.node}
+                        </Band>
+                      </div>
                     ))}
                     <PermissionsFooter />
                   </>
@@ -518,74 +515,6 @@ function VisualizeRow({
   );
 }
 
-const OFFICEMARK_ORDER_URL = 'https://account.officemark.ca/authentication/login';
-
-function orderMailto(toEmail: string, toName: string | undefined, asset: Asset): string {
-  const subject = `Sign order — ${asset.name}`;
-  const body =
-    `Hi${toName ? ` ${toName}` : ''},\n\n` +
-    `I'd like to order signage for "${asset.name}"` +
-    `${asset.room_number ? ` (room ${asset.room_number})` : ''}.\n\n` +
-    `Details:\n\n\nThanks.`;
-  return `mailto:${toEmail}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
-}
-
-/**
- * Item 3: "Order signs" is an action button targeted at the directory the pin
- * references. Priority:
- *   1. a linked vendor with an email → prefilled mailto draft
- *   2. a linked vendor with a URL    → opens the supplier site in a new tab
- *   3. the pin's contact with an email → prefilled mailto draft
- *   4. fallback                       → the Officemark order login
- */
-function OrderSignsRow({ asset }: { asset: Asset }) {
-  const { data: vendors } = useAssetVendors(asset.id);
-  const contacts = useContacts();
-
-  const vendorEmail = (vendors ?? []).find((v) => v.email?.trim());
-  const vendorUrl = (vendors ?? []).find((v) => v.url?.trim());
-  const contact = asset.contact_id
-    ? contacts.list.find((c) => c.id === asset.contact_id)
-    : undefined;
-
-  let href: string;
-  let helper: string;
-  let opensExternally: boolean;
-  if (vendorEmail) {
-    href = orderMailto(vendorEmail.email!.trim(), vendorEmail.name, asset);
-    helper = `Email ${vendorEmail.name} to order replacement signage.`;
-    opensExternally = false;
-  } else if (vendorUrl) {
-    href = vendorUrlHref(vendorUrl.url!.trim());
-    helper = `Open ${vendorUrl.name}'s site to order signage.`;
-    opensExternally = true;
-  } else if (contact?.email?.trim()) {
-    href = orderMailto(contact.email.trim(), contact.label, asset);
-    helper = `Email ${contact.label} to order replacement signage.`;
-    opensExternally = false;
-  } else {
-    href = OFFICEMARK_ORDER_URL;
-    helper = 'Order new or replacement signage from Officemark.';
-    opensExternally = true;
-  }
-
-  return (
-    <div className="flex items-center justify-between gap-3 rounded-md border border-waymarks-gold/30 bg-waymarks-gold-soft px-3 py-2 text-xs dark:bg-white/5">
-      <div className="min-w-0">
-        <p className="font-semibold text-waymarks-ink dark:text-white">Order signs</p>
-        <p className="text-text-muted">{helper}</p>
-      </div>
-      <a
-        href={href}
-        {...(opensExternally ? { target: '_blank', rel: 'noopener noreferrer' } : {})}
-        className="inline-flex h-8 shrink-0 items-center gap-1.5 rounded-md bg-accent px-3 text-xs font-medium text-white hover:bg-accent/90"
-      >
-        <ShoppingCart size={12} aria-hidden />
-        Order Signs
-      </a>
-    </div>
-  );
-}
 
 function AdminActions({
   canReposition,
@@ -1256,30 +1185,75 @@ function PinMeta({ asset }: { asset: Asset }) {
  * behavior). The old "Where on the floor" / location_notes line is gone — the
  * pin position already conveys that (Feature #3b).
  */
-function IdentityBody({ asset }: { asset: Asset }) {
-  const hasChips = !!(asset.zone || asset.room_number || asset.manufacturer);
+/** Read-only labelled value, styled like the mock's field/box. */
+function ReadField({ label, children }: { label: string; children: ReactNode }) {
+  return (
+    <div>
+      <p className="mb-1 text-[10px] font-medium uppercase tracking-[0.14em] text-text-faint">
+        {label}
+      </p>
+      <div className="rounded-md border border-black/10 bg-bg px-3 py-2 text-sm leading-relaxed text-text dark:border-white/10">
+        <span className="block whitespace-pre-wrap break-words">{children}</span>
+      </div>
+    </div>
+  );
+}
+
+/** "What it is" (step 2) — the asset's identity: type, name, notes, maker. */
+function WhatItIsBody({ asset }: { asset: Asset }) {
+  const category = asset.category
+    ? asset.category.charAt(0).toUpperCase() + asset.category.slice(1)
+    : '';
   return (
     <>
-      {hasChips && (
-        <div className="flex flex-wrap items-center gap-1">
-          {asset.zone && (
-            <Chip variant="default" title="Zone or department">{asset.zone}</Chip>
-          )}
-          {asset.room_number && (
-            <Chip variant="default" title="Room number">Rm {asset.room_number}</Chip>
-          )}
-          {asset.manufacturer && (
-            <Chip variant="default" title="Manufacturer">{asset.manufacturer}</Chip>
-          )}
-        </div>
+      <ReadField label="Asset type">
+        {[prettyType(asset.type), category].filter(Boolean).join(' · ') || '—'}
+      </ReadField>
+      <ReadField label="Name">{asset.name?.trim() || '—'}</ReadField>
+      {asset.manufacturer?.trim() && (
+        <ReadField label="Manufacturer">{asset.manufacturer}</ReadField>
       )}
-      {asset.notes && (
-        <div className="rounded-md border border-black/10 bg-bg p-2.5 dark:border-white/10">
-          <p className="mb-1 text-[10px] font-medium uppercase tracking-[0.14em] text-text-faint">
-            Notes
-          </p>
-          <p className="whitespace-pre-wrap text-sm leading-relaxed text-text">{asset.notes}</p>
-        </div>
+      {asset.notes?.trim() && <ReadField label="Notes">{asset.notes}</ReadField>}
+    </>
+  );
+}
+
+/** "Where it is" (step 3) — location fields plus the pin controls (folds in the
+ *  old "Pin" section). Lock + reposition/delete stay admin-gated. */
+function WhereItIsBody({
+  asset,
+  canEdit,
+  busy,
+  onToggleLock,
+  canReposition,
+  canDelete,
+  onReposition,
+  onDelete,
+}: {
+  asset: Asset;
+  canEdit: boolean;
+  busy: boolean;
+  onToggleLock: () => void;
+  canReposition: boolean;
+  canDelete: boolean;
+  onReposition: () => void;
+  onDelete: () => void;
+}) {
+  return (
+    <>
+      {asset.room_number?.trim() && <ReadField label="Room">{asset.room_number}</ReadField>}
+      {asset.zone?.trim() && <ReadField label="Zone or department">{asset.zone}</ReadField>}
+      <PinMeta asset={asset} />
+      {canEdit && (
+        <>
+          <LockBar asset={asset} busy={busy} onToggleLock={onToggleLock} />
+          <AdminActions
+            canReposition={canReposition}
+            canDelete={canDelete}
+            onReposition={onReposition}
+            onDelete={onDelete}
+          />
+        </>
       )}
     </>
   );
