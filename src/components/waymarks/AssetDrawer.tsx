@@ -24,6 +24,7 @@ import {
   Tag,
   MapPin,
   ClipboardCheck,
+  ClipboardList,
   Store,
   History,
 } from 'lucide-react';
@@ -79,6 +80,12 @@ export type AssetDrawerProps = {
    * capture form. Only wired when the user can run an audit on this floor.
    */
   onLogFlag?: (assetId: string) => void;
+  /**
+   * "Start audit here" — begins (or resumes) Audit Mode with this pin as the
+   * walkthrough's starting point (the cycle runs in pin-number order and wraps
+   * from here). Only wired when the user can run an audit on this floor.
+   */
+  onStartAuditHere?: (assetId: string) => void;
 };
 
 const STATUS_OPTIONS: Array<{ value: AssetStatus; label: string; icon: typeof Check }> = [
@@ -99,6 +106,7 @@ export function AssetDrawer({
   onStartReposition,
   onStartDelete,
   onLogFlag,
+  onStartAuditHere,
 }: AssetDrawerProps) {
   const open = !!assetId;
   const { data: asset, isLoading } = useAsset(assetId ?? undefined);
@@ -291,6 +299,9 @@ export function AssetDrawer({
                           asset={asset}
                           canAudit={canAudit}
                           onLogFlag={onLogFlag ? () => onLogFlag(asset.id) : undefined}
+                          onStartAuditHere={
+                            onStartAuditHere ? () => onStartAuditHere(asset.id) : undefined
+                          }
                         />
                         <AuditAttrs asset={asset} />
                       </>
@@ -416,18 +427,21 @@ function LockBar({
 
 /**
  * Read-only status indicators (M33). Status changes happen in Audit Mode --
- * these chips report the current state, they don't set it. The "Log a flag"
- * link routes the user into Audit Mode on this pin, where the flag capture
- * form lives.
+ * these chips report the current state, they don't set it. The "Start audit
+ * here" and "Log a flag" links route the user into Audit Mode on this pin:
+ * the former starts the walkthrough here, the latter opens the flag capture
+ * form.
  */
 function QuickActions({
   asset,
   canAudit,
   onLogFlag,
+  onStartAuditHere,
 }: {
   asset: Asset;
   canAudit: boolean;
   onLogFlag?: () => void;
+  onStartAuditHere?: () => void;
 }) {
   const current = asset.status as AssetStatus;
   return (
@@ -457,15 +471,29 @@ function QuickActions({
           );
         })}
       </div>
-      {canAudit && onLogFlag && (
-        <button
-          type="button"
-          onClick={onLogFlag}
-          className="mt-2 inline-flex items-center gap-1.5 text-xs font-medium text-waymarks-gold hover:underline"
-        >
-          <Flag size={12} aria-hidden />
-          Log a flag in Audit Mode
-        </button>
+      {canAudit && (onStartAuditHere || onLogFlag) && (
+        <div className="mt-2 flex flex-wrap items-center gap-x-4 gap-y-1.5">
+          {onStartAuditHere && (
+            <button
+              type="button"
+              onClick={onStartAuditHere}
+              className="inline-flex items-center gap-1.5 text-xs font-medium text-waymarks-gold hover:underline"
+            >
+              <ClipboardList size={12} aria-hidden />
+              Start audit here
+            </button>
+          )}
+          {onLogFlag && (
+            <button
+              type="button"
+              onClick={onLogFlag}
+              className="inline-flex items-center gap-1.5 text-xs font-medium text-waymarks-gold hover:underline"
+            >
+              <Flag size={12} aria-hidden />
+              Log a flag in Audit Mode
+            </button>
+          )}
+        </div>
       )}
     </div>
   );
