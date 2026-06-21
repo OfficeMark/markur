@@ -17,6 +17,8 @@ import { AssetGridView } from '@/components/waymarks/AssetGridView';
 import { FilterByTypePopover } from '@/components/waymarks/FilterByTypePopover';
 import { FilterByZonePopover } from '@/components/waymarks/FilterByZonePopover';
 import { FilterByTextInput } from '@/components/waymarks/FilterByTextInput';
+import { SearchPopover } from '@/components/waymarks/SearchPopover';
+import { FloorFilterSheet } from '@/components/waymarks/FloorFilterSheet';
 import { FloorMoreMenu } from '@/components/waymarks/FloorMoreMenu';
 import { FloorNotesButton } from '@/components/waymarks/FloorNotesButton';
 import { useAssetsWithVideos } from '@/hooks/useAuditVideos';
@@ -32,6 +34,7 @@ import {
 import { useAuth } from '@/lib/auth-context';
 import { useCan } from '@/lib/permissions-context';
 import { planKindForPath, signedUrlForPlan } from '@/lib/upload';
+import { cn } from '@/lib/utils';
 import { pinNumberMatchesQuery } from '@/lib/pin-types';
 import {
   putAssetsForFloor,
@@ -330,12 +333,12 @@ export function Floor() {
   const notesVisible = canEdit || !!floor.floor_notes?.trim();
 
   const segCls = (active: boolean) =>
-    'inline-flex h-9 flex-1 items-center justify-center gap-1.5 px-3 text-xs font-medium transition-colors sm:flex-none ' +
+    'inline-flex h-9 items-center justify-center gap-1.5 px-2 text-xs font-medium transition-colors sm:px-3 ' +
     (active
       ? 'bg-waymarks-ink text-white'
       : 'text-text-muted hover:bg-black/5 dark:hover:bg-white/5');
   const filterSegCls = (active: boolean) =>
-    'inline-flex h-9 flex-1 items-center justify-center gap-1.5 px-3 text-xs font-medium transition-colors sm:flex-none ' +
+    'inline-flex h-9 items-center justify-center gap-1.5 px-2 text-xs font-medium transition-colors sm:px-3 ' +
     (active
       ? 'bg-waymarks-gold-soft text-waymarks-ink'
       : 'text-text-muted hover:bg-black/5 dark:hover:bg-white/5');
@@ -367,13 +370,17 @@ export function Floor() {
   );
 
   // Two primary circles — the focal actions (orange Add pin, dark Audit).
+  // Slightly smaller on phones but still the prominent focal point.
+  const circleCls =
+    'flex h-[52px] w-[52px] shrink-0 flex-col items-center justify-center gap-0.5 rounded-full border-[3px] border-white text-[10px] font-bold leading-tight shadow-md transition-colors sm:h-[68px] sm:w-[68px] sm:text-[12px]';
   const addPinCircle = floor.plan_url && canCreate && (
     <Tooltip text={placing ? 'Cancel placing a pin' : 'Place a new pin by clicking the floor plan'}>
       <button
         type="button"
         onClick={() => setPlacing((p) => !p)}
         className={
-          'flex h-[68px] w-[68px] shrink-0 flex-col items-center justify-center gap-0.5 rounded-full border-[3px] border-white text-[12px] font-bold leading-tight shadow-md transition-colors ' +
+          circleCls +
+          ' ' +
           (placing
             ? 'bg-waymarks-ink text-white hover:bg-waymarks-ink/90'
             : 'bg-accent text-white hover:bg-accent/90')
@@ -390,7 +397,7 @@ export function Floor() {
         type="button"
         onClick={() => void startOrResumeAudit()}
         disabled={startAudit.isPending}
-        className="flex h-[68px] w-[68px] shrink-0 flex-col items-center justify-center gap-0.5 rounded-full border-[3px] border-white bg-waymarks-ink text-[12px] font-bold leading-tight text-white shadow-md transition-colors hover:bg-waymarks-ink/90 disabled:opacity-60"
+        className={circleCls + ' bg-waymarks-ink text-white hover:bg-waymarks-ink/90 disabled:opacity-60'}
       >
         <ClipboardCheck size={18} aria-hidden />
         {activeSession ? 'Resume' : 'Audit'}
@@ -404,23 +411,25 @@ export function Floor() {
     <div
       role="group"
       aria-label="View mode"
-      className="flex w-full overflow-hidden rounded-lg border border-black/15 sm:inline-flex sm:w-auto dark:border-white/15"
+      className="inline-flex h-9 shrink-0 overflow-hidden rounded-lg border border-black/15 dark:border-white/15"
     >
       <button
         type="button"
         onClick={() => setViewMode('map')}
         aria-pressed={viewMode === 'map'}
+        aria-label="Map view"
         className={segCls(viewMode === 'map')}
       >
-        <MapIcon size={13} aria-hidden /> Map
+        <MapIcon size={13} aria-hidden /> <span className="hidden sm:inline">Map</span>
       </button>
       <button
         type="button"
         onClick={() => setViewMode('grid')}
         aria-pressed={viewMode === 'grid'}
+        aria-label="Grid view"
         className={'border-l border-black/10 dark:border-white/10 ' + segCls(viewMode === 'grid')}
       >
-        <LayoutGrid size={13} aria-hidden /> Grid
+        <LayoutGrid size={13} aria-hidden /> <span className="hidden sm:inline">Grid</span>
       </button>
       {notesVisible && (
         <FloorNotesButton
@@ -431,11 +440,12 @@ export function Floor() {
           trigger={
             <button
               type="button"
-              className={'border-l border-black/10 dark:border-white/10 ' + segCls(false)}
+              aria-label="Floor notes"
+              className={'relative border-l border-black/10 dark:border-white/10 ' + segCls(false)}
             >
-              <NotebookPen size={13} aria-hidden /> Notes
+              <NotebookPen size={13} aria-hidden /> <span className="hidden sm:inline">Notes</span>
               {!!floor.floor_notes?.trim() && (
-                <span aria-hidden className="inline-block h-1.5 w-1.5 rounded-full bg-waymarks-gold" />
+                <span aria-hidden className="absolute right-1 top-1 inline-block h-1.5 w-1.5 rounded-full bg-waymarks-gold sm:static" />
               )}
             </button>
           }
@@ -444,8 +454,12 @@ export function Floor() {
     </div>
   ) : null;
 
-  // "⋯ More" overflow — Replace plan, Plan source, Lock all, Delete floor.
-  const moreMenu =
+  // "⋯ More" overflow. Two variants:
+  //  • base (lg+): Replace plan, Plan source, Lock all, Delete floor.
+  //  • narrow (<lg): the above PLUS Offline + Visualize, which collapse in here
+  //    as the screen narrows (they sit in the toolbar only at lg+).
+  const onVisualize = () => window.open(viewmarkUrl, '_blank', 'noopener,noreferrer');
+  const moreMenuBase =
     floor.plan_url && (canUploadPlan || canDeleteFloor || (canEdit && hasPins)) ? (
       <FloorMoreMenu
         floorId={floor.id}
@@ -463,10 +477,35 @@ export function Floor() {
         }}
       />
     ) : null;
+  // Narrow variant always renders — it carries Visualize (always available) and,
+  // when there's a plan, Offline + the plan actions.
+  const moreMenuNarrow = (
+    <FloorMoreMenu
+      floorId={floor.id}
+      buildingId={floor.building_id}
+      provenance={floor.plan_provenance}
+      allPinsLocked={allPinsLocked}
+      hasPins={hasPins}
+      canUploadPlan={canUploadPlan}
+      canEditPins={canEdit}
+      canDeleteFloor={canDeleteFloor}
+      onReplacePlan={() => setUploadOpen(true)}
+      onDeleteFloor={() => {
+        setDeleteFloorError(null);
+        setDeleteFloorOpen(true);
+      }}
+      offline={
+        floor.plan_url
+          ? { cached: cacheState === 'cached', busy: cacheState === 'caching', onToggle: () => void takeOffline() }
+          : undefined
+      }
+      onVisualize={onVisualize}
+    />
+  );
 
   // Filter segment — Zone / Type, each opening its popover.
   const filterSeg = showFilters ? (
-    <div className="flex w-full overflow-hidden rounded-lg border border-black/15 sm:inline-flex sm:w-auto dark:border-white/15">
+    <div className="inline-flex h-9 shrink-0 overflow-hidden rounded-lg border border-black/15 dark:border-white/15">
       <FilterByZonePopover
         zones={zoneOptions}
         selectedZones={filterZones}
@@ -491,6 +530,17 @@ export function Floor() {
         }
       />
     </div>
+  ) : null;
+
+  // Phone-tier: Zone + Type collapse into one "Filter" sheet.
+  const combinedFilter = showFilters ? (
+    <FloorFilterSheet
+      zones={zoneOptions}
+      selectedZones={filterZones}
+      onZonesChange={setFilterZones}
+      selectedTypes={filterTypes}
+      onTypesChange={setFilterTypes}
+    />
   ) : null;
 
   const offlineBtn = floor.plan_url ? (
@@ -537,17 +587,26 @@ export function Floor() {
     </span>
   ) : null;
 
+  // Map mode fills the viewport (definite-height chain via AppShell) so the
+  // plan canvas's h-full resolves and its recenter/zoom controls stay on-screen.
+  // Grid + empty state keep the normal scrolling page.
+  const mapFill = Boolean(floor.plan_url) && viewMode === 'map';
+
   return (
-    <AppShell>
-      <div className="mx-auto w-full max-w-5xl px-4 py-4 sm:px-6 sm:py-5">
-        {/* Reskinned toolbar (Slice 1): breadcrumb · two primary circles
-            (Add pin / Audit) · secondary controls. Desktop lays the secondaries
-            in two right-aligned rows under the user pill; mobile stacks them
-            full-width so nothing is oversized (the long-standing phone bug).
-            All data stays per-table — no bundle hooks. */}
-        <div className="mb-3 rounded-xl border border-black/10 bg-surface-soft px-3 py-3 dark:border-white/10 dark:bg-white/5">
-          {/* ── Desktop / tablet (sm+) ── */}
-          <div className="hidden items-start gap-4 sm:flex">
+    <AppShell fillViewport={mapFill}>
+      <div
+        className={cn(
+          'mx-auto flex w-full max-w-5xl flex-col px-4 py-3 sm:px-6 sm:py-4',
+          mapFill ? 'h-full min-h-0' : 'min-h-[calc(100dvh-3.5rem)]'
+        )}
+      >
+        {/* Slice 1-fix toolbar — a FIXED, compact band at every width. The two
+            primaries (Add pin / Audit) stay prominent; secondary controls
+            progressively collapse into the "⋯" overflow as the screen narrows
+            (they never wrap to a 3rd row or shrink). Per-table — no bundles. */}
+        <div className="mb-3 shrink-0 rounded-xl border border-black/10 bg-surface-soft px-2.5 py-2.5 dark:border-white/10 dark:bg-white/5 sm:px-3">
+          {/* ── Desktop (lg+): full 2-row right cluster — everything visible ── */}
+          <div className="hidden items-start gap-4 lg:flex">
             <div className="min-w-0 flex-1">{breadcrumb}</div>
             {hasPrimary && (
               <div className="flex shrink-0 items-center gap-3 self-center">
@@ -555,13 +614,13 @@ export function Floor() {
                 {auditCircle}
               </div>
             )}
-            <div className="flex flex-1 flex-col items-end gap-2">
-              <div className="flex items-center gap-2">
+            <div className="flex min-w-0 flex-1 flex-col items-end gap-2">
+              <div className="flex flex-nowrap items-center gap-2">
                 {viewSeg}
-                {moreMenu}
+                {moreMenuBase}
               </div>
               {(showFilters || offlineBtn) && (
-                <div className="flex flex-wrap items-center justify-end gap-2">
+                <div className="flex flex-nowrap items-center justify-end gap-2">
                   {filterLabel}
                   {showFilters && (
                     <FilterByTextInput value={filterText} onChange={setFilterText} />
@@ -575,25 +634,28 @@ export function Floor() {
             </div>
           </div>
 
-          {/* ── Mobile (< sm): uniform full-width stack, no oversizing ── */}
-          <div className="space-y-2.5 sm:hidden">
-            <div className="flex items-center justify-between gap-2">
-              {breadcrumb}
+          {/* ── Tablet + phone (<lg): one compact band; secondaries collapse
+              into ⋯. Search → icon; on phone Zone/Type → a single Filter sheet
+              and the view switcher goes icon-only. ── */}
+          <div className="lg:hidden">
+            <div className="mb-2 flex items-center gap-2">
+              <div className="min-w-0 flex-1">{breadcrumb}</div>
               {visibleBadge}
             </div>
-            {hasPrimary && (
-              <div className="flex justify-center gap-4 py-1">
-                {addPinCircle}
-                {auditCircle}
+            <div className="flex items-center gap-2">
+              {hasPrimary && (
+                <div className="flex shrink-0 items-center gap-2">
+                  {addPinCircle}
+                  {auditCircle}
+                </div>
+              )}
+              <div className="ml-auto flex shrink-0 items-center gap-1 sm:gap-1.5">
+                {viewSeg}
+                {showFilters && <div className="hidden sm:block">{filterSeg}</div>}
+                {showFilters && <div className="sm:hidden">{combinedFilter}</div>}
+                {showFilters && <SearchPopover value={filterText} onChange={setFilterText} />}
+                {moreMenuNarrow}
               </div>
-            )}
-            {viewSeg}
-            {showFilters && <FilterByTextInput value={filterText} onChange={setFilterText} />}
-            {filterSeg}
-            <div className="flex items-stretch gap-1.5 [&>*]:flex-1 [&_button]:w-full">
-              {offlineBtn}
-              {visualizeBtn}
-              {moreMenu}
             </div>
           </div>
         </div>
@@ -646,10 +708,11 @@ export function Floor() {
               assetsWithVideos={assetsWithVideos ?? null}
             />
           ) : (
-            <div className="relative">
+            <div className="relative min-h-0 flex-1">
               <FloorPlanCanvas
                 src={signedUrl}
                 kind={planKind}
+                fill
                 mode={placing ? 'placing' : 'view'}
                 onPlaceClick={(coords) => {
                   setPlacing(false);

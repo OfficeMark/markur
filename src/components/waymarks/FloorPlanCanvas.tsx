@@ -36,6 +36,13 @@ export type FloorPlanCanvasProps = {
    *  Coordinates are 0–1 normalized within the rendered canvas box. */
   onPlaceClick?: (coords: { x: number; y: number }) => void;
   className?: string;
+  /**
+   * Fill the parent's height (`h-full`) instead of the default fixed `h-[70vh]`.
+   * Used by the floor map view so the plan takes the whole viewport below the
+   * compact toolbar (and the recenter/zoom controls stay on-screen on phones).
+   * Requires an ancestor definite-height chain (AppShell `fillViewport`).
+   */
+  fill?: boolean;
 };
 
 type Status = 'idle' | 'loading' | 'ready' | 'error';
@@ -50,6 +57,7 @@ export function FloorPlanCanvas({
   mode = 'view',
   onPlaceClick,
   className,
+  fill = false,
 }: FloorPlanCanvasProps) {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
@@ -380,7 +388,9 @@ export function FloorPlanCanvas({
       // bypasses --zoom and balloons the pins.
       style={{ touchAction: 'none' }}
       className={cn(
-        'relative h-[70vh] w-full overflow-hidden rounded-xl border border-black/10 bg-surface outline-none focus-visible:ring-2 focus-visible:ring-waymarks-gold dark:border-white/10 dark:bg-white/5',
+        'relative w-full overflow-hidden rounded-xl border border-black/10 bg-surface outline-none focus-visible:ring-2 focus-visible:ring-waymarks-gold dark:border-white/10 dark:bg-white/5',
+        // Fill the parent (map view) or fall back to the fixed viewport height.
+        fill ? 'h-full' : 'h-[70vh]',
         cursor,
         className
       )}
@@ -423,7 +433,9 @@ export function FloorPlanCanvas({
             ref={canvasRef}
             aria-hidden
             className={cn(
-              'block h-auto w-auto max-h-[70vh] max-w-full select-none shadow-sm',
+              'block h-auto w-auto max-w-full select-none shadow-sm',
+              // Cap to the container so the plan fits-to-contain at any height.
+              fill ? 'max-h-full' : 'max-h-[70vh]',
               status === 'ready' ? 'opacity-100' : 'opacity-0'
             )}
           />
@@ -434,7 +446,12 @@ export function FloorPlanCanvas({
         </div>
       </div>
       {status === 'ready' && (
-        <div className="absolute bottom-2 right-2 flex items-center gap-2">
+        <div
+          className="absolute right-2 flex items-center gap-2"
+          // Float above the phone home indicator / browser chrome so the
+          // recenter button + zoom % are never clipped at the viewport edge.
+          style={{ bottom: 'max(0.5rem, env(safe-area-inset-bottom))' }}
+        >
           <button
             type="button"
             onPointerDown={(e) => e.stopPropagation()}

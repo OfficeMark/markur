@@ -8,6 +8,8 @@ import {
   Trash2,
   ChevronRight,
   Check,
+  Download,
+  Eye,
 } from 'lucide-react';
 import { PLAN_PROVENANCE_OPTIONS } from '@/lib/plan-provenance';
 import { useSetFloorProvenance } from '@/hooks/useFloors';
@@ -33,6 +35,8 @@ export function FloorMoreMenu({
   canDeleteFloor,
   onReplacePlan,
   onDeleteFloor,
+  offline,
+  onVisualize,
 }: {
   floorId: string;
   buildingId?: string;
@@ -44,6 +48,13 @@ export function FloorMoreMenu({
   canDeleteFloor: boolean;
   onReplacePlan: () => void;
   onDeleteFloor: () => void;
+  /**
+   * When provided, an Offline (take-offline) item is shown at the top — used by
+   * the narrow (<lg) toolbar where Offline collapses into this menu.
+   */
+  offline?: { cached: boolean; busy: boolean; onToggle: () => void };
+  /** When provided, a Visualize item is shown (collapses here below lg). */
+  onVisualize?: () => void;
 }) {
   const setProvenance = useSetFloorProvenance(floorId, buildingId);
   const setPinsLocked = useSetFloorPinsLocked(floorId);
@@ -69,6 +80,34 @@ export function FloorMoreMenu({
           sideOffset={6}
           className="z-50 min-w-[12rem] rounded-lg border border-black/10 bg-surface p-1 text-text shadow-sheet outline-none dark:border-white/10"
         >
+          {offline && (
+            <DropdownMenu.Item
+              className={itemCls}
+              onSelect={(e) => {
+                e.preventDefault();
+                offline.onToggle();
+              }}
+            >
+              {offline.cached ? (
+                <Check size={14} aria-hidden className="text-success" />
+              ) : (
+                <Download size={14} aria-hidden className="text-text-muted" />
+              )}
+              {offline.cached ? 'Saved offline' : offline.busy ? 'Saving…' : 'Take offline'}
+            </DropdownMenu.Item>
+          )}
+
+          {onVisualize && (
+            <DropdownMenu.Item className={itemCls} onSelect={onVisualize}>
+              <Eye size={14} aria-hidden className="text-text-muted" />
+              Visualize
+            </DropdownMenu.Item>
+          )}
+
+          {(offline || onVisualize) && (canUploadPlan || canEditPins || canDeleteFloor) && (
+            <DropdownMenu.Separator className="my-1 h-px bg-black/10 dark:bg-white/10" />
+          )}
+
           {canUploadPlan && (
             <DropdownMenu.Item className={itemCls} onSelect={onReplacePlan}>
               <RefreshCw size={14} aria-hidden className="text-text-muted" />
