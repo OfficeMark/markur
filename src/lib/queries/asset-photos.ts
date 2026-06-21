@@ -8,7 +8,16 @@ import type { AssetPhoto } from '@/types/database';
  */
 
 export const ASSET_PHOTO_MAX_BYTES = 8 * 1024 * 1024;
-export const ASSET_PHOTO_MIMES = ['image/png', 'image/jpeg', 'image/webp'] as const;
+// 'image/heic'/'image/heif' added as a DIAGNOSTIC (not the final S8): let HEIC
+// through the upload untouched so we can see whether the browser renders it.
+// No conversion yet — stored as-is.
+export const ASSET_PHOTO_MIMES = [
+  'image/png',
+  'image/jpeg',
+  'image/webp',
+  'image/heic',
+  'image/heif',
+] as const;
 export type AssetPhotoMime = (typeof ASSET_PHOTO_MIMES)[number];
 
 export function validateAssetPhotoFile(file: File): string | null {
@@ -16,7 +25,7 @@ export function validateAssetPhotoFile(file: File): string | null {
     return `${file.name}: too large (limit 8 MB).`;
   }
   if (!(ASSET_PHOTO_MIMES as readonly string[]).includes(file.type)) {
-    return `${file.name}: unsupported type. Use PNG, JPG, or WebP.`;
+    return `${file.name}: unsupported type. Use PNG, JPG, WebP, or HEIC.`;
   }
   return null;
 }
@@ -24,6 +33,7 @@ export function validateAssetPhotoFile(file: File): string | null {
 function extFromMime(mime: string): string {
   if (mime === 'image/png') return 'png';
   if (mime === 'image/webp') return 'webp';
+  if (mime === 'image/heic' || mime === 'image/heif') return 'heic';
   return 'jpg';
 }
 
