@@ -84,7 +84,7 @@ export function FilterByZonePopover({
 
           {zones.length === 0 ? (
             <p className="px-2 py-1 text-sm text-text-muted">
-              No zones set on this floor yet. Add a zone in a pin's “Where it is”
+              No layers set on this floor yet. Add a layer in a pin's “Where it is”
               section and it'll appear here.
             </p>
           ) : (
@@ -111,7 +111,7 @@ export function FilterByZonePopover({
                         {isOn && <Check size={10} aria-hidden />}
                       </span>
                       <span className={'flex-1 truncate ' + (z ? 'text-text' : 'italic text-text-muted')}>
-                        {z || 'No zone'}
+                        {z || 'No layer'}
                       </span>
                     </button>
                   </li>

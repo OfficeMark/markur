@@ -724,12 +724,12 @@ function EditPanel({
         </FieldLabel>
       </div>
 
-      <FieldLabel label="Zone or department">
+      <FieldLabel label="Layer">
         <input
           value={zone}
           onChange={(e) => setZone(e.target.value)}
           maxLength={120}
-          placeholder='e.g. "North wing"'
+          placeholder="Reception, Parkade, Wing B, or a department"
           className="h-10 w-full rounded-md border border-black/10 bg-surface px-3 text-sm text-text outline-none focus:border-waymarks-gold focus:ring-2 focus:ring-waymarks-gold dark:border-white/10"
         />
       </FieldLabel>
@@ -1242,7 +1242,7 @@ function WhereItIsBody({
   return (
     <>
       {asset.room_number?.trim() && <ReadField label="Room">{asset.room_number}</ReadField>}
-      {asset.zone?.trim() && <ReadField label="Zone or department">{asset.zone}</ReadField>}
+      {asset.zone?.trim() && <ReadField label="Layer">{asset.zone}</ReadField>}
       <PinMeta asset={asset} />
       {canEdit && (
         <>

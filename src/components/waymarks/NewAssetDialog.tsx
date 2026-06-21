@@ -443,15 +443,15 @@ export function NewAssetDialog({
             {/* Feature #3a — free-text zone/department, distinct from the type
                 select above. Optional; saved to assets.zone on submit. */}
             <Field
-              label="Zone or department"
+              label="Layer"
               htmlFor="asset-zone"
               error={errors.zone?.message}
-              hint="Optional. e.g. “North wing”, “Leasing”, “Level 3 — East”."
+              hint="Optional. e.g. Reception, Parkade, Wing B, or a department."
             >
               <input
                 id="asset-zone"
                 {...register('zone')}
-                placeholder='e.g. "North wing"'
+                placeholder="Reception, Parkade, Wing B, or a department"
                 className="h-11 w-full rounded-md border border-black/10 bg-surface px-3 text-sm text-text outline-none focus:border-waymarks-gold focus:ring-2 focus:ring-waymarks-gold dark:border-white/10"
               />
             </Field>

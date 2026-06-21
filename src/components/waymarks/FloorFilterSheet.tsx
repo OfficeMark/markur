@@ -79,7 +79,7 @@ export function FloorFilterSheet({
             Layer
           </p>
           {zones.length === 0 ? (
-            <p className="px-2 pb-2 text-sm text-text-muted">No zones set on this floor yet.</p>
+            <p className="px-2 pb-2 text-sm text-text-muted">No layers set on this floor yet.</p>
           ) : (
             <ul className="space-y-0.5">
               {zones.map((z) => {
@@ -89,7 +89,7 @@ export function FloorFilterSheet({
                     <Row
                       on={on}
                       onClick={() => toggle(selectedZones, z, onZonesChange)}
-                      label={z || 'No zone'}
+                      label={z || 'No layer'}
                       muted={!z}
                     />
                   </li>
