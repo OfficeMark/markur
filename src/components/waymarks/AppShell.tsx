@@ -24,18 +24,30 @@ type AppShellProps = {
    * view) so other routes keep their normal page-scroll behaviour.
    */
   fillViewport?: boolean;
+  /**
+   * Focus / presentation mode: hide ALL chrome (top bar, sidebar, footer) so the
+   * page content gets the whole screen. Implies the definite-height fill chain.
+   * The route is responsible for rendering its own "exit focus" affordance.
+   */
+  hideChrome?: boolean;
 };
 
-export function AppShell({ children, withSidebar = true, fillViewport = false }: AppShellProps) {
+export function AppShell({
+  children,
+  withSidebar = true,
+  fillViewport = false,
+  hideChrome = false,
+}: AppShellProps) {
   const navigate = useNavigate();
+  const fill = fillViewport || hideChrome;
   return (
     <div
       className={cn(
         'flex flex-col bg-waymarks-cream text-text',
-        // Definite viewport height in fill mode so the flex chain below can hand
-        // a real height down to a `h-full` map; min-h (indefinite) otherwise so
-        // tall pages scroll normally.
-        fillViewport ? 'h-dvh overflow-hidden' : 'min-h-screen min-h-dvh'
+        // Definite viewport height in fill/focus mode so the flex chain below can
+        // hand a real height down to a `h-full` map; min-h (indefinite) otherwise
+        // so tall pages scroll normally.
+        fill ? 'h-dvh overflow-hidden' : 'min-h-screen min-h-dvh'
       )}
     >
       <a
@@ -44,6 +56,7 @@ export function AppShell({ children, withSidebar = true, fillViewport = false }:
       >
         Skip to main content
       </a>
+      {!hideChrome && (
       <header className="sticky top-0 z-40 bg-waymarks-ink text-white shadow-[0_2px_0_0_rgb(var(--waymarks-gold))]">
         <div className="mx-auto flex h-14 w-full max-w-[1600px] items-center justify-between gap-3 px-3 sm:px-6">
           <div className="flex items-center gap-1">
@@ -78,16 +91,18 @@ export function AppShell({ children, withSidebar = true, fillViewport = false }:
           </div>
         </div>
       </header>
-      <div className={cn('mx-auto flex w-full max-w-[1600px] flex-1', fillViewport && 'min-h-0')}>
-        {withSidebar && <BuildingNav />}
+      )}
+      <div className={cn('mx-auto flex w-full max-w-[1600px] flex-1', fill && 'min-h-0')}>
+        {withSidebar && !hideChrome && <BuildingNav />}
         <main
           id="main-content"
           tabIndex={-1}
-          className={cn('flex-1 min-w-0 outline-none', fillViewport && 'min-h-0')}
+          className={cn('flex-1 min-w-0 outline-none', fill && 'min-h-0')}
         >
           {children}
         </main>
       </div>
+      {!hideChrome && (
       <footer className="border-t border-black/5 bg-waymarks-cream py-3">
         {/* flex-wrap + gap-y-1 so support@officemark.ca can drop to a second
             line on a 375-414px iPhone instead of overflowing the viewport. */}
@@ -109,6 +124,7 @@ export function AppShell({ children, withSidebar = true, fillViewport = false }:
           </a>
         </div>
       </footer>
+      )}
     </div>
   );
 }

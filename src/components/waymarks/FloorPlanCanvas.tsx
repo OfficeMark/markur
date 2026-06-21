@@ -63,6 +63,13 @@ export function FloorPlanCanvas({
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const [status, setStatus] = useState<Status>('idle');
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
+  // Intrinsic plan size + live container size — together they give the
+  // JS-measured "contain" box used in `fill` mode (so the plan fits BOTH
+  // dimensions, the bottom is never clipped, and the pin overlay shares the
+  // plan's exact bounds). Tracked via a ResizeObserver so it stays correct
+  // through focus toggles, sidebar changes, and window resizes.
+  const [natural, setNatural] = useState<{ w: number; h: number } | null>(null);
+  const [containerSize, setContainerSize] = useState<{ w: number; h: number } | null>(null);
 
   const [zoom, setZoom] = useState(1);
   const [pan, setPan] = useState({ x: 0, y: 0 });
@@ -116,6 +123,7 @@ export function FloorPlanCanvas({
     let pdfDoc: { destroy: () => Promise<void> } | null = null;
     setStatus('loading');
     setErrorMsg(null);
+    setNatural(null);
     setZoom(1);
     setPan({ x: 0, y: 0 });
 
@@ -140,6 +148,7 @@ export function FloorPlanCanvas({
           if (!ctx) throw new Error('Canvas 2D context unavailable');
           canvas.width = Math.floor(viewport.width);
           canvas.height = Math.floor(viewport.height);
+          setNatural({ w: canvas.width, h: canvas.height });
           renderTask = page.render({ canvasContext: ctx, viewport });
           await renderTask.promise;
           if (cancelled) return;
@@ -164,6 +173,7 @@ export function FloorPlanCanvas({
             const h = img.naturalHeight || 1200;
             canvas.width = w;
             canvas.height = h;
+            setNatural({ w, h });
             ctx.drawImage(img, 0, 0, w, h);
             setStatus('ready');
           };
@@ -363,6 +373,28 @@ export function FloorPlanCanvas({
     return () => window.removeEventListener('keydown', onKey);
   }, [recenterView]);
 
+  // Track the container's live size so the fill-mode contain box recomputes on
+  // focus toggle / sidebar / window resize.
+  useEffect(() => {
+    const el = containerRef.current;
+    if (!el) return;
+    const update = () => setContainerSize({ w: el.clientWidth, h: el.clientHeight });
+    update();
+    const ro = new ResizeObserver(update);
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
+
+  // The contain box for `fill` mode: the largest plan-aspect rectangle that fits
+  // inside the container (fits BOTH dimensions → no clipped bottom).
+  const fitBox = useMemo(() => {
+    if (!fill || !natural || !containerSize || containerSize.w <= 0 || containerSize.h <= 0) {
+      return null;
+    }
+    const scale = Math.min(containerSize.w / natural.w, containerSize.h / natural.h);
+    return { w: Math.floor(natural.w * scale), h: Math.floor(natural.h * scale) };
+  }, [fill, natural, containerSize]);
+
   const transform = useMemo(
     () => `translate(${pan.x}px, ${pan.y}px) scale(${zoom})`,
     [pan.x, pan.y, zoom]
@@ -428,14 +460,20 @@ export function FloorPlanCanvas({
             max-h-full / max-w-full here (and matching styles on the
             canvas) lets the centered flex container do the fit-to-screen
             work. */}
-        <div className="relative min-h-0 min-w-0 max-h-full max-w-full">
+        <div
+          className={cn('relative', !fill && 'min-h-0 min-w-0 max-h-full max-w-full')}
+          // In fill mode we size the wrapper to the JS-measured contain box
+          // (fits BOTH container dimensions) so the bottom is never clipped and
+          // the pin overlay shares the plan's exact bounds. Non-fill keeps the
+          // CSS max-h-[70vh] fit.
+          style={fill && fitBox ? { width: fitBox.w, height: fitBox.h } : undefined}
+        >
           <canvas
             ref={canvasRef}
             aria-hidden
             className={cn(
-              'block h-auto w-auto max-w-full select-none shadow-sm',
-              // Cap to the container so the plan fits-to-contain at any height.
-              fill ? 'max-h-full' : 'max-h-[70vh]',
+              'block select-none shadow-sm',
+              fill ? 'h-full w-full' : 'h-auto w-auto max-h-[70vh] max-w-full',
               status === 'ready' ? 'opacity-100' : 'opacity-0'
             )}
           />

@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
-import { ArrowLeft, Check, ChevronRight, ClipboardCheck, Download, Eye, ImageOff, LayoutGrid, Map as MapIcon, MapPin, NotebookPen, Shapes, Trash2 } from 'lucide-react';
+import { ArrowLeft, Check, ChevronRight, ClipboardCheck, Download, Eye, ImageOff, LayoutGrid, Map as MapIcon, Maximize2, MapPin, Minimize2, NotebookPen, Shapes, Trash2 } from 'lucide-react';
 import { AppShell } from '@/components/waymarks/AppShell';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { Button } from '@/components/ui/Button';
@@ -84,6 +84,9 @@ export function Floor() {
   // M10c — view mode (Map / Grid) + filter-by-type set.
   // M22 (#6) — additional free-text filter that ANDs with the type filter.
   const [viewMode, setViewMode] = useState<'map' | 'grid'>('map');
+  // Focus / presentation mode — hides all chrome so the plan gets the full
+  // screen (great for client walkthroughs). Only entered from the map view.
+  const [focus, setFocus] = useState(false);
   const [filterTypes, setFilterTypes] = useState<Set<string>>(new Set());
   // Reskin: a real zone facet alongside type + free-text. '' (NO_ZONE) selects
   // pins with a blank zone. Empty set = all visible.
@@ -373,7 +376,7 @@ export function Floor() {
   // Slightly smaller on phones but still the prominent focal point.
   const circleCls =
     'flex h-[52px] w-[52px] shrink-0 flex-col items-center justify-center gap-0.5 rounded-full border-[3px] border-white text-[10px] font-bold leading-tight shadow-md transition-colors sm:h-[68px] sm:w-[68px] sm:text-[12px]';
-  const addPinCircle = floor.plan_url && canCreate && (
+  const addPinCircle = () => floor.plan_url && canCreate && (
     <Tooltip text={placing ? 'Cancel placing a pin' : 'Place a new pin by clicking the floor plan'}>
       <button
         type="button"
@@ -391,7 +394,7 @@ export function Floor() {
       </button>
     </Tooltip>
   );
-  const auditCircle = showAuditCta && (
+  const auditCircle = () => showAuditCta && (
     <Tooltip text={activeSession ? 'Resume the audit walkaround you started' : 'Walk the floor and confirm every sign'}>
       <button
         type="button"
@@ -404,10 +407,10 @@ export function Floor() {
       </button>
     </Tooltip>
   );
-  const hasPrimary = Boolean(addPinCircle || auditCircle);
+  const hasPrimary = Boolean((floor.plan_url && canCreate) || showAuditCta);
 
   // View segment — Map / Grid / Notes in one bordered control.
-  const viewSeg = floor.plan_url ? (
+  const viewSeg = () => floor.plan_url ? (
     <div
       role="group"
       aria-label="View mode"
@@ -504,7 +507,7 @@ export function Floor() {
   );
 
   // Filter segment — Zone / Type, each opening its popover.
-  const filterSeg = showFilters ? (
+  const filterSeg = () => showFilters ? (
     <div className="inline-flex h-9 shrink-0 overflow-hidden rounded-lg border border-black/15 dark:border-white/15">
       <FilterByZonePopover
         zones={zoneOptions}
@@ -587,78 +590,117 @@ export function Floor() {
     </span>
   ) : null;
 
+  // Focus / presentation mode toggle (map only). Hides all chrome.
+  const focusBtn = () => floor.plan_url && viewMode === 'map' ? (
+    <Tooltip text="Focus mode — present the plan full-screen">
+      <button
+        type="button"
+        onClick={() => setFocus(true)}
+        aria-label="Enter focus mode"
+        className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-black/15 bg-surface text-text-muted transition-colors hover:bg-black/5 hover:text-text dark:border-white/15 dark:hover:bg-white/5"
+      >
+        <Maximize2 size={15} aria-hidden />
+      </button>
+    </Tooltip>
+  ) : null;
+
   // Map mode fills the viewport (definite-height chain via AppShell) so the
   // plan canvas's h-full resolves and its recenter/zoom controls stay on-screen.
   // Grid + empty state keep the normal scrolling page.
   const mapFill = Boolean(floor.plan_url) && viewMode === 'map';
 
   return (
-    <AppShell fillViewport={mapFill}>
+    <AppShell fillViewport={mapFill} hideChrome={focus}>
       <div
         className={cn(
-          'mx-auto flex w-full max-w-5xl flex-col px-4 py-3 sm:px-6 sm:py-4',
-          mapFill ? 'h-full min-h-0' : 'min-h-[calc(100dvh-3.5rem)]'
+          'mx-auto flex w-full flex-col',
+          focus
+            ? 'h-full min-h-0 max-w-none px-2 py-2'
+            : cn(
+                'max-w-5xl px-4 py-3 sm:px-6 sm:py-4',
+                mapFill ? 'h-full min-h-0' : 'min-h-[calc(100dvh-3.5rem)]'
+              )
         )}
       >
-        {/* Slice 1-fix toolbar — a FIXED, compact band at every width. The two
-            primaries (Add pin / Audit) stay prominent; secondary controls
-            progressively collapse into the "⋯" overflow as the screen narrows
-            (they never wrap to a 3rd row or shrink). Per-table — no bundles. */}
-        <div className="mb-3 shrink-0 rounded-xl border border-black/10 bg-surface-soft px-2.5 py-2.5 dark:border-white/10 dark:bg-white/5 sm:px-3">
-          {/* ── Desktop (lg+): full 2-row right cluster — everything visible ── */}
-          <div className="hidden items-start gap-4 lg:flex">
-            <div className="min-w-0 flex-1">{breadcrumb}</div>
-            {hasPrimary && (
-              <div className="flex shrink-0 items-center gap-3 self-center">
-                {addPinCircle}
-                {auditCircle}
-              </div>
-            )}
-            <div className="flex min-w-0 flex-1 flex-col items-end gap-2">
-              <div className="flex flex-nowrap items-center gap-2">
-                {viewSeg}
-                {moreMenuBase}
-              </div>
-              {(showFilters || offlineBtn) && (
-                <div className="flex flex-nowrap items-center justify-end gap-2">
-                  {filterLabel}
-                  {showFilters && (
-                    <FilterByTextInput value={filterText} onChange={setFilterText} />
-                  )}
-                  {filterSeg}
-                  {visibleBadge}
-                  {offlineBtn}
-                  {visualizeBtn}
-                </div>
-              )}
-            </div>
-          </div>
-
-          {/* ── Tablet + phone (<lg): one compact band; secondaries collapse
-              into ⋯. Search → icon; on phone Zone/Type → a single Filter sheet
-              and the view switcher goes icon-only. ── */}
-          <div className="lg:hidden">
-            <div className="mb-2 flex items-center gap-2">
+        {/* Slice 1-fix-2 toolbar — a FIXED, compact band with three NON-
+            overlapping zones: breadcrumb (left, truncates) · primaries (own
+            space) · controls (right). The controls are shrink-0 and collapse by
+            breakpoint into the "⋯" overflow so nothing ever sits on top of
+            anything else. Hidden entirely in focus mode. Per-table — no bundles. */}
+        {!focus && (
+          <div className="mb-3 shrink-0 rounded-xl border border-black/10 bg-surface-soft px-2.5 py-2.5 dark:border-white/10 dark:bg-white/5 sm:px-3">
+            {/* ── Desktop (xl+): full 2-row right cluster — everything visible.
+                breadcrumb flex-1 (truncates); primaries + controls are shrink-0
+                so the cluster takes its content width and never overlaps. ── */}
+            <div className="hidden items-center gap-4 xl:flex">
               <div className="min-w-0 flex-1">{breadcrumb}</div>
-              {visibleBadge}
-            </div>
-            <div className="flex items-center gap-2">
               {hasPrimary && (
-                <div className="flex shrink-0 items-center gap-2">
-                  {addPinCircle}
-                  {auditCircle}
+                <div className="flex shrink-0 items-center gap-3">
+                  {addPinCircle()}
+                  {auditCircle()}
                 </div>
               )}
-              <div className="ml-auto flex shrink-0 items-center gap-1 sm:gap-1.5">
-                {viewSeg}
-                {showFilters && <div className="hidden sm:block">{filterSeg}</div>}
-                {showFilters && <div className="sm:hidden">{combinedFilter}</div>}
-                {showFilters && <SearchPopover value={filterText} onChange={setFilterText} />}
-                {moreMenuNarrow}
+              <div className="flex shrink-0 flex-col items-end gap-2">
+                <div className="flex flex-nowrap items-center gap-2">
+                  {viewSeg()}
+                  {focusBtn()}
+                  {moreMenuBase}
+                </div>
+                {(showFilters || floor.plan_url) && (
+                  <div className="flex flex-nowrap items-center justify-end gap-2">
+                    {filterLabel}
+                    {showFilters && (
+                      <FilterByTextInput value={filterText} onChange={setFilterText} />
+                    )}
+                    {filterSeg()}
+                    {visibleBadge}
+                    {offlineBtn}
+                    {visualizeBtn}
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {/* ── <xl (small desktop + tablet + phone): one compact band; the
+                sidebar eats ~190px at lg, so the cluster stays collapsed here —
+                search → icon, Offline/Visualize → ⋯; on phone Zone/Type → one
+                Filter sheet and the view switcher goes icon-only. ── */}
+            <div className="xl:hidden">
+              <div className="mb-2 flex items-center gap-2">
+                <div className="min-w-0 flex-1">{breadcrumb}</div>
+                {visibleBadge}
+              </div>
+              <div className="flex items-center gap-2">
+                {hasPrimary && (
+                  <div className="flex shrink-0 items-center gap-2">
+                    {addPinCircle()}
+                    {auditCircle()}
+                  </div>
+                )}
+                <div className="ml-auto flex shrink-0 items-center gap-1 sm:gap-1.5">
+                  {viewSeg()}
+                  {showFilters && <div className="hidden sm:block">{filterSeg()}</div>}
+                  {showFilters && <div className="sm:hidden">{combinedFilter}</div>}
+                  {showFilters && <SearchPopover value={filterText} onChange={setFilterText} />}
+                  {focusBtn()}
+                  {moreMenuNarrow}
+                </div>
               </div>
             </div>
           </div>
-        </div>
+        )}
+
+        {/* Focus mode: a small floating control to restore normal view. */}
+        {focus && (
+          <button
+            type="button"
+            onClick={() => setFocus(false)}
+            className="fixed right-3 top-3 z-50 inline-flex h-9 items-center gap-1.5 rounded-lg bg-waymarks-ink/85 px-3 text-xs font-medium text-white shadow-sheet backdrop-blur transition-colors hover:bg-waymarks-ink"
+          >
+            <Minimize2 size={14} aria-hidden />
+            Exit focus
+          </button>
+        )}
 
         {cacheError && (
           <div className="mb-4 rounded-md border border-danger/30 bg-danger-bg p-3 text-xs text-danger">
