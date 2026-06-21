@@ -44,7 +44,7 @@ export function FilterByZonePopover({
         {trigger ?? (
           <button
             type="button"
-            aria-label="Filter pins by zone"
+            aria-label="Filter pins by layer"
             className={
               'inline-flex h-9 items-center gap-1.5 rounded-md border px-3 text-xs font-medium transition-colors ' +
               (isFiltering
@@ -53,7 +53,7 @@ export function FilterByZonePopover({
             }
           >
             <MapIcon size={12} aria-hidden />
-            <span>Zone</span>
+            <span>Layer</span>
             {isFiltering && (
               <span className="rounded bg-waymarks-ink px-1 font-mono text-[10px] text-white">
                 {selectedZones.size}
@@ -70,7 +70,7 @@ export function FilterByZonePopover({
         >
           <header className="mb-3 flex items-center justify-between">
             <p className="text-[11px] font-medium uppercase tracking-[0.22em] text-text-faint">
-              Filter by zone
+              Filter by layer
             </p>
             <Popover.Close asChild>
               <button

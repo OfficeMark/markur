@@ -74,9 +74,9 @@ export function FloorFilterSheet({
             </Popover.Close>
           </header>
 
-          {/* Zone */}
+          {/* Layer */}
           <p className="mb-1.5 text-[10px] font-medium uppercase tracking-[0.22em] text-text-faint">
-            Zone
+            Layer
           </p>
           {zones.length === 0 ? (
             <p className="px-2 pb-2 text-sm text-text-muted">No zones set on this floor yet.</p>

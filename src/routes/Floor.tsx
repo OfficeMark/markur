@@ -16,8 +16,6 @@ import { AuditModeShell } from '@/components/waymarks/AuditModeShell';
 import { AssetGridView } from '@/components/waymarks/AssetGridView';
 import { FilterByTypePopover } from '@/components/waymarks/FilterByTypePopover';
 import { FilterByZonePopover } from '@/components/waymarks/FilterByZonePopover';
-import { FilterByTextInput } from '@/components/waymarks/FilterByTextInput';
-import { SearchPopover } from '@/components/waymarks/SearchPopover';
 import { FloorFilterSheet } from '@/components/waymarks/FloorFilterSheet';
 import { FloorMoreMenu } from '@/components/waymarks/FloorMoreMenu';
 import { FloorNotesButton } from '@/components/waymarks/FloorNotesButton';
@@ -35,7 +33,6 @@ import { useAuth } from '@/lib/auth-context';
 import { useCan } from '@/lib/permissions-context';
 import { planKindForPath, signedUrlForPlan } from '@/lib/upload';
 import { cn } from '@/lib/utils';
-import { pinNumberMatchesQuery } from '@/lib/pin-types';
 import {
   putAssetsForFloor,
   putBuilding,
@@ -88,10 +85,9 @@ export function Floor() {
   // screen (great for client walkthroughs). Only entered from the map view.
   const [focus, setFocus] = useState(false);
   const [filterTypes, setFilterTypes] = useState<Set<string>>(new Set());
-  // Reskin: a real zone facet alongside type + free-text. '' (NO_ZONE) selects
-  // pins with a blank zone. Empty set = all visible.
+  // Reskin: a real zone facet alongside type. '' (NO_ZONE) selects pins with a
+  // blank zone. Empty set = all visible.
   const [filterZones, setFilterZones] = useState<Set<string>>(new Set());
-  const [filterText, setFilterText] = useState('');
 
   // M9 — take this floor offline (pre-cache for the audit walkaround).
   const [cacheState, setCacheState] = useState<'idle' | 'caching' | 'cached' | 'error'>(
@@ -256,7 +252,6 @@ export function Floor() {
   const planKind = useMemo(() => planKindForPath(floor?.plan_url), [floor?.plan_url]);
 
   const baseSet = assets;
-  const trimmedFilterText = filterText.trim().toLowerCase();
   // Distinct zone values present on this floor (for the zone filter). '' marks
   // pins with no zone so they can be filtered too; sorted, blank-last.
   const zoneOptions = useMemo(() => {
@@ -272,12 +267,10 @@ export function Floor() {
     return baseSet.filter((a) => {
       if (filterTypes.size > 0 && !filterTypes.has(a.type)) return false;
       if (filterZones.size > 0 && !filterZones.has((a.zone ?? '').trim())) return false;
-      if (trimmedFilterText && !matchesAssetText(a, trimmedFilterText)) return false;
       return true;
     });
-  }, [baseSet, filterTypes, filterZones, trimmedFilterText]);
-  const filtersActive =
-    filterTypes.size > 0 || filterZones.size > 0 || trimmedFilterText.length > 0;
+  }, [baseSet, filterTypes, filterZones]);
+  const filtersActive = filterTypes.size > 0 || filterZones.size > 0;
 
   if (fLoading) {
     return (
@@ -514,8 +507,8 @@ export function Floor() {
         selectedZones={filterZones}
         onChange={setFilterZones}
         trigger={
-          <button type="button" aria-label="Filter pins by zone" className={filterSegCls(filterZones.size > 0)}>
-            <MapIcon size={13} aria-hidden /> Zone {filterZones.size > 0 && countBadge(filterZones.size)}
+          <button type="button" aria-label="Filter pins by layer" className={filterSegCls(filterZones.size > 0)}>
+            <MapIcon size={13} aria-hidden /> Layer {filterZones.size > 0 && countBadge(filterZones.size)}
           </button>
         }
       />
@@ -649,9 +642,6 @@ export function Floor() {
                 {(showFilters || floor.plan_url) && (
                   <div className="flex flex-nowrap items-center justify-end gap-2">
                     {filterLabel}
-                    {showFilters && (
-                      <FilterByTextInput value={filterText} onChange={setFilterText} />
-                    )}
                     {filterSeg()}
                     {visibleBadge}
                     {offlineBtn}
@@ -663,8 +653,8 @@ export function Floor() {
 
             {/* ── <xl (small desktop + tablet + phone): one compact band; the
                 sidebar eats ~190px at lg, so the cluster stays collapsed here —
-                search → icon, Offline/Visualize → ⋯; on phone Zone/Type → one
-                Filter sheet and the view switcher goes icon-only. ── */}
+                Offline/Visualize → ⋯; on phone Layer/Type → one Filter sheet
+                and the view switcher goes icon-only. ── */}
             <div className="xl:hidden">
               <div className="mb-2 flex items-center gap-2">
                 <div className="min-w-0 flex-1">{breadcrumb}</div>
@@ -681,7 +671,6 @@ export function Floor() {
                   {viewSeg()}
                   {showFilters && <div className="hidden sm:block">{filterSeg()}</div>}
                   {showFilters && <div className="sm:hidden">{combinedFilter}</div>}
-                  {showFilters && <SearchPopover value={filterText} onChange={setFilterText} />}
                   {focusBtn()}
                   {moreMenuNarrow}
                 </div>
@@ -917,32 +906,3 @@ export function Floor() {
 // Filter helpers (M22 #6)
 // =============================================================================
 
-/**
- * Case-insensitive substring match against the user-visible text fields
- * we care about: pin ID number, name, location notes, room number, notes,
- * and the two vendor-contact strings. `q` is expected to already be trimmed
- * and lower-cased by the caller.
- */
-function matchesAssetText(a: Asset, q: string): boolean {
-  if (!q) return true;
-  // Pin ID: typing "3", "003", or "#003" finds the asset by its floor number.
-  if (pinNumberMatchesQuery(a.pin_number, q)) return true;
-  const haystacks: Array<string | null | undefined> = [
-    a.name,
-    a.location_notes,
-    a.room_number,
-    a.notes,
-  ];
-  const v = a.vendor_contact as
-    | { name?: string | null; company?: string | null }
-    | null
-    | undefined;
-  if (v) {
-    haystacks.push(v.name);
-    haystacks.push(v.company);
-  }
-  for (const h of haystacks) {
-    if (h && h.toLowerCase().includes(q)) return true;
-  }
-  return false;
-}
