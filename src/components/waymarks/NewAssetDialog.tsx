@@ -3,8 +3,9 @@ import * as Dialog from '@radix-ui/react-dialog';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
-import { Camera, FileImage, X, AlertCircle, Trash2, Check, Layers, Video } from 'lucide-react';
+import { Camera, FileImage, X, AlertCircle, Trash2, Check, Layers, Video, Tag, MapPin } from 'lucide-react';
 import { Button } from '@/components/ui/Button';
+import { Band } from '@/components/ui/Band';
 import { useCreateAsset } from '@/hooks/useAssets';
 import { useFloors } from '@/hooks/useFloors';
 import { useAddAuditVideo } from '@/hooks/useAuditVideos';
@@ -15,7 +16,6 @@ import {
   type CapturedVideo,
 } from '@/components/waymarks/AuditVideoRecorderDialog';
 import { useAssetTypes, useCreateAssetType } from '@/hooks/useAssetTypes';
-import { useTheme } from '@/components/waymarks/theme-context';
 import { cn } from '@/lib/utils';
 import type { Asset } from '@/types/database';
 
@@ -289,9 +289,9 @@ export function NewAssetDialog({
         <Dialog.Content className="fixed left-1/2 top-1/2 z-50 max-h-[92vh] w-[min(94vw,540px)] -translate-x-1/2 -translate-y-1/2 overflow-y-auto rounded-xl border border-black/10 bg-surface p-5 text-text shadow-sheet outline-none dark:border-white/10">
           <div className="flex items-start justify-between gap-3">
             <div>
-              <Dialog.Title className="font-semibold text-xl">Add asset</Dialog.Title>
+              <Dialog.Title className="font-semibold text-xl">Add a pin</Dialog.Title>
               <Dialog.Description className="mt-1 text-sm text-text-muted">
-                Place a sign at the spot you clicked on the plan.
+                Place a pin at the spot you clicked on the plan.
               </Dialog.Description>
             </div>
             <Dialog.Close asChild>
@@ -335,6 +335,30 @@ export function NewAssetDialog({
               </div>
             )}
 
+            {/* Banded to match the pin-detail window (S6): Photos & video →
+                What it is → Where it is. Presentation only — every field,
+                register(), and handler below is unchanged. */}
+            <Band
+              icon={Camera}
+              label="Photos & video"
+              hint={
+                photos.length > 0
+                  ? `${photos.length} photo${photos.length === 1 ? '' : 's'}`
+                  : undefined
+              }
+            >
+              <PhotosPicker
+                files={photos}
+                onAdd={appendFiles}
+                onRemove={(i) => setPhotos((prev) => prev.filter((_, idx) => idx !== i))}
+                errors={photoErrors}
+                videos={videos}
+                onRecord={() => setVideoOpen(true)}
+                onRemoveVideo={(i) => setVideos((prev) => prev.filter((_, idx) => idx !== i))}
+              />
+            </Band>
+
+            <Band icon={Tag} label="What it is">
             <Field
               label="Asset type"
               htmlFor="asset-type"
@@ -440,6 +464,23 @@ export function NewAssetDialog({
               />
             </Field>
 
+            <Field
+              label="Install & service notes"
+              htmlFor="asset-notes"
+              error={errors.notes?.message}
+              hint="History, vendor info, install details. Anything not about where the pin is."
+            >
+              <textarea
+                id="asset-notes"
+                rows={3}
+                {...register('notes')}
+                placeholder='e.g. "Replaced 2024-03. Brushed aluminum, custom font."'
+                className="w-full rounded-md border border-black/10 bg-surface p-3 text-sm text-text outline-none focus:border-waymarks-gold focus:ring-2 focus:ring-waymarks-gold dark:border-white/10"
+              />
+            </Field>
+            </Band>
+
+            <Band icon={MapPin} label="Where it is">
             {/* Feature #3a — free-text zone/department, distinct from the type
                 select above. Optional; saved to assets.zone on submit. */}
             <Field
@@ -455,32 +496,6 @@ export function NewAssetDialog({
                 className="h-11 w-full rounded-md border border-black/10 bg-surface px-3 text-sm text-text outline-none focus:border-waymarks-gold focus:ring-2 focus:ring-waymarks-gold dark:border-white/10"
               />
             </Field>
-
-            {/* Item 4: place the same pin on multiple floors at once. Each
-                selected floor gets an independent copy at this x/y. */}
-            {floors.length > 1 && (
-              <div className="space-y-1.5">
-                <span className="block text-xs font-medium uppercase tracking-[0.18em] text-text-faint">
-                  Floors
-                </span>
-                <FloorPicker
-                  floors={floors}
-                  currentFloorId={floorId}
-                  selected={selectedFloorIds}
-                  onChange={setSelectedFloorIds}
-                />
-                <p className="text-xs text-text-faint">
-                  Creates a separate, independent pin on each selected floor. Shift-click to
-                  select a range. A floor that already has a pin here is skipped.
-                </p>
-              </div>
-            )}
-
-            {/* M32 Step 3: section divider — visually separates "where on
-                the floor" from "everything else about the pin." Thin uppercase
-                label with a 1px rule above, not a chunky heading. DB columns
-                are unchanged (location_notes / room_number / notes). */}
-            <SectionDivider label="Where" />
 
             <Field
               label="Room"
@@ -511,32 +526,26 @@ export function NewAssetDialog({
               />
             </Field>
 
-            <SectionDivider label="Notes" />
-
-            <Field
-              label="Install & service notes"
-              htmlFor="asset-notes"
-              error={errors.notes?.message}
-              hint="History, vendor info, install details. Anything not about where the pin is."
-            >
-              <textarea
-                id="asset-notes"
-                rows={3}
-                {...register('notes')}
-                placeholder='e.g. "Replaced 2024-03. Brushed aluminum, custom font."'
-                className="w-full rounded-md border border-black/10 bg-surface p-3 text-sm text-text outline-none focus:border-waymarks-gold focus:ring-2 focus:ring-waymarks-gold dark:border-white/10"
-              />
-            </Field>
-
-            <PhotosPicker
-              files={photos}
-              onAdd={appendFiles}
-              onRemove={(i) => setPhotos((prev) => prev.filter((_, idx) => idx !== i))}
-              errors={photoErrors}
-              videos={videos}
-              onRecord={() => setVideoOpen(true)}
-              onRemoveVideo={(i) => setVideos((prev) => prev.filter((_, idx) => idx !== i))}
-            />
+            {/* Item 4: place the same pin on multiple floors at once. Each
+                selected floor gets an independent copy at this x/y. */}
+            {floors.length > 1 && (
+              <div className="space-y-1.5">
+                <span className="block text-xs font-medium uppercase tracking-[0.18em] text-text-faint">
+                  Floors
+                </span>
+                <FloorPicker
+                  floors={floors}
+                  currentFloorId={floorId}
+                  selected={selectedFloorIds}
+                  onChange={setSelectedFloorIds}
+                />
+                <p className="text-xs text-text-faint">
+                  Creates a separate, independent pin on each selected floor. Shift-click to
+                  select a range. A floor that already has a pin here is skipped.
+                </p>
+              </div>
+            )}
+            </Band>
 
             <div className="flex justify-end gap-2">
               <Button
@@ -685,31 +694,6 @@ function FloorPicker({
   );
 }
 
-/**
- * M32 Step 3: thin section divider used inside the asset form to group
- * "Where" (Room + Where on the floor) and "Notes" (Install & service notes).
- * Tiny uppercase label with a hairline rule above — guidance for the eye,
- * not navigation. Sits at the same vertical rhythm as a regular Field so
- * the form's space-y-4 cadence stays clean.
- */
-function SectionDivider({ label }: { label: string }) {
-  // Item 5: Add Asset section headings use Markur orange (waymarks-gold) in
-  // the light theme only. Dark-theme headings stay faint to preserve contrast.
-  const { theme } = useTheme();
-  return (
-    <div className="border-t border-black/10 pt-3 dark:border-white/10">
-      <p
-        className={cn(
-          'text-[11px] font-medium uppercase tracking-[0.18em]',
-          theme === 'light' ? 'text-waymarks-gold' : 'text-text-faint'
-        )}
-      >
-        {label}
-      </p>
-    </div>
-  );
-}
-
 function PhotosPicker({
   files,
   onAdd,
@@ -729,10 +713,6 @@ function PhotosPicker({
 }) {
   return (
     <div className="space-y-2">
-      <p className="text-xs font-medium uppercase tracking-[0.18em] text-text-faint">
-        Photos &amp; video (optional)
-      </p>
-
       {files.length > 0 && (
         <ul className="grid grid-cols-3 gap-2 sm:grid-cols-4">
           {files.map((f, i) => (
