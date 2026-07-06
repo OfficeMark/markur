@@ -30,6 +30,7 @@ const Trash = lazy(() => import('@/routes/Trash').then((m) => ({ default: m.Tras
 const AcceptInvitation = lazy(() =>
   import('@/routes/AcceptInvitation').then((m) => ({ default: m.AcceptInvitation }))
 );
+const Welcome = lazy(() => import('@/routes/Welcome').then((m) => ({ default: m.Welcome })));
 const Help = lazy(() => import('@/routes/Help').then((m) => ({ default: m.Help })));
 const Settings = lazy(() => import('@/routes/Settings').then((m) => ({ default: m.Settings })));
 const Privacy = lazy(() => import('@/routes/Privacy').then((m) => ({ default: m.Privacy })));
@@ -211,6 +212,7 @@ export default function App() {
                     <Route path="branding" element={<AdminBrandingPane />} />
                   </Route>
                   <Route path="/accept/:token" element={<AcceptInvitation />} />
+                  <Route path="/welcome/:token" element={<Welcome />} />
                   <Route path="/legal/privacy" element={<Privacy />} />
                   <Route path="/legal/terms" element={<Terms />} />
                     </Routes>
