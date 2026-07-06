@@ -23,6 +23,7 @@ export type Database = {
           role: string
           scope_id: string | null
           scope_type: string
+          source_invitation_id: string | null
           user_id: string
         }
         Insert: {
@@ -33,6 +34,7 @@ export type Database = {
           role: string
           scope_id?: string | null
           scope_type: string
+          source_invitation_id?: string | null
           user_id: string
         }
         Update: {
@@ -43,9 +45,18 @@ export type Database = {
           role?: string
           scope_id?: string | null
           scope_type?: string
+          source_invitation_id?: string | null
           user_id?: string
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "access_grants_source_invitation_id_fkey"
+            columns: ["source_invitation_id"]
+            isOneToOne: false
+            referencedRelation: "pending_invitations"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       asset_attachments: {
         Row: {
@@ -830,10 +841,12 @@ export type Database = {
         Row: {
           accepted_at: string | null
           created_at: string
-          email: string
+          email: string | null
           expires_at: string
+          grant_days: number | null
           id: string
           invited_by: string
+          kind: string
           role: string
           scope_id: string | null
           scope_type: string
@@ -842,10 +855,12 @@ export type Database = {
         Insert: {
           accepted_at?: string | null
           created_at?: string
-          email: string
+          email?: string | null
           expires_at: string
+          grant_days?: number | null
           id?: string
           invited_by: string
+          kind?: string
           role: string
           scope_id?: string | null
           scope_type: string
@@ -854,10 +869,12 @@ export type Database = {
         Update: {
           accepted_at?: string | null
           created_at?: string
-          email?: string
+          email?: string | null
           expires_at?: string
+          grant_days?: number | null
           id?: string
           invited_by?: string
+          kind?: string
           role?: string
           scope_id?: string | null
           scope_type?: string
@@ -945,6 +962,22 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      accept_invitation: { Args: { p_token: string }; Returns: undefined }
+      claim_demo_link: { Args: { p_token: string }; Returns: string }
+      list_demo_link_claims: {
+        Args: { p_building_id: string }
+        Returns: {
+          claimed_at: string
+          email: string
+          invitation_id: string
+        }[]
+      }
+      lookup_invitation: { Args: { p_token: string }; Returns: Json }
+      peek_demo_link: { Args: { p_token: string }; Returns: Json }
+      revoke_demo_link: {
+        Args: { p_invitation_id: string }
+        Returns: undefined
+      }
       set_floor_pins_locked: {
         Args: { p_floor_id: string; p_locked: boolean }
         Returns: number

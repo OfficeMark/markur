@@ -226,7 +226,7 @@ export type LookupInvitationResult =
 export async function lookupInvitation(token: string): Promise<LookupInvitationResult> {
   const { data, error } = await supabase.rpc('lookup_invitation', { p_token: token });
   if (error) throw error;
-  const res = data as {
+  const res = data as unknown as {
     status: 'ok' | 'expired' | 'accepted' | 'invalid';
     email?: string;
     role?: string;

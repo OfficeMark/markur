@@ -101,10 +101,11 @@ export function AcceptInvitation() {
             </div>
           )}
           {inv.email.toLowerCase() !== (user.email ?? '').toLowerCase() && (
-            <div className="rounded-md border border-warning/30 bg-warning-bg p-3 text-sm text-warning">
+            <div className="rounded-md border border-danger/30 bg-danger-bg p-3 text-sm text-danger">
               This invitation was sent to <span className="font-medium">{inv.email}</span> but
-              you're signed in as <span className="font-medium">{user.email}</span>. Continue only
-              if that's intentional.
+              you're signed in as <span className="font-medium">{user.email}</span>. Sign in with
+              the invited email to accept — invitations can only be redeemed by the address they
+              were issued to.
             </div>
           )}
           {error && (
@@ -122,6 +123,7 @@ export function AcceptInvitation() {
             <Button
               variant="gold"
               loading={accept.isPending}
+              disabled={inv.email.toLowerCase() !== (user.email ?? '').toLowerCase()}
               iconLeft={<Check size={14} aria-hidden />}
               onClick={async () => {
                 setError(null);
