@@ -32,7 +32,7 @@ import {
 import { useAuth } from '@/lib/auth-context';
 import { useCan } from '@/lib/permissions-context';
 import { planKindForPath, signedUrlForPlan } from '@/lib/upload';
-import { cn } from '@/lib/utils';
+import { cn, mapWithConcurrency } from '@/lib/utils';
 import {
   putAssetsForFloor,
   putBuilding,
@@ -295,8 +295,8 @@ export function Floor() {
     try {
       const drafts = prepareCatalogueEntries(visibleAssets);
       const photoPaths = await listFirstPhotoPaths(drafts.map((d) => d.assetId));
-      const entries = await Promise.all(
-        drafts.map(async (d) => {
+      // PERF-6: cap concurrency (see Report.tsx).
+      const entries = await mapWithConcurrency(drafts, 8, async (d) => {
           const path = photoPaths.get(d.assetId);
           let photoDataUrl: string | null = null;
           if (path) {
@@ -307,8 +307,7 @@ export function Floor() {
             }
           }
           return { ...d, photoDataUrl };
-        })
-      );
+      });
       const addressLine =
         [building?.address, building?.city].filter(Boolean).join(', ') || null;
       const doc = buildCatalogueDoc({

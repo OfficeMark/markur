@@ -263,8 +263,9 @@ export function useDrainPendingAuditEvents(online: boolean): void {
         }
       }
       qc.invalidateQueries({ queryKey: ['audit', 'pending-count'] });
-      // Re-poll in 5s as long as queue may still have eligible entries.
-      timer = window.setTimeout(drain, 5_000);
+      // PERF-8: re-poll fast only while the queue is non-empty; an idle queue
+      // re-checks lazily so the app isn't spinning a 5s loop forever.
+      timer = window.setTimeout(drain, queue.length > 0 ? 5_000 : 30_000);
     }
     void drain();
     return () => {

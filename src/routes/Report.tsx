@@ -18,6 +18,7 @@ import {
 import { signedAssetPhotoUrl } from '@/lib/queries/asset-photos';
 import { signedFlagPhotoUrl } from '@/lib/queries/flags';
 import { photoToJpegDataUrl } from '@/lib/photo-to-data-url';
+import { mapWithConcurrency } from '@/lib/utils';
 
 /**
  * Survey + Audit Report page (audit-report-export #1).
@@ -75,8 +76,12 @@ export function Report() {
     setExportState('building');
     try {
       // Resolve cover photos for every asset that has one.
-      const photoEntries = await Promise.all(
-        Array.from(bundle.firstPhotoByAsset.entries()).map(async ([assetId, path]) => {
+      // PERF-6: cap concurrency — hundreds of parallel fetch+decode calls
+      // starve the main thread on big buildings.
+      const photoEntries = await mapWithConcurrency(
+        Array.from(bundle.firstPhotoByAsset.entries()),
+        8,
+        async ([assetId, path]) => {
           try {
             const signed = await signedAssetPhotoUrl(path);
             const dataUrl = await photoToJpegDataUrl(signed);
@@ -84,7 +89,7 @@ export function Report() {
           } catch {
             return [assetId, null] as const;
           }
-        })
+        }
       );
       const photoByAsset = new Map(photoEntries);
 
@@ -104,16 +109,14 @@ export function Report() {
                     ? (flag.photo_urls as unknown[])
                     : []
                   ).filter((u): u is string => typeof u === 'string');
-                  const dataUrls = await Promise.all(
-                    urls.map(async (path) => {
-                      try {
-                        const signed = await signedFlagPhotoUrl(path);
-                        return await photoToJpegDataUrl(signed);
-                      } catch {
-                        return null;
-                      }
-                    })
-                  );
+                  const dataUrls = await mapWithConcurrency(urls, 4, async (path) => {
+                    try {
+                      const signed = await signedFlagPhotoUrl(path);
+                      return await photoToJpegDataUrl(signed);
+                    } catch {
+                      return null;
+                    }
+                  });
                   return {
                     ...flag,
                     photoDataUrls: dataUrls.filter((u): u is string => u != null),
