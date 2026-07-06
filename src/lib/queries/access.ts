@@ -202,87 +202,63 @@ export async function cancelInvitation(id: string): Promise<void> {
   if (error) throw error;
 }
 
+/** Slim invitation preview returned by the lookup_invitation RPC. */
+export type InvitationPreview = {
+  email: string;
+  role: string;
+  scope_type: string;
+  scope_id: string | null;
+  expires_at: string;
+};
+
 export type LookupInvitationResult =
-  | { kind: 'ok'; invitation: PendingInvitation; building_name: string | null }
+  | { kind: 'ok'; invitation: InvitationPreview; building_name: string | null }
   | { kind: 'expired' }
   | { kind: 'accepted' }
   | { kind: 'invalid' };
 
+/**
+ * Preview an invitation by token via the SECURITY DEFINER
+ * `lookup_invitation` RPC. RLS (correctly) hides pending_invitations from
+ * the invitee, so a direct select can never work for the person the
+ * invitation is actually for — the RPC is the sanctioned read path.
+ */
 export async function lookupInvitation(token: string): Promise<LookupInvitationResult> {
-  const { data, error } = await supabase
-    .from('pending_invitations')
-    .select('*')
-    .eq('token', token)
-    .maybeSingle();
+  const { data, error } = await supabase.rpc('lookup_invitation', { p_token: token });
   if (error) throw error;
-  if (!data) return { kind: 'invalid' };
-  if (data.accepted_at) return { kind: 'accepted' };
-  if (new Date(data.expires_at).getTime() < Date.now()) return { kind: 'expired' };
-
-  // Resolve a friendly building name for the preview, when possible.
-  let buildingName: string | null = null;
-  if (data.scope_type === 'building' && data.scope_id) {
-    const { data: b } = await supabase.from('buildings').select('name').eq('id', data.scope_id).maybeSingle();
-    buildingName = b?.name ?? null;
-  } else if (data.scope_type === 'floor' && data.scope_id) {
-    const { data: f } = await supabase
-      .from('floors')
-      .select('label, building:buildings(name)')
-      .eq('id', data.scope_id)
-      .maybeSingle();
-    type FloorJoin = { label: string; building: { name: string } | null };
-    const fj = f as unknown as FloorJoin | null;
-    buildingName = fj?.building?.name ? `${fj.building.name} · ${fj.label}` : fj?.label ?? null;
-  } else if (data.scope_type === 'tenant' && data.scope_id) {
-    const { data: t } = await supabase
-      .from('tenants')
-      .select('name, building:buildings(name)')
-      .eq('id', data.scope_id)
-      .maybeSingle();
-    type TenantJoin = { name: string; building: { name: string } | null };
-    const tj = t as unknown as TenantJoin | null;
-    buildingName = tj?.building?.name ? `${tj.building.name} · ${tj.name}` : tj?.name ?? null;
-  }
-
-  return { kind: 'ok', invitation: data, building_name: buildingName };
+  const res = data as {
+    status: 'ok' | 'expired' | 'accepted' | 'invalid';
+    email?: string;
+    role?: string;
+    scope_type?: string;
+    scope_id?: string | null;
+    building_name?: string | null;
+    expires_at?: string;
+  } | null;
+  if (!res || res.status === 'invalid') return { kind: 'invalid' };
+  if (res.status === 'accepted') return { kind: 'accepted' };
+  if (res.status === 'expired') return { kind: 'expired' };
+  return {
+    kind: 'ok',
+    invitation: {
+      email: res.email ?? '',
+      role: res.role ?? '',
+      scope_type: res.scope_type ?? '',
+      scope_id: res.scope_id ?? null,
+      expires_at: res.expires_at ?? '',
+    },
+    building_name: res.building_name ?? null,
+  };
 }
 
 /**
- * Consume an invitation: insert an access_grant for the current user,
- * mark the invitation accepted. Both writes happen in the same RPC if
- * we ever add one — for now we do them sequentially client-side and
- * rely on idempotency (the unique constraint on access_grants would
- * surface a duplicate, though we don't enforce one yet).
+ * Consume an invitation via the SECURITY DEFINER `accept_invitation` RPC.
+ * The server validates the token, checks expiry, binds the accept to the
+ * invited email (a leaked token cannot be redeemed by another account),
+ * creates the grant and stamps accepted_at in one transaction. The old
+ * client-side insert was blocked by RLS for every real invitee.
  */
 export async function acceptInvitation(token: string): Promise<void> {
-  const { data: userData } = await supabase.auth.getUser();
-  const userId = userData.user?.id;
-  if (!userId) throw new Error('Sign in to accept this invitation.');
-
-  const lookup = await lookupInvitation(token);
-  if (lookup.kind !== 'ok') {
-    throw new Error(
-      lookup.kind === 'expired'
-        ? 'This invitation has expired.'
-        : lookup.kind === 'accepted'
-          ? 'This invitation has already been accepted.'
-          : 'Invitation not found.'
-    );
-  }
-  const inv = lookup.invitation;
-
-  const { error: grantErr } = await supabase.from('access_grants').insert({
-    user_id: userId,
-    role: inv.role,
-    scope_type: inv.scope_type,
-    scope_id: inv.scope_id,
-    granted_by: inv.invited_by,
-  });
-  if (grantErr) throw grantErr;
-
-  const { error: markErr } = await supabase
-    .from('pending_invitations')
-    .update({ accepted_at: new Date().toISOString() })
-    .eq('id', inv.id);
-  if (markErr) throw markErr;
+  const { error } = await supabase.rpc('accept_invitation', { p_token: token });
+  if (error) throw error;
 }
