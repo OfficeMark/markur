@@ -97,6 +97,9 @@ export const PinMarker = memo(forwardRef<HTMLButtonElement, PinMarkerProps>(func
     : unlocked
       ? ', unlocked - drag to move'
       : '';
+  // S10: teardrop is the Markur map-pin silhouette (hollow centre), rendered
+  // as an SVG instead of a CSS box; same colour rules as the other shapes.
+  const isTeardrop = shape === 'teardrop';
   const resolvedFill = fillColor ?? colorForType(type);
   const ariaPrefix = pinLabel ? `Pin ${pinLabel}, ` : '';
   const statusRingClass =
@@ -139,7 +142,7 @@ export const PinMarker = memo(forwardRef<HTMLButtonElement, PinMarkerProps>(func
       }}
       aria-label={`${ariaPrefix}${name} (${typeName}, ${statusLabel(status)}${lockSuffix})`}
       style={{
-        backgroundColor: resolvedFill,
+        backgroundColor: isTeardrop ? 'transparent' : resolvedFill,
         width: px,
         height: px,
         transform,
@@ -147,11 +150,13 @@ export const PinMarker = memo(forwardRef<HTMLButtonElement, PinMarkerProps>(func
       }}
       className={cn(
         'group relative inline-flex items-center justify-center',
-        shapeClass,
+        !isTeardrop && shapeClass,
         // Hit-area extender (M12): visible body may be small (down to 18px) but the
         // tap target is enlarged by ~6px via a before-pseudo so phones stay easy to hit.
         'before:absolute before:-inset-1.5 before:rounded-full before:content-[""]',
-        'border border-white shadow-sm transition-transform',
+        'transition-transform',
+        // Teardrop carries its own white outline in the SVG; the others use a box border.
+        !isTeardrop && 'border border-white shadow-sm',
         'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-waymarks-gold focus-visible:ring-offset-1',
         !repositioning && !unlocked && !selected && statusRingClass,
         repositioning && 'cursor-grab touch-none ring-4 ring-waymarks-gold ring-offset-2',
@@ -166,11 +171,26 @@ export const PinMarker = memo(forwardRef<HTMLButtonElement, PinMarkerProps>(func
         faded && 'opacity-40'
       )}
     >
-      <Icon
-        size={iconPx}
-        className={cn('fill-white text-white', iconCounterRotate && '-rotate-45')}
-        aria-hidden
-      />
+      {isTeardrop ? (
+        <svg viewBox="0 0 24 24" width={px} height={px} className="drop-shadow-sm" aria-hidden>
+          {/* Markur map-pin: teardrop body with a hollow centre (evenodd cut-out
+              so the plan shows through), white outline for definition. */}
+          <path
+            fillRule="evenodd"
+            clipRule="evenodd"
+            d="M12 1.75a7.25 7.25 0 0 0-7.25 7.25c0 5.4 6.2 12.1 6.78 12.72a.64.64 0 0 0 .94 0c.58-.62 6.78-7.32 6.78-12.72A7.25 7.25 0 0 0 12 1.75Zm0 4.6a2.65 2.65 0 1 0 0 5.3 2.65 2.65 0 0 0 0-5.3Z"
+            fill={resolvedFill}
+            stroke="white"
+            strokeWidth="1.1"
+          />
+        </svg>
+      ) : (
+        <Icon
+          size={iconPx}
+          className={cn('fill-white text-white', iconCounterRotate && '-rotate-45')}
+          aria-hidden
+        />
+      )}
       {/* Flagged pins get a loud red badge so they stand out on the plan
           without opening the detail panel (M33). */}
       {status === 'flagged' && (
