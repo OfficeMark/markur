@@ -3,6 +3,8 @@ import * as Dialog from '@radix-ui/react-dialog';
 import { AlertCircle, Camera, FileImage, Flag, Trash2, X } from 'lucide-react';
 import { Button } from '@/components/ui/Button';
 import { FLAG_PHOTO_MAX, validateFlagPhotoFile } from '@/lib/queries/flags';
+import { prepareForUpload } from '@/lib/image-convert';
+import { PHOTO_ACCEPT } from '@/lib/queries/asset-photos';
 import { useContacts } from '@/hooks/useContacts';
 import { useFloor } from '@/hooks/useFloors';
 import type { Asset } from '@/types/database';
@@ -54,14 +56,22 @@ export function AuditFlagDialog({
     }
   }, [open, asset?.id]);
 
-  function addFiles(list: FileList | null) {
+  async function addFiles(list: FileList | null) {
     if (!list || list.length === 0) return;
     const accepted: File[] = [];
     let err: string | null = null;
     for (const file of Array.from(list)) {
       const v = validateFlagPhotoFile(file);
-      if (v) err = v;
-      else accepted.push(file);
+      if (v) {
+        err = v;
+        continue;
+      }
+      try {
+        // S8: HEIC converts to JPEG on-device before upload.
+        accepted.push(await prepareForUpload(file));
+      } catch (e) {
+        err = e instanceof Error ? e.message : 'Could not read that photo.';
+      }
     }
     setPhotos((prev) => {
       const room = Math.max(0, FLAG_PHOTO_MAX - prev.length);
@@ -224,7 +234,7 @@ function PhotoStrip({
             <span>Choose files</span>
             <input
               type="file"
-              accept="image/png,image/jpeg,image/webp"
+              accept={PHOTO_ACCEPT}
               multiple
               className="sr-only"
               onChange={(e) => {

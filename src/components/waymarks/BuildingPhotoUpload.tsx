@@ -7,6 +7,8 @@ import {
   useUploadBuildingPhoto,
 } from '@/hooks/useBuildings';
 import { validateBuildingPhotoFile } from '@/lib/queries/buildings';
+import { prepareForUpload } from '@/lib/image-convert';
+import { PHOTO_ACCEPT } from '@/lib/queries/asset-photos';
 
 /**
  * Hero-photo manager for a building (M10b). Admins see a "Choose photo"
@@ -54,7 +56,8 @@ export function BuildingPhotoUpload({
       return;
     }
     try {
-      await upload.mutateAsync(file);
+      // S8: HEIC converts to JPEG on-device before upload.
+      await upload.mutateAsync(await prepareForUpload(file));
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Upload failed.');
     }
@@ -93,7 +96,7 @@ export function BuildingPhotoUpload({
               )}
               <input
                 type="file"
-                accept="image/png,image/jpeg,image/webp"
+                accept={PHOTO_ACCEPT}
                 className="sr-only"
                 onChange={(e) => {
                   void onPick(e.target.files);

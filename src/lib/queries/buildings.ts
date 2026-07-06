@@ -131,7 +131,8 @@ export type BuildingPhotoValidationError =
   | 'invalid-name';
 
 export function validateBuildingPhotoFile(file: File): BuildingPhotoValidationError | null {
-  if (!file.name.match(/\.(png|jpe?g|webp)$/i)) return 'invalid-type';
+  // S8: HEIC accepted — converted to JPEG on-device before upload.
+  if (!file.name.match(/\.(png|jpe?g|webp|heic|heif)$/i)) return 'invalid-type';
   if (file.size > 10 * 1024 * 1024) return 'too-large';
   return null;
 }

@@ -8,24 +8,33 @@ import type { AssetPhoto } from '@/types/database';
  */
 
 export const ASSET_PHOTO_MAX_BYTES = 8 * 1024 * 1024;
-// 'image/heic'/'image/heif' added as a DIAGNOSTIC (not the final S8): let HEIC
-// through the upload untouched so we can see whether the browser renders it.
-// No conversion yet — stored as-is.
-export const ASSET_PHOTO_MIMES = [
-  'image/png',
-  'image/jpeg',
-  'image/webp',
-  'image/heic',
-  'image/heif',
-] as const;
+// S8 final: displayable web formats only — HEIC is accepted at the PICKER
+// (see PHOTO_ACCEPT + isHeicFile) and converted to JPEG before upload by
+// lib/image-convert.ts, so the stored object is always displayable.
+export const ASSET_PHOTO_MIMES = ['image/png', 'image/jpeg', 'image/webp'] as const;
 export type AssetPhotoMime = (typeof ASSET_PHOTO_MIMES)[number];
+
+/** `accept` value for photo file inputs — HEIC/HEIF included by ext AND MIME. */
+export const PHOTO_ACCEPT =
+  'image/png,image/jpeg,image/webp,image/heic,image/heif,.heic,.heif';
+
+/**
+ * HEIC/HEIF detection: MIME type AND filename extension, because Windows
+ * Chrome frequently hands over `.heic` files with an EMPTY `file.type`
+ * (the empty-MIME gotcha from the 2026-06-21 diagnostic).
+ */
+export function isHeicFile(file: File): boolean {
+  const t = (file.type || '').toLowerCase();
+  if (t === 'image/heic' || t === 'image/heif') return true;
+  return /\.(heic|heif)$/i.test(file.name);
+}
 
 export function validateAssetPhotoFile(file: File): string | null {
   if (file.size > ASSET_PHOTO_MAX_BYTES) {
     return `${file.name}: too large (limit 8 MB).`;
   }
-  if (!(ASSET_PHOTO_MIMES as readonly string[]).includes(file.type)) {
-    return `${file.name}: unsupported type. Use PNG, JPG, WebP, or HEIC.`;
+  if (!isHeicFile(file) && !(ASSET_PHOTO_MIMES as readonly string[]).includes(file.type)) {
+    return `${file.name}: unsupported type. Use a JPG, PNG, WebP, or HEIC.`;
   }
   return null;
 }
@@ -33,7 +42,6 @@ export function validateAssetPhotoFile(file: File): string | null {
 function extFromMime(mime: string): string {
   if (mime === 'image/png') return 'png';
   if (mime === 'image/webp') return 'webp';
-  if (mime === 'image/heic' || mime === 'image/heif') return 'heic';
   return 'jpg';
 }
 

@@ -44,8 +44,10 @@ import {
   assetPhotoDownloadName,
   signedAssetPhotoDownloadUrl,
   validateAssetPhotoFile,
+  PHOTO_ACCEPT,
 } from '@/lib/queries/asset-photos';
 import { computeStatus, statusLabel, type AssetStatus } from '@/lib/asset-status';
+import { prepareForUpload } from '@/lib/image-convert';
 import { formatPinNumber } from '@/lib/pin-types';
 import { useAssetTypes } from '@/hooks/useAssetTypes';
 import { useContacts } from '@/hooks/useContacts';
@@ -139,7 +141,8 @@ export function AssetDrawer({
         continue;
       }
       try {
-        await addPhoto.mutateAsync(file);
+        // S8: HEIC converts to JPEG on-device before upload (image-convert.ts).
+        await addPhoto.mutateAsync(await prepareForUpload(file));
       } catch (e) {
         setPhotoError(e instanceof Error ? e.message : 'Upload failed.');
       }
@@ -1122,7 +1125,7 @@ function PhotoStrip({
             <span>Choose files</span>
             <input
               type="file"
-              accept="image/png,image/jpeg,image/webp,image/heic,image/heif,.heic,.heif"
+              accept={PHOTO_ACCEPT}
               multiple
               className="sr-only"
               onChange={(e) => {
