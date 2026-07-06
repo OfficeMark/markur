@@ -8,6 +8,7 @@
     "dev:demo": "vite --mode demo --port 5180",
     "build": "tsc -b && vite build",
     "build:rebuild": "tsc -b && vite build --mode rebuild",
+    "deploy:rebuild": "npm run build:rebuild && npx netlify-cli deploy --prod --no-build --dir=dist --site 82c2ec99-b07c-4dc2-be23-7c49bf8c03d9",
     "preview": "vite preview",
     "typecheck": "tsc --noEmit",
     "lint": "eslint . --max-warnings=0",
