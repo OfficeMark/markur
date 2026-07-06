@@ -27,6 +27,8 @@ import {
   ClipboardList,
   Store,
   History,
+  Wrench,
+  ShoppingCart,
 } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 import { Chip } from '@/components/ui/Chip';
@@ -304,6 +306,7 @@ export function AssetDrawer({
                           }
                         />
                         <AuditAttrs asset={asset} />
+                        <ActionCard asset={asset} />
                       </>
                     ),
                   },
@@ -1304,6 +1307,124 @@ function vendorUrlHref(raw: string): string {
  * Supersedes the old single `vendor_contact` JSON blob (that column is kept in
  * the DB but no longer read/written here; legacy data was migrated forward).
  */
+function orderMailto(
+  toEmail: string,
+  toName: string | undefined,
+  asset: Asset,
+  intent: 'order' | 'service'
+): string {
+  const subject =
+    intent === 'service' ? `Service request — ${asset.name}` : `Sign order — ${asset.name}`;
+  const action =
+    intent === 'service'
+      ? 'request service or a repair for'
+      : 'order a replacement or new sign for';
+  const body =
+    `Hi${toName ? ` ${toName}` : ''},\n\n` +
+    `I'd like to ${action} "${asset.name}"` +
+    `${asset.room_number ? ` (room ${asset.room_number})` : ''}.\n\n` +
+    `Details:\n\n\nThanks.`;
+  return `mailto:${toEmail}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
+}
+
+/**
+ * S4 — action card driven by the asset's CATEGORY:
+ *   - signage  → "Order or service": "Order replacement" primary + a
+ *                "Request service" secondary.
+ *   - facility → "Request service" only — no sign-order framing; the card
+ *                still shows as a prompt even when it has no target.
+ *
+ * Targets come ONLY from the asset's own data — vendor email → contact
+ * email → vendor URL ("add any vendor with a link", Randy 2026-07-06).
+ * No Officemark fallback, no building-level custom link. Buttons with no
+ * resolvable target are dropped.
+ */
+function ActionCard({ asset }: { asset: Asset }) {
+  const { data: vendors } = useAssetVendors(asset.id);
+  const contacts = useContacts();
+
+  const vendorEmail = (vendors ?? []).find((v) => v.email?.trim());
+  const vendorUrl = (vendors ?? []).find((v) => v.url?.trim());
+  const contact = asset.contact_id
+    ? contacts.list.find((c) => c.id === asset.contact_id)
+    : undefined;
+
+  const isFacility = asset.category === 'facility';
+
+  const emailTarget = vendorEmail?.email?.trim()
+    ? { email: vendorEmail.email.trim(), name: vendorEmail.name }
+    : contact?.email?.trim()
+      ? { email: contact.email.trim(), name: contact.label }
+      : null;
+  const urlTarget =
+    !emailTarget && vendorUrl?.url?.trim() ? vendorUrlHref(vendorUrl.url.trim()) : null;
+
+  const orderHref = emailTarget
+    ? orderMailto(emailTarget.email, emailTarget.name, asset, 'order')
+    : urlTarget;
+  const serviceHref = emailTarget
+    ? orderMailto(emailTarget.email, emailTarget.name, asset, 'service')
+    : urlTarget;
+  const external = !emailTarget;
+
+  const vendorName = emailTarget?.name ?? vendorUrl?.name ?? null;
+  const vendorLine = vendorName ? `via ${vendorName}` : null;
+
+  const title = isFacility ? 'Request service' : 'Order or service';
+  const body = isFacility
+    ? 'Log a service or maintenance request for this location.'
+    : 'Order a replacement sign or request service for this sign.';
+
+  type Btn = { label: string; href: string; primary: boolean; service: boolean };
+  const buttons: Btn[] = [];
+  if (!isFacility && orderHref) {
+    buttons.push({ label: 'Order replacement', href: orderHref, primary: true, service: false });
+  }
+  if (serviceHref) {
+    buttons.push({
+      label: 'Request service',
+      href: serviceHref,
+      primary: isFacility,
+      service: true,
+    });
+  }
+
+  // Signage with no target of its own has nothing to offer; a facility pin
+  // always shows its prompt (add a vendor/contact to make it actionable).
+  if (buttons.length === 0 && !isFacility) return null;
+
+  return (
+    <div className="mt-3 rounded-md border border-waymarks-gold/30 bg-waymarks-gold-soft px-3 py-2 text-xs dark:bg-white/5">
+      <p className="font-semibold text-waymarks-ink dark:text-white">{title}</p>
+      <p className="mt-0.5 text-text-muted">{body}</p>
+      {vendorLine && <p className="mt-0.5 text-text-faint">{vendorLine}</p>}
+      {buttons.length > 0 && (
+        <div className="mt-2 flex flex-wrap gap-2">
+          {buttons.map((b) => {
+            const Icon = b.service ? Wrench : ShoppingCart;
+            return (
+              <a
+                key={b.label}
+                href={b.href}
+                {...(external ? { target: '_blank', rel: 'noopener noreferrer' } : {})}
+                className={
+                  'inline-flex h-8 items-center gap-1.5 rounded-md px-3 text-xs font-medium ' +
+                  (b.primary
+                    ? 'bg-waymarks-gold text-waymarks-ink hover:bg-waymarks-gold-deep'
+                    : 'border border-waymarks-gold text-waymarks-ink hover:bg-waymarks-gold-soft dark:text-white')
+                }
+              >
+                <Icon size={12} aria-hidden />
+                {b.label}
+              </a>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+}
+
 function VendorPanel({
   asset,
   canEdit,
