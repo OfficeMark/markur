@@ -53,10 +53,10 @@ Port the category branch in `standalone:src/components/waymarks/AssetDrawer.tsx`
 ## S5 — Start an audit at a chosen pin — ✅ SHIPPED 2026-06-21 (`fcea5d4`, deploy `6a38155c`)
 Port from `standalone` (`AssetDrawer.tsx`, `AuditModeShell.tsx`, `hooks/useAudit.ts`, `routes/Floor.tsx`): let an audit begin at a selected pin instead of from the top. Per-table.
 
-## S6 — Add-pin dialog restyle + pin terminology
+## S6 — Add-pin dialog restyle + pin terminology — ✅ SHIPPED 2026-06-21 (`59e30ee`)
 (a) Restyle `NewAssetDialog` to the banded high-contrast look so add matches the pin detail window. (b) **Copy pass:** user-facing "sign/asset" → "pin" where generic ("Add a sign" → "Add a pin," "asset/sign detail" → "pin detail"). Internal code names + the `assets` table stay as-is. Presentation/copy only.
 
-## S7 — Printable grid *(replaces catalogue; partly NEW)*
+## S7 — Printable grid — ✅ SHIPPED 2026-06-21 (`d93e894`)
 Add **print/export** to the existing `AssetGridView` (already in prod). Reuse `lib/floor-catalogue.ts` / `lib/audit-report.ts` for output. Output = a clean printable list/grid of every pin with key fields + photo thumbnails, grouped by zone if set. No separate catalogue view. Keep simple.
 
 ## S8 — Photos — ✅ SHIPPED 2026-07-06 (`fb6839c`) *(⚠️ Randy's real-session HEIC verify still owed as final sign-off)*
