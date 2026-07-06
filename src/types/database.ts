@@ -464,6 +464,58 @@ export type Database = {
           },
         ]
       }
+      feature_suggestions: {
+        Row: {
+          body: string
+          building_id: string | null
+          created_at: string
+          id: string
+          org_id: string | null
+          status: string
+          submitted_by: string
+        }
+        Insert: {
+          body: string
+          building_id?: string | null
+          created_at?: string
+          id?: string
+          org_id?: string | null
+          status?: string
+          submitted_by?: string
+        }
+        Update: {
+          body?: string
+          building_id?: string | null
+          created_at?: string
+          id?: string
+          org_id?: string | null
+          status?: string
+          submitted_by?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "feature_suggestions_building_id_fkey"
+            columns: ["building_id"]
+            isOneToOne: false
+            referencedRelation: "buildings"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "feature_suggestions_org_id_fkey"
+            columns: ["org_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "feature_suggestions_submitted_by_fkey"
+            columns: ["submitted_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       flags: {
         Row: {
           asset_id: string

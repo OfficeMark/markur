@@ -1,9 +1,11 @@
+import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import * as DropdownMenu from '@radix-ui/react-dropdown-menu';
-import { ChevronDown, LogOut, Settings as SettingsIcon, ShieldCheck } from 'lucide-react';
+import { ChevronDown, Lightbulb, LogOut, Settings as SettingsIcon, ShieldCheck } from 'lucide-react';
 import { Avatar } from '@/components/ui/Avatar';
 import { useAuth } from '@/lib/auth-context';
 import { usePermissions } from '@/lib/permissions-context';
+import { SuggestFeatureDialog } from '@/components/waymarks/SuggestFeatureDialog';
 
 /**
  * UserMenu (M10e+). Trimmed down compared to earlier builds:
@@ -18,6 +20,7 @@ export function UserMenu() {
   const { user, profile, signOut } = useAuth();
   const { grants } = usePermissions();
   const navigate = useNavigate();
+  const [suggestOpen, setSuggestOpen] = useState(false);
 
   if (!user) return null;
 
@@ -32,6 +35,7 @@ export function UserMenu() {
   const name = profile?.display_name ?? user.email ?? 'You';
 
   return (
+    <>
     <DropdownMenu.Root>
       <DropdownMenu.Trigger asChild>
         <button
@@ -80,6 +84,16 @@ export function UserMenu() {
             <SettingsIcon size={14} aria-hidden />
             <span>Account settings</span>
           </DropdownMenu.Item>
+          <DropdownMenu.Item
+            onSelect={(e) => {
+              e.preventDefault();
+              setSuggestOpen(true);
+            }}
+            className="flex cursor-pointer items-center gap-2 rounded-md px-2 py-2 outline-none data-[highlighted]:bg-black/5"
+          >
+            <Lightbulb size={14} aria-hidden />
+            <span>Suggest a feature</span>
+          </DropdownMenu.Item>
           <DropdownMenu.Separator className="my-1 h-px bg-black/10" />
           <DropdownMenu.Item
             onSelect={(e) => {
@@ -94,5 +108,7 @@ export function UserMenu() {
         </DropdownMenu.Content>
       </DropdownMenu.Portal>
     </DropdownMenu.Root>
+    <SuggestFeatureDialog open={suggestOpen} onOpenChange={setSuggestOpen} />
+    </>
   );
 }
