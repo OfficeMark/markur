@@ -25,7 +25,20 @@ Migrations applied to **markur-rebuild only**: `accept_invitation_rpc`, `demo_li
 
 **Verification:** build green · **192/192 tests** · iron rule confirmed (`git grep` bundle hooks in `src/` = **0**) · S9 peek RPC smoke-tested live ("161 Bay St. · Officemark · 30 days") · no prod URL in the built bundle.
 
-## The demo flow to rehearse (S9)
+## The Share feature — corrected intent (Randy, 2026-07-06)
+
+**Share/demo links are NOT aimed at Brookfield.** The intended user is a Markur
+client who has clients of their own — e.g. a signage installer or design firm
+sharing a project or design concept with *their* end client (the down-the-chain
+cascade from the original S8b framing). Brookfield likely has no direct use
+case for it. It was built now so nothing from the queue was left hanging, and
+it can be *mentioned* in the meeting as a capability ("your vendors and
+designers can share concepts with you on your own building") — but the demo
+itself should center on the core product: floor plans, pins, photos, audits,
+and reports. Docs older than this note that call S9 "the Brookfield
+centerpiece" reflect the earlier framing — this note supersedes them.
+
+## The share flow (rehearse if you plan to mention it)
 
 1. Building page → **Share** button → pick 30 days → **Generate link** → Copy.
 2. Open the `/welcome/<token>` link in an incognito window: building name, "Full access · 30 days", name/email/password.
@@ -38,7 +51,7 @@ Migrations applied to **markur-rebuild only**: `accept_invitation_rpc`, `demo_li
 2. **Deploy** (sandbox couldn't reach Netlify): in the repo, `netlify deploy --build --prod` against the **markur-rebuild** site (`82c2ec99…`) only — never the prod `markur` site. The build must use `.env.rebuild` values.
 3. **6-tap lag check** (desktop + phone): cold load → building → floor → pin detail → place a pin → open a photo → Map/Grid/Notes.
 4. **HEIC physical verify** (your verify-first rule): upload a real `.heic` to a pin in your logged-in session — it should convert on-device and display as a JPEG. iPhone: instant. Windows Chrome: a clear "convert to JPG first" message (that browser can't decode HEIC — by design, nothing broken).
-5. **Rehearse the S9 flow** above on a good building with pins + photos.
+5. **Optional:** rehearse the share flow above — only if you plan to show it (see corrected intent note).
 
 ## Known follow-ups (not blockers)
 
