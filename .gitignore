@@ -53,5 +53,10 @@ supabase/.temp
 # Husky
 .husky/_
 
+# Local artifacts
+.verify/
+.claude/
+.netlify/
+
 # TypeScript
 *.tsbuildinfo
