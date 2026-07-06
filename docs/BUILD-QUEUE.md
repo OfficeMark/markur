@@ -1,5 +1,7 @@
 # Markur Rebuild — Build Queue (ready-to-hand CC prompts)
 
+> **STATUS 2026-07-06 (Cowork/Fable 5 session): QUEUE COMPLETE.** Every slice above/below is shipped on `rebuild` (10 new commits, `177a72b`..`3e1058c`), plus a full code review (`docs/CODE-REVIEW-2026-07-06.md`) and its High-severity fixes (SEC-1/2/3 accept RPC; PERF-1 offline drain, PERF-2 grid N+1 signing, PERF-3 photo caching, PERF-4/5/7). Build green, 192/192 tests, iron rule verified (0 bundle hooks). Remaining for Randy: `git push origin rebuild`, deploy (`netlify deploy --build --prod` on the markur-rebuild site `82c2ec99…` only), the 6-tap lag check, the real-session HEIC verify, and the S9 demo-flow rehearsal. Prod untouched throughout.
+
 **Created 2026-06-20.** Hand CC one slice at a time, in order. After each, get its STOP report (files, desktop+mobile screenshots, per-table grep = 0, build/test green, prod untouched), have Cowork verify, then hand the next. Everything below already exists in `standalone` unless marked **NEW**.
 
 ## Responsive principle (applies to every screen, not just the toolbar)
@@ -45,7 +47,7 @@ Make the existing Trash page (`src/routes/Trash.tsx`, `/buildings/:id/trash`) th
 - **Remove Delete-floor from the floor toolbar ⋯ overflow** (S1 stopgap) once its Trash home is live.
 Rationale: the building page's "Trash" is a recycle bin, not a delete action; destructive actions belong together in the Trash/settings area, main pages stay clean.
 
-## S4 — Type-aware action card
+## S4 — Type-aware action card — ✅ SHIPPED 2026-07-06 (`400d21e`; adapted: vendor/contact link targets only, NO Officemark CTA and no building custom link, per Randy 2026-07-06)
 Port the category branch in `standalone:src/components/waymarks/AssetDrawer.tsx` (~lines 489–584): facility pins (stairwells, service rooms) show **"Request service"**; signage shows the order framing. Lives in the pin detail's Status/Vendor area. Per-table.
 
 ## S5 — Start an audit at a chosen pin — ✅ SHIPPED 2026-06-21 (`fcea5d4`, deploy `6a38155c`)
@@ -57,7 +59,7 @@ Port from `standalone` (`AssetDrawer.tsx`, `AuditModeShell.tsx`, `hooks/useAudit
 ## S7 — Printable grid *(replaces catalogue; partly NEW)*
 Add **print/export** to the existing `AssetGridView` (already in prod). Reuse `lib/floor-catalogue.ts` / `lib/audit-report.ts` for output. Output = a clean printable list/grid of every pin with key fields + photo thumbnails, grouped by zone if set. No separate catalogue view. Keep simple.
 
-## S8 — Photos *(VERIFY HEIC behavior in a real session FIRST — don't build on assumption)*
+## S8 — Photos — ✅ SHIPPED 2026-07-06 (`fb6839c`) *(⚠️ Randy's real-session HEIC verify still owed as final sign-off)*
 **Verify-first (Randy's call 2026-06-21):** the data/first-principles say browsers can't render HEIC in `<img>` (Safari only) → conversion needed. The automated diagnostic showed a broken thumbnail, but that ran in CC's context (which also hits the test-only signed-URL 401), so it's NOT conclusive. **Before building any conversion: Randy uploads a real `.heic` to a pin in his actual logged-in session and looks — does it display in grid/pin, or break?** Only build conversion if it genuinely fails in the flesh. (Pattern today: the "physical" repeatedly contradicted the "data" — multi-floor pins, photos, print all already worked when tested for real.)
 **IF verification confirms HEIC fails to display:** Markur's upload doesn't accept HEIC and iPhones shoot it by default (auditor's primary camera), so conversion would be core, not gravy.
 - **Two dead ends, don't repeat:** client-side `heic2any` on the **main thread** froze the UI; **server-side failed** (Supabase/edge can't decode HEVC — licensing/native deps).
@@ -70,10 +72,10 @@ Add **print/export** to the existing `AssetGridView` (already in prod). Reuse `l
 - Also: HEIC is currently excluded from the upload allowlist (`ASSET_PHOTO_MIMES` + the `accept` attr) — a diagnostic to allow it + see what renders was queued separately.
 Port the **final** photo approach from `standalone` (commits `7b73708` + `04d9ef6`: on-device HEIC→JPEG ~3000px + sized thumbnails) and signed-URL serving (`e765e20`). **CRITICAL:** standalone batch-signed photos via `get_floor_view` (commit `a9cb56d`) — do **NOT** bring that. Sign photos **per-table** instead. Files: `hooks/useAssetPhotos.ts`, `AssetDrawer.tsx`, `AssetGridView.tsx`, `PinMarker.tsx`, `FloorPlanCanvas.tsx`, `BuildingPhotoUpload.tsx`. Verify upload + display are fast; test on mobile (photo is the primary audit action).
 
-## S8b — Share / collaboration (access-management + invitations) *(port; foundation for S9)*
+## S8b — Share / collaboration — ✅ VERIFIED ALREADY PORTED + FIXED 2026-07-06 (`3c08fdf`: SEC-1/2/3 — invitation lookup/accept moved to SECURITY DEFINER RPCs, email-bound; the old client-side accept was RLS-blocked for real invitees)
 Port the existing sharing system from `standalone`: invite an external party to a building with a **role (Edit / View)**, accept-invitation flow, pending invitations, members list. Files: `AccessManagementCard.tsx`, `NewInvitationDialog.tsx`, `PendingInvitationsCard.tsx`, `MembersCard.tsx`, `hooks/useAccess.ts`, `hooks/useMembers.ts`, `routes/AcceptInvitation.tsx`. Rewire per-table, no bundle. This is the **Share** use case (collaboration down the chain — e.g. installer → their end client; can cascade). Ongoing, no expiry. **Build this BEFORE S9** — Demo is a preset on top of it.
 
-## S9 — Demo link *(sales demo-to-signup preset of S8b's share; Brookfield centerpiece; replaces old #11 trial)*
+## S9 — Demo link — ✅ SHIPPED 2026-07-06 (`b0e9e94` + migration `20260706170000_demo_links`; Brookfield centerpiece)
 **Framing:** this is a demo-to-signup motion — load a prospect's building, send a link, they try the real thing ~30 days, then convert. Copy = "try Markur on your building," not "share with tenants." Add a **"sign up to keep your building" conversion path** near expiry (and available anytime); on conversion the time limit lifts and the building stays theirs. The link IS the trial.
 Build on the **existing invitation flow** — `standalone:src/routes/AcceptInvitation.tsx`, `NewInvitationDialog.tsx`, `pending_invitations`, and `access_grants.expires_at` (already in the schema). Match `docs/demo-share-flow-mock.html`.
 - **Admin:** a "Share" action on a building → pick period (14 / 30 / **90**, default **30**) → generate a link → copy. List active links with time remaining.
@@ -93,13 +95,13 @@ Copy-only: the asset-type picker in `NewAssetDialog` carried legacy "Zone / asse
 ## StepUpDialog confirm fix — ✅ SHIPPED 2026-06-21 (`71bb805`, deploy `6a3812d5`)
 Shared type-to-confirm dialog: matched case-sensitively but rendered the word ALL-CAPS, trapping users (esp. mobile auto-capitalize). Fix = case-insensitive + trimmed match, and `normal-case` so the word shows in its true case. Fixes floor/building/pin delete confirms together; tests updated.
 
-## S9b — Edit form (`EditPanel`) re-group *(small follow-up to S2)*
+## S9b — Edit form (`EditPanel`) re-group — ✅ SHIPPED 2026-07-06 (`6810c41`)
 S2 re-grouped the pin-detail **read** view to the What-it-is / Where-it-is flow but left the **edit form** (`EditPanel`) on its prior grouping. Optional: re-group the edit form to mirror the same flow so view and edit match. Presentation only, per-table.
 
-## S10 — Pin-shape options *(low priority)*
+## S10 — Pin-shape options — ✅ SHIPPED 2026-07-06 (`89b12ed` + teardrop constraint migration; org-branding shape source)
 Port pin shape choices (teardrop, logo-glyph) from `standalone:src/components/waymarks/PinMarker.tsx`. Per-table.
 
-## S11 — Suggest-a-feature box *(low priority)*
+## S11 — Suggest-a-feature box — ✅ SHIPPED 2026-07-06 (`3e1058c`)
 Port from `standalone` (the `feature_suggestions` table — migration `20260604180538` — + the suggest dialog). Per-table.
 
 ---
