@@ -712,7 +712,7 @@ function EditPanel({
       {/* Feature #3e — same banded language as the read view (near-black header
           + orange chip + white label, white body). Fields, validation, and
           order are unchanged; only the section chrome changes. */}
-      <Band icon={Tag} label="Identity">
+      <Band icon={Tag} label="What it is">
 
       <FieldLabel label="Asset type">
         <select
@@ -737,31 +737,19 @@ function EditPanel({
         </select>
       </FieldLabel>
 
-      <div className="grid grid-cols-2 gap-2">
-        <FieldLabel label="Room #">
-          <input
-            value={room}
-            onChange={(e) => setRoom(e.target.value)}
-            maxLength={80}
-            placeholder='e.g. "301"'
-            className="h-10 w-full rounded-md border border-black/10 bg-surface px-3 text-sm text-text outline-none focus:border-waymarks-gold focus:ring-2 focus:ring-waymarks-gold dark:border-white/10"
-          />
-        </FieldLabel>
-        <FieldLabel label="Name">
-          <input
-            value={name}
-            onChange={(e) => setName(e.target.value)}
-            className="h-10 w-full rounded-md border border-black/10 bg-surface px-3 text-sm text-text outline-none focus:border-waymarks-gold focus:ring-2 focus:ring-waymarks-gold dark:border-white/10"
-          />
-        </FieldLabel>
-      </div>
-
-      <FieldLabel label="Layer">
+      <FieldLabel label="Name">
         <input
-          value={zone}
-          onChange={(e) => setZone(e.target.value)}
-          maxLength={120}
-          placeholder="Reception, Parkade, Wing B, or a department"
+          value={name}
+          onChange={(e) => setName(e.target.value)}
+          className="h-10 w-full rounded-md border border-black/10 bg-surface px-3 text-sm text-text outline-none focus:border-waymarks-gold focus:ring-2 focus:ring-waymarks-gold dark:border-white/10"
+        />
+      </FieldLabel>
+
+      <FieldLabel label="Manufacturer">
+        <input
+          value={manufacturer}
+          onChange={(e) => setManufacturer(e.target.value)}
+          placeholder="e.g. Officemark"
           className="h-10 w-full rounded-md border border-black/10 bg-surface px-3 text-sm text-text outline-none focus:border-waymarks-gold focus:ring-2 focus:ring-waymarks-gold dark:border-white/10"
         />
       </FieldLabel>
@@ -783,14 +771,31 @@ function EditPanel({
         </span>
       </FieldLabel>
 
-      <FieldLabel label="Manufacturer">
-        <input
-          value={manufacturer}
-          onChange={(e) => setManufacturer(e.target.value)}
-          placeholder="e.g. Officemark"
-          className="h-10 w-full rounded-md border border-black/10 bg-surface px-3 text-sm text-text outline-none focus:border-waymarks-gold focus:ring-2 focus:ring-waymarks-gold dark:border-white/10"
-        />
-      </FieldLabel>
+      </Band>
+
+      {/* S9b — mirror the read view's What-it-is / Where-it-is flow. */}
+      <Band icon={MapPin} label="Where it is">
+
+      <div className="grid grid-cols-2 gap-2">
+        <FieldLabel label="Room #">
+          <input
+            value={room}
+            onChange={(e) => setRoom(e.target.value)}
+            maxLength={80}
+            placeholder='e.g. "301"'
+            className="h-10 w-full rounded-md border border-black/10 bg-surface px-3 text-sm text-text outline-none focus:border-waymarks-gold focus:ring-2 focus:ring-waymarks-gold dark:border-white/10"
+          />
+        </FieldLabel>
+        <FieldLabel label="Layer">
+          <input
+            value={zone}
+            onChange={(e) => setZone(e.target.value)}
+            maxLength={120}
+            placeholder="Reception, Parkade, Wing B"
+            className="h-10 w-full rounded-md border border-black/10 bg-surface px-3 text-sm text-text outline-none focus:border-waymarks-gold focus:ring-2 focus:ring-waymarks-gold dark:border-white/10"
+          />
+        </FieldLabel>
+      </div>
 
       </Band>
 
