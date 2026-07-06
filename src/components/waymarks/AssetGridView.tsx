@@ -1,8 +1,7 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useMemo, useState } from 'react';
 import { ArrowDown, ArrowUp, ArrowUpDown, FileDown, ImageOff, Video } from 'lucide-react';
 import { format, formatDistanceToNow } from 'date-fns';
-import { useAssetPhotos } from '@/hooks/useAssetPhotos';
-import { signedAssetPhotoUrl } from '@/lib/queries/asset-photos';
+import { useFloorPhotoThumbs } from '@/hooks/useAssetPhotos';
 import { TYPE_COLORS, labelForType, formatPinNumber } from '@/lib/pin-types';
 import { computeStatus, statusLabel, type AssetStatus } from '@/lib/asset-status';
 import type { VendorContact } from '@/lib/queries/assets';
@@ -45,6 +44,10 @@ export function AssetGridView({
   exporting,
 }: AssetGridViewProps) {
   const [sort, setSort] = useState<SortState>({ key: 'name', dir: 'asc' });
+  // PERF-2 (CODE-REVIEW-2026-07-06): thumbnails for the whole grid in two
+  // round trips (one paths query + one batch signing) instead of two per row.
+  const assetIds = useMemo(() => assets.map((a) => a.id), [assets]);
+  const thumbs = useFloorPhotoThumbs(assetIds);
 
   const rows = useMemo(() => {
     const enriched = assets.map((a) => {
@@ -129,6 +132,7 @@ export function AssetGridView({
                 status={status}
                 selected={asset.id === selectedAssetId}
                 hasVideo={!!assetsWithVideos?.has(asset.id)}
+                thumbUrl={thumbs.data?.get(asset.id) ?? null}
                 onClick={() => onSelectAsset(asset)}
               />
             ))}
@@ -176,6 +180,7 @@ function Row({
   status,
   selected,
   hasVideo,
+  thumbUrl,
   onClick,
 }: {
   asset: Asset;
@@ -183,6 +188,7 @@ function Row({
   status: AssetStatus;
   selected: boolean;
   hasVideo: boolean;
+  thumbUrl: string | null;
   onClick: () => void;
 }) {
   const typeColor = TYPE_COLORS[asset.type]?.fill ?? '#475569';
@@ -220,7 +226,7 @@ function Row({
       )}
     >
       <td className="py-2 pl-3 pr-1">
-        <PhotoThumb assetId={asset.id} />
+        <PhotoThumb url={thumbUrl} />
       </td>
       <td className="py-2 pr-3">
         <div className="flex items-center gap-1.5">
@@ -296,25 +302,7 @@ function StatusBadge({ status }: { status: AssetStatus }) {
   );
 }
 
-function PhotoThumb({ assetId }: { assetId: string }) {
-  const { data: photos } = useAssetPhotos(assetId);
-  const path = photos?.[0]?.path;
-  const [url, setUrl] = useState<string | null>(null);
-
-  useEffect(() => {
-    let cancelled = false;
-    if (!path) {
-      setUrl(null);
-      return;
-    }
-    void signedAssetPhotoUrl(path)
-      .then((u) => !cancelled && setUrl(u))
-      .catch(() => undefined);
-    return () => {
-      cancelled = true;
-    };
-  }, [path]);
-
+function PhotoThumb({ url }: { url: string | null }) {
   return (
     <div className="h-10 w-10 overflow-hidden rounded-md border border-black/10 bg-surface-soft dark:border-white/10">
       {url ? (

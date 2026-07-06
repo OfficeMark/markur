@@ -1,4 +1,4 @@
-import { forwardRef } from 'react';
+import { forwardRef, memo } from 'react';
 import { Circle, Triangle, Square } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import type { AssetStatus } from '@/lib/asset-status';
@@ -66,7 +66,11 @@ const PIN_ICON_PX: Record<PinSize, number> = {
   large: 13,
 };
 
-export const PinMarker = forwardRef<HTMLButtonElement, PinMarkerProps>(function PinMarker(
+/**
+ * PERF-4: memoized (CODE-REVIEW-2026-07-06) so dragging one pin does not
+ * re-render every pin on the floor at pointermove frequency.
+ */
+export const PinMarker = memo(forwardRef<HTMLButtonElement, PinMarkerProps>(function PinMarker(
   {
     assetId,
     name,
@@ -177,4 +181,4 @@ export const PinMarker = forwardRef<HTMLButtonElement, PinMarkerProps>(function 
       )}
     </button>
   );
-});
+}));

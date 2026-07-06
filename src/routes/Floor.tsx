@@ -39,13 +39,7 @@ import {
   putFloor,
   putLastAudits,
 } from '@/lib/offline';
-import {
-  buildCatalogueDoc,
-  catalogueDownloadName,
-  pickCatalogueSaveTarget,
-  prepareCatalogueEntries,
-  writeCatalogue,
-} from '@/lib/floor-catalogue';
+// PERF-5: floor-catalogue pulls in jsPDF; load it only when exporting.
 import { listFirstPhotoPaths, signedAssetPhotoUrl } from '@/lib/queries/asset-photos';
 import { photoToJpegDataUrl } from '@/lib/photo-to-data-url';
 import type { Asset } from '@/types/database';
@@ -285,6 +279,13 @@ export function Floor() {
   async function exportCatalogue() {
     if (!floor) return;
     const when = new Date();
+    const {
+      buildCatalogueDoc,
+      catalogueDownloadName,
+      pickCatalogueSaveTarget,
+      prepareCatalogueEntries,
+      writeCatalogue,
+    } = await import('@/lib/floor-catalogue');
     const fileName = catalogueDownloadName(building?.name ?? 'Building', floor.label, when);
     // pickCatalogueSaveTarget must run on the click's user activation, before
     // the slow photo work — so call it first, then load.

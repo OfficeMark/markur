@@ -39,12 +39,10 @@ import { useActivity } from '@/hooks/useActivity';
 import {
   useAddAssetPhoto,
   useAssetPhotos,
-  useDeleteAssetPhoto,
-} from '@/hooks/useAssetPhotos';
+  useDeleteAssetPhoto, useSignedAssetPhotoUrl } from '@/hooks/useAssetPhotos';
 import {
   assetPhotoDownloadName,
   signedAssetPhotoDownloadUrl,
-  signedAssetPhotoUrl,
   validateAssetPhotoFile,
 } from '@/lib/queries/asset-photos';
 import { computeStatus, statusLabel, type AssetStatus } from '@/lib/asset-status';
@@ -934,22 +932,12 @@ function Hero({
   onEdit: () => void;
   onDeletePhoto?: () => void;
 }) {
-  const [url, setUrl] = useState<string | null>(null);
-  const [errored, setErrored] = useState(false);
+  // PERF-3: cached signed URL (keyed by path) — revisiting the same photo
+  // reuses the same URL, so browser/SW caches hit instead of re-downloading.
+  const signed = useSignedAssetPhotoUrl(photo?.path);
+  const url = signed.data ?? null;
+  const errored = signed.isError;
   const [downloading, setDownloading] = useState(false);
-
-  useEffect(() => {
-    let cancelled = false;
-    setUrl(null);
-    setErrored(false);
-    if (!photo) return;
-    void signedAssetPhotoUrl(photo.path)
-      .then((u) => !cancelled && setUrl(u))
-      .catch(() => !cancelled && setErrored(true));
-    return () => {
-      cancelled = true;
-    };
-  }, [photo?.path]);
 
   async function handleDownload() {
     if (!photo) return;
@@ -1159,17 +1147,7 @@ function ThumbButton({
   active: boolean;
   onSelect: () => void;
 }) {
-  const [url, setUrl] = useState<string | null>(null);
-
-  useEffect(() => {
-    let cancelled = false;
-    void signedAssetPhotoUrl(photo.path)
-      .then((u) => !cancelled && setUrl(u))
-      .catch(() => {});
-    return () => {
-      cancelled = true;
-    };
-  }, [photo.path]);
+  const url = useSignedAssetPhotoUrl(photo.path).data ?? null;
 
   return (
     <button

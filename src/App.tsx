@@ -135,6 +135,9 @@ export default function App() {
                 <RadixTooltip.Provider delayDuration={400} skipDelayDuration={200}>
                   <OfflineSync />
                   <SessionLostHandler />
+                  {/* PERF-7: second boundary so a route crash cannot take
+                      down the whole app shell (e.g. mid-audit). */}
+                  <ErrorBoundary>
                   <Suspense fallback={<RouteFallback />}>
                     <Routes>
                   <Route path="/login" element={<Login />} />
@@ -217,6 +220,7 @@ export default function App() {
                   <Route path="/legal/terms" element={<Terms />} />
                     </Routes>
                   </Suspense>
+                  </ErrorBoundary>
                   <CookieConsent />
                 </RadixTooltip.Provider>
               </ActionHintsProvider>

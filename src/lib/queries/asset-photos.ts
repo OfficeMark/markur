@@ -83,7 +83,10 @@ export async function addAssetPhoto(assetId: string, file: File): Promise<AssetP
     .upload(path, file, {
       contentType: file.type,
       upsert: false,
-      cacheControl: '0',
+      // PERF-3 (CODE-REVIEW-2026-07-06): paths are immutable UUIDs, so let
+      // browsers/SW actually cache the bytes. '0' forced a re-download on
+      // every view — the old '45s photo opens' disease in miniature.
+      cacheControl: '3600',
     });
   if (uploadErr) throw uploadErr;
 
@@ -125,6 +128,23 @@ export async function deleteAssetPhoto(photo: AssetPhoto): Promise<void> {
   const { error: dbErr } = await supabase.from('asset_photos').delete().eq('id', photo.id);
   if (dbErr) throw dbErr;
   await supabase.storage.from('asset-photos').remove([photo.path]).catch(() => {});
+}
+
+/**
+ * PERF-2: sign MANY paths in one round trip (createSignedUrls, plural).
+ * One call per floor instead of one per pin — pair with listFirstPhotoPaths.
+ */
+export async function signedAssetPhotoUrls(paths: string[]): Promise<Map<string, string>> {
+  if (paths.length === 0) return new Map();
+  const { data, error } = await supabase.storage
+    .from('asset-photos')
+    .createSignedUrls(paths, 60 * 30);
+  if (error) throw error;
+  const map = new Map<string, string>();
+  for (const row of data ?? []) {
+    if (row.path && row.signedUrl && !row.error) map.set(row.path, row.signedUrl);
+  }
+  return map;
 }
 
 export async function signedAssetPhotoUrl(path: string): Promise<string> {
