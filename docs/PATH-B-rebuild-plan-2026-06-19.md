@@ -5,6 +5,18 @@
 
 ---
 
+## Brookfield one-day plan (for the return; ~2026-07-xx)
+
+Shipped & verified on `rebuild`: floor view (S1+fixes), pin detail (S2/2b/2c/2d), Trash+deletion (S3), StepUp fix, start-audit-at-pin (S5). In flight when Randy left: S6 (add-dialog banded restyle) + S7 (printable grid — surface the existing `floor-catalogue.ts` PDF).
+
+**One focused polish day, Brookfield-first priority:**
+1. Finish S6/S7 if they didn't land.
+2. **S8b (Share/collab port) + S9 (Demo link)** — the centerpiece; front-load it. Demo link = "use Markur on your building" → "sign up to keep it."
+3. **S4** (type-aware action card) — fast.
+4. **Polish pass** — cosmetic quirks, full smoke test on desktop/iPad/phone, and **rehearse the demo flow** (load a good building w/ pins+photos, run the share→signup path).
+
+**De-risk:** Photos already work (rebuild = prod's photo code; prod serves photos fine) — S8 is just the HEIC/thumbnail *enhancement*, the riskiest slice, treat as gravy. **Demo on `markur-rebuild.netlify.app`, NOT prod** — do not rush a rebuild→main promotion before the meeting. Skip S10/S11 for the demo; S9b optional.
+
 ## Status — 2026-06-20 (end of day; Randy on holiday ~2 weeks, Brookfield meeting on return)
 
 **Floorplan view: DONE** — rebuilt to the approved mock, responsive (progressive-disclosure toolbar), focus mode added, recenter fixed, primary buttons fire. Commits on `rebuild`: `e01d958` (S1) → `a56d5b5` (S1-fix responsive) → `9da7eb0` (S1-fix-2: no-overlap desktop + contain-fit recenter + focus mode). All verified clean (0 bundle hooks, per-table, `.env.rebuild` out).
