@@ -1,28 +1,48 @@
 import { useState } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import * as Dialog from '@radix-ui/react-dialog';
-import { Building2, Layers, ChevronRight, Menu, Plus, X } from 'lucide-react';
+import { Building2, Layers, ChevronRight, ChevronsLeft, ChevronsRight, Menu, Plus, X } from 'lucide-react';
 import { useBuildings } from '@/hooks/useBuildings';
 import { useFloors } from '@/hooks/useFloors';
+import { useSidebarCollapsed } from '@/hooks/useSidebarCollapsed';
 import { cn } from '@/lib/utils';
 import type { Building, Floor } from '@/types/database';
 import { NewBuildingDialog } from '@/components/waymarks/NewBuildingDialog';
 
 /**
  * Left sidebar listing buildings + their floors. Per spec 05 / 08 / M10b:
- *   * desktop (lg+): fixed 240px column on the left, slate-ink background.
+ *   * desktop (lg+): a slim column on the left, slate-ink background. Slimmed
+ *     from 240px to 176px (w-44) so the floor plan — the product — gets the
+ *     reclaimed width. A chevron collapses it to a 56px icon rail; the choice
+ *     persists per browser via `useSidebarCollapsed` (localStorage).
  *   * tablet/phone: hidden; the AppShell shows a hamburger that opens
  *     `<BuildingNavSheet>` - a left-slide Radix Dialog containing the same
  *     dark-themed content. Tapping any link auto-dismisses the sheet.
  */
 export function BuildingNav() {
+  const [collapsed, toggleCollapsed] = useSidebarCollapsed();
   return (
     <aside
       aria-label="Buildings and floors"
-      className="hidden w-60 shrink-0 border-r border-black/30 bg-waymarks-ink text-white/90 lg:block"
+      className={cn(
+        'hidden shrink-0 border-r border-black/30 bg-waymarks-ink text-white/90 lg:block',
+        collapsed ? 'w-14' : 'w-44'
+      )}
     >
-      <div className="sticky top-14 max-h-[calc(100vh-3.5rem)] max-h-[calc(100dvh-3.5rem)] overflow-y-auto p-3">
-        <NavList />
+      <div className="sticky top-14 max-h-[calc(100vh-3.5rem)] max-h-[calc(100dvh-3.5rem)] overflow-y-auto p-2">
+        <div className={cn('mb-2 flex items-center', collapsed ? 'justify-center' : 'justify-end')}>
+          <button
+            type="button"
+            onClick={toggleCollapsed}
+            aria-label={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
+            aria-expanded={!collapsed}
+            title={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
+            className="inline-flex h-7 w-7 items-center justify-center rounded-md text-white/50 hover:bg-white/10 hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-waymarks-gold"
+          >
+            {collapsed ? <ChevronsRight size={16} aria-hidden /> : <ChevronsLeft size={16} aria-hidden />}
+          </button>
+        </div>
+        {collapsed ? <RailList /> : <NavList />}
       </div>
     </aside>
   );
@@ -196,6 +216,70 @@ function FloorItem({ floor, onNavigate }: { floor: Floor; onNavigate?: () => voi
       >
         <Layers size={12} aria-hidden className="opacity-70" />
         <span className="truncate">{floor.label}</span>
+      </Link>
+    </li>
+  );
+}
+
+/**
+ * Collapsed icon rail: building icons only, each linking to its building page.
+ * Floors are not shown here — expand the sidebar (or open the building) to drill
+ * in. Keeps the rail to a single 56px column so the map gets the width back.
+ */
+function RailList() {
+  const { data: buildings, isLoading } = useBuildings();
+  const [createOpen, setCreateOpen] = useState(false);
+
+  return (
+    <>
+      <div className="mb-2 flex justify-center">
+        <button
+          type="button"
+          onClick={() => setCreateOpen(true)}
+          aria-label="New building"
+          title="New building"
+          className="inline-flex h-8 w-8 items-center justify-center rounded-md text-white/60 hover:bg-white/10 hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-waymarks-gold"
+        >
+          <Plus size={16} aria-hidden />
+        </button>
+      </div>
+
+      {isLoading ? (
+        <ul className="space-y-1" aria-hidden>
+          {[0, 1, 2].map((i) => (
+            <li key={i} className="mx-auto h-8 w-8 animate-pulse rounded-md bg-white/5" />
+          ))}
+        </ul>
+      ) : (
+        <ul className="space-y-1">
+          {(buildings ?? []).map((b) => (
+            <RailItem key={b.id} building={b} />
+          ))}
+        </ul>
+      )}
+
+      <NewBuildingDialog open={createOpen} onOpenChange={setCreateOpen} />
+    </>
+  );
+}
+
+function RailItem({ building }: { building: Building }) {
+  const location = useLocation();
+  const active = location.pathname === `/buildings/${building.id}`;
+  return (
+    <li className="flex justify-center">
+      <Link
+        to={`/buildings/${building.id}`}
+        title={building.name}
+        aria-label={building.name}
+        className={cn(
+          'inline-flex h-9 w-9 items-center justify-center rounded-md transition-colors',
+          active
+            ? 'bg-white/[0.08] text-white shadow-[inset_3px_0_0_0_var(--tw-shadow-color)] shadow-waymarks-gold'
+            : 'text-white/65 hover:bg-white/5 hover:text-white'
+        )}
+      >
+        <Building2 size={16} aria-hidden />
       </Link>
     </li>
   );

@@ -2,7 +2,7 @@ import { forwardRef, type ButtonHTMLAttributes, type ReactNode } from 'react';
 import { Loader2 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
-export type ButtonVariant = 'primary' | 'secondary' | 'ghost' | 'danger' | 'gold';
+export type ButtonVariant = 'primary' | 'secondary' | 'ghost' | 'danger' | 'gold' | 'accent';
 export type ButtonSize = 'sm' | 'md' | 'lg';
 
 export type ButtonProps = {
@@ -33,6 +33,10 @@ const VARIANTS: Record<ButtonVariant, string> = {
   // both modes and still clearly a gold action.
   gold:
     'bg-waymarks-gold text-waymarks-ink hover:bg-waymarks-gold-deep disabled:opacity-50',
+  // Orange focal action (the "Add pin" primary). Uses the accent token so the
+  // colour lives in the theme, not the call site.
+  accent:
+    'bg-accent text-white hover:bg-accent/90 disabled:bg-accent/40',
 };
 
 const SIZES: Record<ButtonSize, string> = {

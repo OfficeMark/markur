@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
-import { ArrowLeft, Check, ChevronRight, ClipboardCheck, Download, Eye, ImageOff, LayoutGrid, Map as MapIcon, Maximize2, MapPin, Minimize2, NotebookPen, Shapes, Trash2 } from 'lucide-react';
+import { ArrowLeft, ChevronRight, ClipboardCheck, ImageOff, LayoutGrid, Map as MapIcon, Maximize2, MapPin, Minimize2, NotebookPen, Shapes, Trash2 } from 'lucide-react';
 import { AppShell } from '@/components/waymarks/AppShell';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { Button } from '@/components/ui/Button';
@@ -418,39 +418,36 @@ export function Floor() {
     </nav>
   );
 
-  // Two primary circles — the focal actions (orange Add pin, dark Audit).
-  // Slightly smaller on phones but still the prominent focal point.
-  const circleCls =
-    'flex h-[52px] w-[52px] shrink-0 flex-col items-center justify-center gap-0.5 rounded-full border-[3px] border-white text-[10px] font-bold leading-tight shadow-md transition-colors sm:h-[68px] sm:w-[68px] sm:text-[12px]';
-  const addPinCircle = () => floor.plan_url && canCreate && (
+  // Two focal actions as standard toolbar buttons (retired the oversized round
+  // circles): orange "Add pin" (accent) + dark "Audit" (ink primary). h-9 to
+  // line up with the segmented controls beside them.
+  const addPinBtn = () => floor.plan_url && canCreate && (
     <Tooltip text={placing ? 'Cancel placing a pin' : 'Place a new pin by clicking the floor plan'}>
-      <button
-        type="button"
+      <Button
+        variant={placing ? 'primary' : 'accent'}
+        size="sm"
+        className="h-9 shrink-0"
         onClick={() => setPlacing((p) => !p)}
-        className={
-          circleCls +
-          ' ' +
-          (placing
-            ? 'bg-waymarks-ink text-white hover:bg-waymarks-ink/90'
-            : 'bg-accent text-white hover:bg-accent/90')
-        }
+        aria-label={placing ? 'Cancel placing a pin' : 'Add pin'}
+        iconLeft={<MapPin size={14} aria-hidden />}
       >
-        <MapPin size={18} aria-hidden />
-        {placing ? 'Cancel' : 'Add pin'}
-      </button>
+        <span className="hidden sm:inline">{placing ? 'Cancel' : 'Add pin'}</span>
+      </Button>
     </Tooltip>
   );
-  const auditCircle = () => showAuditCta && (
+  const auditBtn = () => showAuditCta && (
     <Tooltip text={activeSession ? 'Resume the audit walkaround you started' : 'Walk the floor and confirm every sign'}>
-      <button
-        type="button"
+      <Button
+        variant="primary"
+        size="sm"
+        className="h-9 shrink-0"
         onClick={() => void startOrResumeAudit()}
-        disabled={startAudit.isPending}
-        className={circleCls + ' bg-waymarks-ink text-white hover:bg-waymarks-ink/90 disabled:opacity-60'}
+        loading={startAudit.isPending}
+        aria-label={activeSession ? 'Resume audit' : 'Audit'}
+        iconLeft={<ClipboardCheck size={14} aria-hidden />}
       >
-        <ClipboardCheck size={18} aria-hidden />
-        {activeSession ? 'Resume' : 'Audit'}
-      </button>
+        <span className="hidden sm:inline">{activeSession ? 'Resume' : 'Audit'}</span>
+      </Button>
     </Tooltip>
   );
   const hasPrimary = Boolean((floor.plan_url && canCreate) || showAuditCta);
@@ -503,27 +500,12 @@ export function Floor() {
     </div>
   ) : null;
 
-  // "⋯ More" overflow. Two variants:
-  //  • base (lg+): Replace plan, Plan source, Lock all, Delete floor.
-  //  • narrow (<lg): the above PLUS Offline + Visualize, which collapse in here
-  //    as the screen narrows (they sit in the toolbar only at lg+).
+  // "⋯ More" overflow — one variant used at every width now (the toolbar is a
+  // single row). It always carries Visualize, plus Take-offline and the plan
+  // actions when there's a plan — the secondary controls that used to sprawl
+  // across a second toolbar row live in here instead.
   const onVisualize = () => window.open(viewmarkUrl, '_blank', 'noopener,noreferrer');
-  const moreMenuBase =
-    floor.plan_url && (canUploadPlan || (canEdit && hasPins)) ? (
-      <FloorMoreMenu
-        floorId={floor.id}
-        buildingId={floor.building_id}
-        provenance={floor.plan_provenance}
-        allPinsLocked={allPinsLocked}
-        hasPins={hasPins}
-        canUploadPlan={canUploadPlan}
-        canEditPins={canEdit}
-        onReplacePlan={() => setUploadOpen(true)}
-      />
-    ) : null;
-  // Narrow variant always renders — it carries Visualize (always available) and,
-  // when there's a plan, Offline + the plan actions.
-  const moreMenuNarrow = (
+  const moreMenu = (
     <FloorMoreMenu
       floorId={floor.id}
       buildingId={floor.building_id}
@@ -582,44 +564,6 @@ export function Floor() {
     />
   ) : null;
 
-  const offlineBtn = floor.plan_url ? (
-    <Tooltip text={cacheState === 'cached' ? 'This floor is saved for offline use — tap to refresh' : 'Save this floor and its plan for offline use'}>
-      <button
-        type="button"
-        onClick={() => void takeOffline()}
-        disabled={cacheState === 'caching'}
-        aria-pressed={cacheState === 'cached'}
-        className={
-          'inline-flex h-9 items-center justify-center gap-1.5 rounded-lg border px-3 text-xs font-medium transition-colors disabled:opacity-60 ' +
-          (cacheState === 'cached'
-            ? 'border-success bg-success-bg text-success'
-            : 'border-black/15 bg-surface text-text hover:bg-black/5 dark:border-white/15 dark:hover:bg-white/5')
-        }
-      >
-        {cacheState === 'cached' ? <Check size={13} aria-hidden /> : <Download size={13} aria-hidden />}
-        {cacheState === 'cached' ? 'Cached' : 'Offline'}
-      </button>
-    </Tooltip>
-  ) : null;
-
-  const visualizeBtn = (
-    <Tooltip text="Open ViewMark to mock up signage on a wall photo">
-      <button
-        type="button"
-        onClick={() => window.open(viewmarkUrl, '_blank', 'noopener,noreferrer')}
-        className="inline-flex h-9 items-center justify-center gap-1.5 rounded-lg border border-accent bg-surface px-3 text-xs font-medium text-accent transition-colors hover:bg-waymarks-gold-soft dark:bg-transparent"
-      >
-        <Eye size={13} aria-hidden />
-        Visualize
-      </button>
-    </Tooltip>
-  );
-
-  const filterLabel = showFilters ? (
-    <span className="text-[10px] font-medium uppercase tracking-[0.12em] text-text-faint">
-      Filter
-    </span>
-  ) : null;
   const visibleBadge = showFilters && filtersActive ? (
     <span className="inline-flex h-9 shrink-0 items-center rounded-lg bg-waymarks-gold-soft px-2 text-[11px] font-medium text-waymarks-ink">
       {visibleAssets.length} of {assets.length} visible
@@ -652,72 +596,37 @@ export function Floor() {
           'mx-auto flex w-full flex-col',
           focus
             ? 'h-full min-h-0 max-w-none px-2 py-2'
-            : cn(
-                'max-w-5xl px-4 py-3 sm:px-6 sm:py-4',
-                mapFill ? 'h-full min-h-0' : 'min-h-[calc(100dvh-3.5rem)]'
-              )
+            : mapFill
+              ? // Map view: no width cap — the plan claims the freed area
+                // (slim sidebar + one-row toolbar). Tighter padding, full width.
+                'h-full min-h-0 max-w-none px-3 py-2 sm:px-4 sm:py-3'
+              : // Grid / empty state: keep a comfortable reading width.
+                'max-w-5xl px-4 py-3 sm:px-6 sm:py-4 min-h-[calc(100dvh-3.5rem)]'
         )}
       >
-        {/* Slice 1-fix-2 toolbar — a FIXED, compact band with three NON-
-            overlapping zones: breadcrumb (left, truncates) · primaries (own
-            space) · controls (right). The controls are shrink-0 and collapse by
-            breakpoint into the "⋯" overflow so nothing ever sits on top of
-            anything else. Hidden entirely in focus mode. Per-table — no bundles. */}
+        {/* Unified toolbar — ONE compact row at every width: breadcrumb (left,
+            truncates) · focal actions + controls (right). No card wrapper and no
+            second row, so laptop (1366) and desktop (1920) render identically —
+            the row just gets more slack between the two zones as it widens.
+            Secondary actions (Take-offline, Visualize, plan ops) live in the "⋯"
+            overflow; on phones the Layer/Type filters collapse into one sheet and
+            the focal-action labels drop to icons. Hidden entirely in focus mode. */}
         {!focus && (
-          <div className="mb-3 shrink-0 rounded-xl border border-black/10 bg-surface-soft px-2.5 py-2.5 dark:border-white/10 dark:bg-white/5 sm:px-3">
-            {/* ── Desktop (xl+): full 2-row right cluster — everything visible.
-                breadcrumb flex-1 (truncates); primaries + controls are shrink-0
-                so the cluster takes its content width and never overlaps. ── */}
-            <div className="hidden items-center gap-4 xl:flex">
-              <div className="min-w-0 flex-1">{breadcrumb}</div>
-              {hasPrimary && (
-                <div className="flex shrink-0 items-center gap-3">
-                  {addPinCircle()}
-                  {auditCircle()}
-                </div>
-              )}
-              <div className="flex shrink-0 flex-col items-end gap-2">
-                <div className="flex flex-nowrap items-center gap-2">
-                  {viewSeg()}
-                  {focusBtn()}
-                  {moreMenuBase}
-                </div>
-                {(showFilters || floor.plan_url) && (
-                  <div className="flex flex-nowrap items-center justify-end gap-2">
-                    {filterLabel}
-                    {filterSeg()}
-                    {visibleBadge}
-                    {offlineBtn}
-                    {visualizeBtn}
-                  </div>
-                )}
+          <div className="mb-3 flex shrink-0 items-center gap-3">
+            <div className="min-w-0 flex-1">{breadcrumb}</div>
+            {visibleBadge}
+            {hasPrimary && (
+              <div className="flex shrink-0 items-center gap-2">
+                {addPinBtn()}
+                {auditBtn()}
               </div>
-            </div>
-
-            {/* ── <xl (small desktop + tablet + phone): one compact band; the
-                sidebar eats ~190px at lg, so the cluster stays collapsed here —
-                Offline/Visualize → ⋯; on phone Layer/Type → one Filter sheet
-                and the view switcher goes icon-only. ── */}
-            <div className="xl:hidden">
-              <div className="mb-2 flex items-center gap-2">
-                <div className="min-w-0 flex-1">{breadcrumb}</div>
-                {visibleBadge}
-              </div>
-              <div className="flex items-center gap-2">
-                {hasPrimary && (
-                  <div className="flex shrink-0 items-center gap-2">
-                    {addPinCircle()}
-                    {auditCircle()}
-                  </div>
-                )}
-                <div className="ml-auto flex shrink-0 items-center gap-1 sm:gap-1.5">
-                  {viewSeg()}
-                  {showFilters && <div className="hidden sm:block">{filterSeg()}</div>}
-                  {showFilters && <div className="sm:hidden">{combinedFilter}</div>}
-                  {focusBtn()}
-                  {moreMenuNarrow}
-                </div>
-              </div>
+            )}
+            <div className="flex shrink-0 items-center gap-1.5">
+              {viewSeg()}
+              {showFilters && <div className="hidden sm:block">{filterSeg()}</div>}
+              {showFilters && <div className="sm:hidden">{combinedFilter}</div>}
+              {focusBtn()}
+              {moreMenu}
             </div>
           </div>
         )}
@@ -754,10 +663,6 @@ export function Floor() {
               Resume
             </Button>
           </div>
-        )}
-
-        {floor.plan_url && (
-          <PlanProvenanceCaption provenance={floor.plan_provenance} className="mb-2" />
         )}
 
         {floor.plan_url ? (
@@ -813,6 +718,14 @@ export function Floor() {
                     onLongPress={canEdit ? startReposition : undefined}
                   />
                 }
+              />
+              {/* Plan provenance moved off its own full-width line into the
+                  map card's bottom-left corner (the zoom % + recenter live
+                  bottom-right, so this stays clear). pointer-events-none so it
+                  never intercepts a pan/place click. */}
+              <PlanProvenanceCaption
+                provenance={floor.plan_provenance}
+                className="pointer-events-none absolute bottom-2 left-2 z-10 max-w-[60%] truncate rounded bg-surface/85 px-1.5 py-0.5 backdrop-blur-sm dark:bg-black/50"
               />
               {repositionAssetId && (
                 <RepositionToolbar
