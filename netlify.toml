@@ -6,6 +6,21 @@
   NODE_VERSION = "22"
   NPM_FLAGS = "--no-audit --no-fund"
 
+# Marketing shortcuts — /demo and /trial funnel to the auth screen.
+# 302 (temporary) so we can move the target later without breaking cached bookmarks.
+# Placed BEFORE the SPA catch-all so Netlify's first-match wins.
+[[redirects]]
+  from = "/demo"
+  to = "/login"
+  status = 302
+  force = true
+
+[[redirects]]
+  from = "/trial"
+  to = "/login"
+  status = 302
+  force = true
+
 # SPA fallback — every route serves index.html so React Router can take over.
 [[redirects]]
   from = "/*"
