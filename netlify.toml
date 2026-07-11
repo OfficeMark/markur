@@ -11,13 +11,13 @@
 # Placed BEFORE the SPA catch-all so Netlify's first-match wins.
 [[redirects]]
   from = "/demo"
-  to = "/login"
+  to = "/login?mode=signup"
   status = 302
   force = true
 
 [[redirects]]
   from = "/trial"
-  to = "/login"
+  to = "/login?mode=signup"
   status = 302
   force = true
 
