@@ -886,7 +886,6 @@ export function Floor() {
         onStartReposition={startReposition}
         onStartDelete={(id) => setDeleteAssetId(id)}
         onLogFlag={(assetId) => void startOrResumeAudit(assetId)}
-        onStartAuditHere={(assetId) => void startOrResumeAudit(assetId)}
       />
 
       <StepUpDialog

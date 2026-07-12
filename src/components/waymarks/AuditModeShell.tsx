@@ -367,6 +367,7 @@ export function AuditModeShell({
         lastOutcome={current ? lastByAsset.get(current.id)?.outcome ?? null : null}
         onOutcome={handleOutcome}
         onNext={following ? () => stepRoute(1) : advanceToNext}
+        onStartHere={() => current && setCurrentId(current.id)}
         hasUnvisited={assets.some((a) => !lastByAsset.has(a.id))}
         follow={
           following
@@ -433,6 +434,7 @@ function BottomSheet({
   lastOutcome,
   onOutcome,
   onNext,
+  onStartHere,
   hasUnvisited,
   follow,
 }: {
@@ -441,6 +443,8 @@ function BottomSheet({
   lastOutcome: string | null;
   onOutcome: (outcome: AuditOutcome) => void;
   onNext: () => void;
+  /** Begin (or re-anchor) the ordered walkthrough at the current pin. */
+  onStartHere: () => void;
   hasUnvisited: boolean;
   follow: FollowState | null;
 }) {
@@ -471,6 +475,15 @@ function BottomSheet({
                 {current.location_notes ? ` · ${current.location_notes}` : ''}
                 {lastOutcome ? ` · last: ${lastOutcome}` : ''}
               </p>
+              <Button
+                size="sm"
+                variant="secondary"
+                className="mt-1.5"
+                iconLeft={<ClipboardList size={12} aria-hidden />}
+                onClick={onStartHere}
+              >
+                Start here
+              </Button>
             </div>
             <div className="flex shrink-0 items-center gap-1">
               {follow && (
