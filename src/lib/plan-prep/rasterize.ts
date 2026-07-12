@@ -145,3 +145,80 @@ export async function produceDisplayPlate(
   }
   return rasterizeImageToPlate(file, maxEdge);
 }
+
+// ---------------------------------------------------------------------------
+// Crop-to-plan (the "Enhance" for Plan Prep — drop the peripheral title block /
+// legend / border without touching any content inside the frame).
+// ---------------------------------------------------------------------------
+
+/** Normalized crop rectangle, all in 0..1 of the plate's own dimensions. */
+export interface CropRect {
+  x: number;
+  y: number;
+  w: number;
+  h: number;
+}
+
+/** The full-plate crop (no-op) — the conservative default: keep everything. */
+export const FULL_CROP: CropRect = { x: 0, y: 0, w: 1, h: 1 };
+
+/**
+ * Clamp a normalized crop rect into [0,1] with a minimum size, keeping x+w ≤ 1
+ * and y+h ≤ 1. Pure; unit-tested.
+ */
+export function clampCrop(rect: CropRect, minFrac = 0.05): CropRect {
+  const x = Math.min(Math.max(rect.x, 0), 1 - minFrac);
+  const y = Math.min(Math.max(rect.y, 0), 1 - minFrac);
+  const w = Math.min(Math.max(rect.w, minFrac), 1 - x);
+  const h = Math.min(Math.max(rect.h, minFrac), 1 - y);
+  return { x, y, w, h };
+}
+
+/** True when the rect keeps essentially the whole plate (nothing to crop). */
+export function isFullCrop(rect: CropRect, eps = 0.005): boolean {
+  return rect.x <= eps && rect.y <= eps && rect.w >= 1 - eps && rect.h >= 1 - eps;
+}
+
+async function loadBlobImage(blob: Blob): Promise<{ img: HTMLImageElement; revoke: () => void }> {
+  const url = URL.createObjectURL(blob);
+  try {
+    const img = await new Promise<HTMLImageElement>((resolve, reject) => {
+      const el = new Image();
+      el.onload = () => resolve(el);
+      el.onerror = () => reject(new Error('Could not read the plan image.'));
+      el.src = url;
+    });
+    return { img, revoke: () => URL.revokeObjectURL(url) };
+  } catch (err) {
+    URL.revokeObjectURL(url);
+    throw err;
+  }
+}
+
+/**
+ * Crop a display-plate PNG to a normalized rect, returning a new capped PNG.
+ * Everything inside the rect is preserved verbatim (walls, rooms, labels) — the
+ * crop only removes what's outside it.
+ */
+export async function cropPlateBlob(
+  blob: Blob,
+  rect: CropRect,
+  maxEdge = MAX_PLATE_EDGE
+): Promise<DisplayPlate> {
+  const c = clampCrop(rect);
+  const { img, revoke } = await loadBlobImage(blob);
+  try {
+    const nw = img.naturalWidth || 1600;
+    const nh = img.naturalHeight || 1200;
+    const sx = Math.round(c.x * nw);
+    const sy = Math.round(c.y * nh);
+    const sw = Math.max(1, Math.round(c.w * nw));
+    const sh = Math.max(1, Math.round(c.h * nh));
+    const s = fitScale(sw, sh, maxEdge);
+    const { canvas, ctx } = newCanvas(sw * s, sh * s);
+    ctx.drawImage(img, sx, sy, sw, sh, 0, 0, canvas.width, canvas.height);
+    return { blob: await canvasToPng(canvas), width: canvas.width, height: canvas.height };
+  } finally {
+    revoke();
+  }
+}

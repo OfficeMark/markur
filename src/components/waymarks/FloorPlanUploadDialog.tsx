@@ -1,7 +1,7 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import * as Dialog from '@radix-ui/react-dialog';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
-import { AlertTriangle, FileText, Image as ImageIcon, Lock, PenTool, Sparkles, Upload, Wand2, X } from 'lucide-react';
+import { AlertTriangle, Crop, FileText, Image as ImageIcon, PenTool, Sparkles, Upload, Wand2, X } from 'lucide-react';
 import { Button } from '@/components/ui/Button';
 import { supabase } from '@/lib/supabase';
 import {
@@ -21,25 +21,17 @@ import {
   type PlanMime,
 } from '@/lib/upload';
 import {
-  analyzePlan,
-  cropForKeys,
-  emitSvg,
+  cropPlateBlob,
   enhanceScanFile,
-  keptPathCount,
-  producePlate,
   produceDisplayPlate,
   stampPlanPrep,
-  type Bbox,
+  type CropRect,
   type DisplayPlate,
   type FloorPlanMetadata,
-  type PlanPlate,
-  type PlanPrepAnalysis,
-  type PlanPrepRecipe,
   type PlanSource,
 } from '@/lib/plan-prep';
-import { MAX_PLATE_EDGE, fitScale } from '@/lib/plan-prep/rasterize';
-import { renderPdfFirstPage } from '@/lib/plan-prep/preview';
-import { floorKeys, useFloor } from '@/hooks/useFloors';
+import { PlanCropPanel } from '@/components/waymarks/PlanCropPanel';
+import { floorKeys } from '@/hooks/useFloors';
 import { useAssets } from '@/hooks/useAssets';
 import type { Json } from '@/types/database';
 import { cn } from '@/lib/utils';
@@ -58,40 +50,6 @@ function withTimeout<T>(p: Promise<T>, ms: number): Promise<T> {
       setTimeout(() => reject(new Error('plate-timeout')), ms)
     ),
   ]);
-}
-
-/**
- * Ensure a produced plate is a PNG within the output cap. The vector-declutter
- * emitter can rasterize large; the display plate must stay bounded so floor-open
- * serves a bounded image.
- */
-async function capToDisplayPlate(plate: PlanPlate): Promise<DisplayPlate> {
-  if (Math.max(plate.width, plate.height) <= MAX_PLATE_EDGE) {
-    return { blob: plate.blob, width: plate.width, height: plate.height };
-  }
-  const url = URL.createObjectURL(plate.blob);
-  try {
-    const img = await new Promise<HTMLImageElement>((resolve, reject) => {
-      const el = new Image();
-      el.onload = () => resolve(el);
-      el.onerror = () => reject(new Error('Could not read the produced plate.'));
-      el.src = url;
-    });
-    const s = fitScale(img.naturalWidth, img.naturalHeight);
-    const canvas = document.createElement('canvas');
-    canvas.width = Math.max(1, Math.round(img.naturalWidth * s));
-    canvas.height = Math.max(1, Math.round(img.naturalHeight * s));
-    const ctx = canvas.getContext('2d');
-    if (!ctx) throw new Error('Canvas 2D context unavailable.');
-    ctx.fillStyle = '#ffffff';
-    ctx.fillRect(0, 0, canvas.width, canvas.height);
-    ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
-    const blob = await new Promise<Blob | null>((r) => canvas.toBlob(r, 'image/png'));
-    if (!blob) throw new Error('Could not encode the plate.');
-    return { blob, width: canvas.width, height: canvas.height };
-  } finally {
-    URL.revokeObjectURL(url);
-  }
 }
 
 /**
@@ -134,12 +92,16 @@ type Stage =
       source: PlanSource;
       metadata: PdfMetadata | null;
       warnings: MismatchWarning[];
-      /** Present only for vector PDFs — enables the declutter Enhance. */
-      analysis: PlanPrepAnalysis | null;
     }
-  // Optional vector-declutter Enhance (before/after).
-  | { kind: 'enhance-vector'; file: File; analysis: PlanPrepAnalysis; beforeUrl: string }
-  // Optional scan/image cleanup Enhance (before/after).
+  // Crop-to-plan Enhance: drag a box over the full plate; keeps everything inside.
+  | {
+      kind: 'enhance-crop';
+      file: File;
+      source: PlanSource;
+      full: DisplayPlate;
+      fullUrl: string;
+    }
+  // Scan/image cleanup Enhance (before/after).
   | {
       kind: 'enhance-scan';
       file: File;
@@ -155,14 +117,13 @@ type Stage =
 type UploadJob =
   // Default: produce a capped display PNG here (with timeout + fallback).
   | { mode: 'default'; file: File; source: PlanSource }
-  // Enhanced/pre-produced: the plate is already in hand.
+  // Enhanced/pre-produced (crop or scan cleanup): the plate is already in hand.
   | {
       mode: 'plate';
       file: File;
       source: PlanSource;
       plate: DisplayPlate;
       enhanced: boolean;
-      recipe?: PlanPrepRecipe;
     };
 
 export function FloorPlanUploadDialog({
@@ -180,16 +141,12 @@ export function FloorPlanUploadDialog({
   const autoRanRef = useRef(false);
   const queryClient = useQueryClient();
 
-  // Frame-lock inputs: a floor that already has pins must keep its plan's
-  // coordinate frame so normalized pins don't drift. Both queries are already
-  // warm (the Floor view populated them), so this adds no network round-trip.
-  const { data: floor } = useFloor(floorId);
+  // A floor that already has pins must keep its plan's extent so normalized pin
+  // coordinates don't drift — so the geometry-changing Enhances (crop, deskew)
+  // are only offered on a pin-free floor. The default full-fidelity upload keeps
+  // the file's own extent and stays pin-safe.
   const { data: assets } = useAssets(floorId);
   const hasPins = (assets?.length ?? 0) > 0;
-  const priorRecipe =
-    (floor?.plan_metadata as FloorPlanMetadata | null)?.planPrep?.recipe ?? null;
-  const lockedCrop: Bbox | null = hasPins ? (priorRecipe?.crop ?? null) : null;
-  const forceFullPage = hasPins && !priorRecipe?.crop;
 
   // Reset state when the dialog opens / closes.
   useEffect(() => {
@@ -228,11 +185,9 @@ export function FloorPlanUploadDialog({
       // (default), with a hard budget + graceful fallback.
       let plate: DisplayPlate | null;
       let enhanced = false;
-      let recipe: PlanPrepRecipe | undefined;
       if (job.mode === 'plate') {
         plate = job.plate;
         enhanced = job.enhanced;
-        recipe = job.recipe;
       } else {
         plate = await withTimeout(
           produceDisplayPlate(job.file, job.source),
@@ -261,7 +216,7 @@ export function FloorPlanUploadDialog({
         width_px: plate.width,
         height_px: plate.height,
         plan_metadata: {
-          planPrep: stampPlanPrep({ processed: true, source: job.source, enhanced, recipe }),
+          planPrep: stampPlanPrep({ processed: true, source: job.source, enhanced }),
         },
       });
     },
@@ -296,7 +251,6 @@ export function FloorPlanUploadDialog({
           name: file.name,
           size: file.size,
           hasPins,
-          forceFullPage,
         });
       }
       const v = validatePlanFile(file);
@@ -307,29 +261,18 @@ export function FloorPlanUploadDialog({
       setStage({ kind: 'analyzing', file });
 
       if (file.type !== 'application/pdf') {
-        // Image/SVG: source 'image', no PDF analysis. The default Upload
-        // produces a capped display PNG; scan-cleanup Enhance is offered.
-        setStage({ kind: 'review', file, source: 'image', metadata: null, warnings: [], analysis: null });
+        // Image/SVG: source 'image'. Default Upload produces a capped display
+        // PNG; Crop and scan-cleanup Enhances are offered (pin-free floors).
+        setStage({ kind: 'review', file, source: 'image', metadata: null, warnings: [] });
         return;
       }
 
+      // PDFs: read metadata for the mismatch warning + label source 'vector'.
+      // (We no longer decompose — the default rasterize keeps all content.)
       try {
-        const buf = await file.arrayBuffer();
-        // getDocument consumes (detaches) the buffer, so clone per parse.
-        const analysis = await analyzePlan(buf.slice(0), { lockedCrop, forceFullPage });
-        const source: PlanSource = analysis.kind === 'vector' ? 'vector' : 'scan';
         const metadata = await readPdfMetadata(file);
         const warnings = detectMismatch(metadata, { buildingName, floorLabel });
-        // Vector PDFs also get the optional declutter Enhance; raster PDFs get
-        // the scan-cleanup Enhance. Either way, the DEFAULT is a capped PNG.
-        setStage({
-          kind: 'review',
-          file,
-          source,
-          metadata,
-          warnings,
-          analysis: analysis.kind === 'vector' ? analysis : null,
-        });
+        setStage({ kind: 'review', file, source: 'vector', metadata, warnings });
       } catch (err) {
         setStage({
           kind: 'error',
@@ -338,7 +281,7 @@ export function FloorPlanUploadDialog({
         });
       }
     },
-    [buildingName, floorLabel, lockedCrop, forceFullPage, hasPins]
+    [buildingName, floorLabel, hasPins]
   );
 
   // Open the scan/image cleanup Enhance: produce both the default plate (before)
@@ -369,16 +312,16 @@ export function FloorPlanUploadDialog({
     []
   );
 
-  // Open the vector declutter Enhance (before/after).
-  const openVectorEnhance = useCallback(async (file: File, analysis: PlanPrepAnalysis) => {
-    setStage({ kind: 'processing', message: 'Preparing the comparison…' });
+  // Open Crop-to-plan: produce the full display plate and hand it to the crop UI.
+  const openCrop = useCallback(async (file: File, source: PlanSource) => {
+    setStage({ kind: 'processing', message: 'Preparing your floor plan…' });
     try {
-      const before = await renderPdfFirstPage(await file.arrayBuffer(), 600);
-      setStage({ kind: 'enhance-vector', file, analysis, beforeUrl: before.url });
+      const full = await produceDisplayPlate(file, source);
+      setStage({ kind: 'enhance-crop', file, source, full, fullUrl: URL.createObjectURL(full.blob) });
     } catch (err) {
       setStage({
         kind: 'error',
-        message: err instanceof Error ? `Couldn't read this PDF: ${err.message}` : "Couldn't read this PDF.",
+        message: err instanceof Error ? `Couldn't prepare this plan: ${err.message}` : "Couldn't prepare this plan.",
       });
     }
   }, []);
@@ -416,7 +359,9 @@ export function FloorPlanUploadDialog({
     ? "Replacing a plan keeps existing pins on the floor. Pin coordinates are normalized — they'll appear in the same relative position on the new plan."
     : `Pick a PDF, PNG, JPG, WebP, or SVG of ${floorLabel}'s plan. Up to ${formatBytes(PLAN_MAX_BYTES)}.`;
 
-  const isWide = stage.kind === 'enhance-vector' || stage.kind === 'enhance-scan';
+  const isWide = stage.kind === 'enhance-crop' || stage.kind === 'enhance-scan';
+  // Geometry-changing enhances (crop, deskew) only on pin-free floors.
+  const canEnhance = !hasPins;
 
   return (
     <Dialog.Root open={open} onOpenChange={onOpenChange}>
@@ -432,12 +377,18 @@ export function FloorPlanUploadDialog({
           <div className="flex items-start justify-between gap-3">
             <div>
               <Dialog.Title className="font-semibold text-xl">
-                {isWide ? `Enhance ${floorLabel}'s plan` : title}
+                {stage.kind === 'enhance-crop'
+                  ? `Crop ${floorLabel}'s plan`
+                  : stage.kind === 'enhance-scan'
+                    ? `Enhance ${floorLabel}'s plan`
+                    : title}
               </Dialog.Title>
               <Dialog.Description id="upload-dialog-desc" className="mt-1 text-sm text-text-muted">
-                {isWide
-                  ? 'Compare the cleaned-up plan with what we have now. Use the enhanced version, or keep the original — your call.'
-                  : description}
+                {stage.kind === 'enhance-crop'
+                  ? 'Frame the floor plan to drop the title block, legend, and border. Everything inside the box is kept.'
+                  : stage.kind === 'enhance-scan'
+                    ? 'Compare the cleaned-up plan with what we have now. Use the enhanced version, or keep the original.'
+                    : description}
               </Dialog.Description>
             </div>
             <Dialog.Close asChild>
@@ -474,52 +425,49 @@ export function FloorPlanUploadDialog({
                 metadata={stage.metadata}
                 warnings={stage.warnings}
                 isReplace={isReplace}
-                canEnhance={stage.source !== 'vector' || !!stage.analysis}
+                canEnhance={canEnhance}
                 onCancel={() => setStage({ kind: 'pick' })}
                 onUpload={() => startDefaultUpload(stage.file, stage.source)}
-                onEnhance={() => {
-                  if (stage.source === 'vector' && stage.analysis) {
-                    void openVectorEnhance(stage.file, stage.analysis);
-                  } else {
-                    void openScanEnhance(stage.file, stage.source);
-                  }
-                }}
+                onCrop={() => void openCrop(stage.file, stage.source)}
+                onCleanScan={() => void openScanEnhance(stage.file, stage.source)}
                 redrawHref={redrawMailto({ buildingName, floorLabel })}
               />
             )}
-            {stage.kind === 'enhance-vector' && (
-              <PlanPrepPanel
-                analysis={stage.analysis}
-                beforeUrl={stage.beforeUrl}
-                pageWidth={stage.analysis.decompose.pageWidth}
-                pageHeight={stage.analysis.decompose.pageHeight}
+            {stage.kind === 'enhance-crop' && (
+              <PlanCropPanel
+                imageUrl={stage.fullUrl}
+                imageW={stage.full.width}
+                imageH={stage.full.height}
                 busy={upload.isPending}
                 redrawHref={redrawMailto({ buildingName, floorLabel })}
                 onCancel={() => setStage({ kind: 'pick' })}
-                onKeepOriginal={() => startDefaultUpload(stage.file, 'vector')}
-                onAccept={async (selection) => {
+                onKeepFull={() =>
+                  upload.mutate({
+                    mode: 'plate',
+                    file: stage.file,
+                    source: stage.source,
+                    plate: stage.full,
+                    enhanced: false,
+                  })
+                }
+                onCrop={async (rect: CropRect) => {
                   try {
-                    setStage({ kind: 'processing', message: 'Producing the enhanced plan…' });
-                    const plate = await capToDisplayPlate(
-                      await producePlate(stage.analysis.decompose, { ...selection, format: 'png' })
-                    );
-                    const recipe: PlanPrepRecipe = {
-                      version: 1,
-                      keepKeys: selection.keepKeys,
-                      crop: selection.crop,
-                      format: 'png',
-                      originalPath: objectNameForFloor(floorId, 'application/pdf'),
-                      outputWidth: plate.width,
-                      outputHeight: plate.height,
-                    };
-                    upload.mutate({ mode: 'plate', file: stage.file, source: 'vector', plate, enhanced: true, recipe });
+                    setStage({ kind: 'processing', message: 'Cropping your floor plan…' });
+                    const cropped = await cropPlateBlob(stage.full.blob, rect);
+                    upload.mutate({
+                      mode: 'plate',
+                      file: stage.file,
+                      source: stage.source,
+                      plate: cropped,
+                      enhanced: true,
+                    });
                   } catch (err) {
                     setStage({
                       kind: 'error',
                       message:
                         err instanceof Error
-                          ? `Couldn't produce the enhanced plan: ${err.message}`
-                          : "Couldn't produce the enhanced plan.",
+                          ? `Couldn't crop this plan: ${err.message}`
+                          : "Couldn't crop this plan.",
                     });
                   }
                 }}
@@ -564,122 +512,6 @@ export function FloorPlanUploadDialog({
   );
 }
 
-function PlanPrepPanel(props: {
-  analysis: PlanPrepAnalysis;
-  beforeUrl: string;
-  pageWidth: number;
-  pageHeight: number;
-  busy: boolean;
-  redrawHref: string;
-  onCancel: () => void;
-  onKeepOriginal: () => void;
-  onAccept: (selection: { keepKeys: string[]; crop: Bbox; format: 'svg' | 'png' }) => void;
-}) {
-  const { analysis, beforeUrl, pageWidth, pageHeight, busy } = props;
-  const groups = analysis.decompose.groups;
-
-  const [keepKeys, setKeepKeys] = useState<string[]>(() =>
-    analysis.autoArchKey ? [analysis.autoArchKey] : groups.map((g) => g.key)
-  );
-  const [showColors, setShowColors] = useState(false);
-
-  // When unlocked, the crop follows the kept groups; when locked, it's frozen.
-  const crop: Bbox = useMemo(() => {
-    if (analysis.cropLocked) return analysis.autoCrop;
-    return cropForKeys(groups, keepKeys, pageWidth, pageHeight);
-  }, [analysis.cropLocked, analysis.autoCrop, groups, keepKeys, pageWidth, pageHeight]);
-
-  const keptCount = useMemo(
-    () => keptPathCount({ groups, keepKeys, crop }),
-    [groups, keepKeys, crop]
-  );
-  const format: 'svg' | 'png' = keptCount > 20_000 ? 'png' : 'svg';
-
-  // Build the AFTER preview from the current selection (always vector SVG —
-  // cheap, regardless of the final output format).
-  const afterUrl = useObjectUrl(
-    useMemo(() => emitSvg({ groups, keepKeys, crop }), [groups, keepKeys, crop])
-  );
-
-  const toggleKey = (key: string) =>
-    setKeepKeys((cur) => (cur.includes(key) ? cur.filter((k) => k !== key) : [...cur, key]));
-
-  const canAccept = keptCount > 0 && !busy;
-
-  return (
-    <div className="space-y-4">
-      <div className="grid grid-cols-2 gap-3">
-        <ComparePane label="Original" badge={`${analysis.decompose.totalPaths.toLocaleString()} shapes`}>
-          <img src={beforeUrl} alt="Original uploaded plan" className="h-full w-full object-contain" />
-        </ComparePane>
-        <ComparePane
-          label="Cleaned"
-          badge={`${keptCount.toLocaleString()} shapes · ${format.toUpperCase()}`}
-          highlight
-        >
-          {afterUrl ? (
-            <img src={afterUrl} alt="Cleaned floor plate preview" className="h-full w-full object-contain" />
-          ) : (
-            <div className="flex h-full items-center justify-center text-xs text-text-faint">
-              Nothing kept — choose at least one color group.
-            </div>
-          )}
-        </ComparePane>
-      </div>
-
-      {analysis.cropLocked ? (
-        <p className="flex items-start gap-2 rounded-md border border-info/30 bg-info-bg p-3 text-xs text-info">
-          <Lock size={14} aria-hidden className="mt-0.5 shrink-0" />
-          <span>
-            This floor has pins, so the plan keeps its current frame. We can declutter and recolor,
-            but the crop is locked to keep every pin in place.
-          </span>
-        </p>
-      ) : analysis.autoArchKey === null ? (
-        <p className="flex items-start gap-2 rounded-md border border-warning/30 bg-warning-bg p-3 text-xs text-warning">
-          <AlertTriangle size={14} aria-hidden className="mt-0.5 shrink-0" />
-          <span>
-            We couldn't confidently spot the architectural layer. Pick which color groups to keep
-            below.
-          </span>
-        </p>
-      ) : null}
-
-      <button
-        type="button"
-        onClick={() => setShowColors((s) => !s)}
-        className="text-xs font-medium text-text-muted underline-offset-2 hover:text-text hover:underline dark:hover:text-white"
-      >
-        {showColors ? 'Hide color groups' : 'Adjust colors'}
-      </button>
-      {showColors && (
-        <ColorGroupPicker groups={groups} keepKeys={keepKeys} onToggle={toggleKey} />
-      )}
-
-      <div className="flex flex-wrap items-center justify-between gap-2 pt-1">
-        <PlanRedrawLink href={props.redrawHref} />
-        <div className="flex flex-wrap justify-end gap-2">
-          <Button variant="ghost" onClick={props.onCancel} disabled={busy}>
-            Pick a different file
-          </Button>
-          <Button variant="secondary" onClick={props.onKeepOriginal} disabled={busy}>
-            Keep original
-          </Button>
-          <Button
-            variant="gold"
-            loading={busy}
-            disabled={!canAccept}
-            iconLeft={<Sparkles size={14} aria-hidden />}
-            onClick={() => props.onAccept({ keepKeys, crop, format })}
-          >
-            Use enhanced plan
-          </Button>
-        </div>
-      </div>
-    </div>
-  );
-}
-
 function ComparePane({
   label,
   badge,
@@ -705,63 +537,6 @@ function ComparePane({
       <div className="h-56 p-2">{children}</div>
     </div>
   );
-}
-
-function ColorGroupPicker({
-  groups,
-  keepKeys,
-  onToggle,
-}: {
-  groups: PlanPrepAnalysis['decompose']['groups'];
-  keepKeys: string[];
-  onToggle: (key: string) => void;
-}) {
-  // Show the most significant groups; trivial buckets just add noise.
-  const shown = groups.filter((g) => g.pathCount >= 3).slice(0, 16);
-  return (
-    <ul className="grid max-h-44 grid-cols-2 gap-1.5 overflow-y-auto rounded-md border border-black/10 p-2 dark:border-white/10">
-      {shown.map((g) => {
-        const kept = keepKeys.includes(g.key);
-        return (
-          <li key={g.key}>
-            <button
-              type="button"
-              onClick={() => onToggle(g.key)}
-              aria-pressed={kept}
-              className={cn(
-                'flex w-full items-center gap-2 rounded-md border px-2 py-1.5 text-left text-xs transition-colors',
-                kept
-                  ? 'border-waymarks-gold bg-waymarks-gold-soft'
-                  : 'border-black/10 opacity-60 hover:opacity-100 dark:border-white/10'
-              )}
-            >
-              <span
-                aria-hidden
-                className="h-4 w-4 shrink-0 rounded border border-black/20"
-                style={{ backgroundColor: `rgb(${g.color[0]}, ${g.color[1]}, ${g.color[2]})` }}
-              />
-              <span className="min-w-0 flex-1">
-                <span className="block font-medium text-text">{kept ? 'Keep' : 'Drop'}</span>
-                <span className="text-text-faint">{g.pathCount.toLocaleString()} shapes</span>
-              </span>
-            </button>
-          </li>
-        );
-      })}
-    </ul>
-  );
-}
-
-/** Create an object URL for a string/blob and revoke it on change/unmount. */
-function useObjectUrl(svg: string): string | null {
-  const [url, setUrl] = useState<string | null>(null);
-  useEffect(() => {
-    const blob = new Blob([svg], { type: 'image/svg+xml' });
-    const u = URL.createObjectURL(blob);
-    setUrl(u);
-    return () => URL.revokeObjectURL(u);
-  }, [svg]);
-  return url;
 }
 
 function PickArea(props: {
@@ -862,11 +637,13 @@ function ReviewPanel(props: {
   canEnhance: boolean;
   onCancel: () => void;
   onUpload: () => void;
-  onEnhance: () => void;
+  onCrop: () => void;
+  onCleanScan: () => void;
   redrawHref: string;
 }) {
   const Icon = props.file.type === 'application/pdf' ? FileText : ImageIcon;
-  const enhanceLabel = props.source === 'vector' ? 'Enhance — declutter' : 'Enhance — clean up';
+  // Scan cleanup (deskew/contrast/despeckle) only helps raster images.
+  const showClean = props.canEnhance && props.source === 'image';
   return (
     <div className="space-y-4">
       <div className="flex items-center gap-3 rounded-lg border border-black/10 bg-surface p-3 text-sm dark:border-white/10">
@@ -896,9 +673,11 @@ function ReviewPanel(props: {
         </ul>
       )}
       <p className="rounded-md border border-black/10 bg-surface p-3 text-xs text-text-muted dark:border-white/10">
-        We'll prepare a crisp, size-capped image of this plan so the floor opens instantly —
-        no rendering when you view it later.
-        {props.source !== 'vector' && ' Scanned or photographed plan? Try Enhance to clean it up.'}
+        We'll prepare a crisp, size-capped image of this plan — with every wall, room,
+        and label intact — so the floor opens instantly.
+        {props.canEnhance
+          ? ' Want to trim the title block and border? Use Crop to plan.'
+          : ' This floor already has pins, so the plan keeps its current frame.'}
         {props.isReplace && ' Existing pins on this floor are preserved.'}
       </p>
       <div className="flex flex-wrap items-center justify-between gap-2">
@@ -907,9 +686,14 @@ function ReviewPanel(props: {
           <Button variant="secondary" onClick={props.onCancel}>
             Pick a different file
           </Button>
+          {showClean && (
+            <Button variant="ghost" iconLeft={<Wand2 size={14} aria-hidden />} onClick={props.onCleanScan}>
+              Clean up scan
+            </Button>
+          )}
           {props.canEnhance && (
-            <Button variant="ghost" iconLeft={<Wand2 size={14} aria-hidden />} onClick={props.onEnhance}>
-              {enhanceLabel}
+            <Button variant="ghost" iconLeft={<Crop size={14} aria-hidden />} onClick={props.onCrop}>
+              Crop to plan
             </Button>
           )}
           <Button variant="gold" onClick={props.onUpload}>
