@@ -56,6 +56,7 @@ import { useVendors, useCreateVendor } from '@/hooks/useVendors';
 import { AssetAttachmentsPanel } from './AssetAttachmentsPanel';
 import { AuditVideosPanel } from './AuditVideosPanel';
 import { AuditVideoRecorderDialog } from './AuditVideoRecorderDialog';
+import { ExpensesPanel } from './ExpensesPanel';
 import { useCan } from '@/lib/permissions-context';
 import { cn } from '@/lib/utils';
 import type { Asset, AssetPhoto, AuditLogEntry } from '@/types/database';
@@ -316,6 +317,23 @@ export function AssetDrawer({
                     label: 'Vendor',
                     node: <VendorPanel asset={asset} canEdit={canEdit} buildingId={buildingId} />,
                   },
+                  // Expenses band — editor+ only (RLS hides expenses from
+                  // auditors, tenant reps, and guests, so the UI matches).
+                  ...(canEdit
+                    ? [
+                        {
+                          icon: ShoppingCart,
+                          label: 'Expenses',
+                          node: (
+                            <ExpensesPanel
+                              assetId={asset.id}
+                              canEdit={canEdit}
+                              canDelete={canDelete}
+                            />
+                          ),
+                        },
+                      ]
+                    : []),
                   { icon: History, label: 'Activity', node: <ActivitySection items={activity} /> },
                 ];
                 return (
