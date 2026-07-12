@@ -102,6 +102,31 @@ export async function uploadPlanObject(
 }
 
 /**
+ * Canonical storage path for a floor's processed display plate (Plan Prep v2).
+ * Always PNG, always `<floorId>.plate.png` — distinct from the retained original
+ * (`<floorId>.<origext>`) so both coexist. The RLS helper keys off the
+ * `<uuid>.` prefix, which matches this too.
+ */
+export function platePathForFloor(floorId: string): string {
+  return `${floorId}.plate.png`;
+}
+
+/** Upload the processed display PNG to the floor's canonical plate slot. */
+export async function uploadDisplayPlate(
+  floorId: string,
+  blob: Blob
+): Promise<{ path: string }> {
+  const path = platePathForFloor(floorId);
+  const { error } = await supabase.storage.from('floor-plans').upload(path, blob, {
+    contentType: 'image/png',
+    upsert: true,
+    cacheControl: '0',
+  });
+  if (error) throw error;
+  return { path };
+}
+
+/**
  * Get a short-lived signed URL for the floor's plan. Plans are private.
  */
 export async function signedUrlForPlan(path: string): Promise<string> {
