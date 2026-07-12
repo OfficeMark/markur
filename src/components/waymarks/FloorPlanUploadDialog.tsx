@@ -435,8 +435,6 @@ export function FloorPlanUploadDialog({
             {stage.kind === 'enhance-crop' && (
               <PlanCropPanel
                 imageUrl={stage.fullUrl}
-                imageW={stage.full.width}
-                imageH={stage.full.height}
                 busy={upload.isPending}
                 redrawHref={redrawMailto({ buildingName, floorLabel })}
                 onCancel={() => setStage({ kind: 'pick' })}
@@ -753,7 +751,7 @@ function PlanRedrawLink({ href }: { href: string }) {
   return (
     <a
       href={href}
-      className="inline-flex items-center gap-1.5 text-xs text-text-muted underline-offset-2 hover:text-waymarks-gold hover:underline"
+      className="inline-flex items-center gap-1.5 text-xs font-medium text-waymarks-gold-deep underline decoration-waymarks-gold/40 underline-offset-2 hover:decoration-waymarks-gold"
     >
       <PenTool size={12} aria-hidden />
       Not clean enough? Have OfficeMark redraw this floor.
