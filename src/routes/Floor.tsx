@@ -89,13 +89,29 @@ export function Floor() {
   // path was saved — they render struck-through and are dropped on Save.
   const [pathOrder, setPathOrder] = useState<string[]>([]);
 
-  const [uploadOpen, setUploadOpen] = useState(false);
+  // The upload/replace dialog is tied to the floor it was opened on. We track
+  // the requested floor id (not a bare boolean) so the request can never
+  // surface on a different floor than the one tapped: it's derived-open only
+  // while the requested floor matches the current route floor. Navigating away
+  // cancels it. This also drives instant feedback (a lightweight "Opening…"
+  // overlay via Suspense while the lazy plan-prep chunk loads).
+  const [uploadReqFloor, setUploadReqFloor] = useState<string | null>(null);
   const [signedUrl, setSignedUrl] = useState<string | null>(null);
   const [signedUrlError, setSignedUrlError] = useState<string | null>(null);
   const [placing, setPlacing] = useState(false);
   const [placePos, setPlacePos] = useState<{ x: number; y: number } | null>(null);
   const [newAssetOpen, setNewAssetOpen] = useState(false);
   const [selectedAssetId, setSelectedAssetId] = useState<string | null>(null);
+
+  // The dialog is open only while its requested floor is the one we're on.
+  const uploadOpen = uploadReqFloor != null && uploadReqFloor === id;
+  const openUploadDialog = () => setUploadReqFloor(id ?? null);
+  const closeUploadDialog = () => setUploadReqFloor(null);
+  // Cancel a pending/open upload request when the floor changes, so a slow
+  // lazy-chunk load can never resolve onto a different floor's plan.
+  useEffect(() => {
+    if (uploadReqFloor != null && uploadReqFloor !== id) setUploadReqFloor(null);
+  }, [id, uploadReqFloor]);
 
 
   // M10c — view mode (Map / Grid) + filter-by-type set.
@@ -587,7 +603,7 @@ export function Floor() {
       hasPins={hasPins}
       canUploadPlan={canUploadPlan}
       canEditPins={canEdit}
-      onReplacePlan={() => setUploadOpen(true)}
+      onReplacePlan={openUploadDialog}
       onEditPath={floor.plan_url ? startEditPath : undefined}
       offline={
         floor.plan_url
@@ -838,7 +854,7 @@ export function Floor() {
             description="Once a floor plan is uploaded you'll see it here, ready for pins. PDF, PNG, or JPG."
             primaryAction={
               canUploadPlan
-                ? { label: 'Upload floor plan', onClick: () => setUploadOpen(true) }
+                ? { label: 'Upload floor plan', onClick: openUploadDialog }
                 : undefined
             }
           />
@@ -846,10 +862,12 @@ export function Floor() {
       </div>
 
       {canUploadPlan && uploadOpen && (
-        <Suspense fallback={null}>
+        <Suspense fallback={<UploadDialogOpening onCancel={closeUploadDialog} />}>
           <FloorPlanUploadDialog
             open
-            onOpenChange={setUploadOpen}
+            onOpenChange={(o) => {
+              if (!o) closeUploadDialog();
+            }}
             floorId={floor.id}
             floorLabel={floor.label}
             buildingName={building?.name ?? 'Building'}
@@ -918,6 +936,33 @@ export function Floor() {
       )}
 
     </AppShell>
+  );
+}
+
+/**
+ * Instant feedback while the lazy plan-prep chunk loads after tapping Upload /
+ * Replace. Rendered as the Suspense fallback so the user sees an immediate
+ * response (never a dead tap). Clicking the backdrop cancels the request.
+ */
+function UploadDialogOpening({ onCancel }: { onCancel: () => void }) {
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/40"
+      role="status"
+      aria-live="polite"
+    >
+      <div className="flex items-center gap-3 rounded-xl border border-black/10 bg-surface px-5 py-4 text-sm text-text shadow-sheet dark:border-white/10">
+        <div className="h-5 w-5 animate-spin rounded-full border-2 border-waymarks-gold border-t-transparent" />
+        <span>Opening plan tools…</span>
+        <button
+          type="button"
+          onClick={onCancel}
+          className="ml-1 rounded-md px-2 py-1 text-xs font-medium text-text-muted hover:bg-black/5 hover:text-text dark:hover:bg-white/5"
+        >
+          Cancel
+        </button>
+      </div>
+    </div>
   );
 }
 

@@ -19,8 +19,6 @@ function clamp01(v: number, lo = 0, hi = 1): number {
 
 export function PlanCropPanel({
   imageUrl,
-  imageW,
-  imageH,
   busy,
   redrawHref,
   onCancel,
@@ -28,8 +26,6 @@ export function PlanCropPanel({
   onCrop,
 }: {
   imageUrl: string;
-  imageW: number;
-  imageH: number;
   busy: boolean;
   redrawHref: string;
   onCancel: () => void;
@@ -95,10 +91,14 @@ export function PlanCropPanel({
   return (
     <div className="space-y-4">
       <div className="flex justify-center">
+        {/* The wrapper shrinks to the image's rendered box (inline-block), and
+            the img self-sizes preserving aspect ratio (max-w/max-h + intrinsic
+            ratio) — contain, never stretch. So the crop overlay's normalized
+            rect maps 1:1 to the plate, which cropPlateBlob converts to unscaled
+            plate pixels. */}
         <div
           ref={frameRef}
-          className="relative max-h-[52vh] w-full touch-none select-none overflow-hidden rounded-lg border border-black/10 bg-white dark:border-white/10"
-          style={{ aspectRatio: `${imageW} / ${imageH}` }}
+          className="relative inline-block max-w-full touch-none select-none overflow-hidden rounded-lg border border-black/10 bg-white leading-none dark:border-white/10"
           onPointerMove={move}
           onPointerUp={end}
           onPointerCancel={end}
@@ -106,7 +106,8 @@ export function PlanCropPanel({
           <img
             src={imageUrl}
             alt="Uploaded plan"
-            className="pointer-events-none absolute inset-0 h-full w-full object-fill"
+            draggable={false}
+            className="pointer-events-none block max-h-[52vh] max-w-full select-none"
           />
           {/* Crop box — the box-shadow dims everything outside it. */}
           <div
@@ -142,7 +143,7 @@ export function PlanCropPanel({
       <div className="flex flex-wrap items-center justify-between gap-2 pt-1">
         <a
           href={redrawHref}
-          className="inline-flex items-center gap-1.5 text-xs text-text-muted underline-offset-2 hover:text-waymarks-gold hover:underline"
+          className="inline-flex items-center gap-1.5 text-xs font-medium text-waymarks-gold-deep underline decoration-waymarks-gold/40 underline-offset-2 hover:decoration-waymarks-gold"
         >
           <PenTool size={12} aria-hidden />
           Not clean enough? Have OfficeMark redraw this floor.
