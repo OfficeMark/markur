@@ -1,5 +1,11 @@
 import { describe, expect, it } from 'vitest';
-import { MAX_PLATE_EDGE, fitScale, pdfRenderScale } from '@/lib/plan-prep/rasterize';
+import {
+  MAX_PLATE_EDGE,
+  clampCrop,
+  fitScale,
+  isFullCrop,
+  pdfRenderScale,
+} from '@/lib/plan-prep/rasterize';
 import { platePathForFloor } from '@/lib/upload';
 import { stampPlanPrep, PLAN_PIPELINE_VERSION } from '@/lib/plan-prep/types';
 
@@ -45,5 +51,25 @@ describe('plan prep v2 — metadata stamp + plate path', () => {
 
     const fallback = stampPlanPrep({ processed: false, source: 'scan', enhanced: false });
     expect(fallback.processed).toBe(false);
+  });
+});
+
+describe('plan prep v2 — crop-to-plan math', () => {
+  it('clampCrop keeps the rect inside [0,1] with a minimum size and x+w ≤ 1', () => {
+    // In-bounds rect unchanged.
+    expect(clampCrop({ x: 0.1, y: 0.2, w: 0.5, h: 0.6 })).toEqual({ x: 0.1, y: 0.2, w: 0.5, h: 0.6 });
+    // Over-right: width shrinks so x+w ≤ 1.
+    const r = clampCrop({ x: 0.8, y: 0, w: 0.5, h: 1 });
+    expect(r.x + r.w).toBeLessThanOrEqual(1 + 1e-9);
+    // Negative origin clamps to 0.
+    expect(clampCrop({ x: -0.3, y: -0.3, w: 0.5, h: 0.5 }).x).toBe(0);
+    // Below-minimum size is bumped up to the floor.
+    expect(clampCrop({ x: 0, y: 0, w: 0.001, h: 0.001 }).w).toBeGreaterThanOrEqual(0.05);
+  });
+
+  it('isFullCrop recognizes the whole-plate rect (nothing to crop)', () => {
+    expect(isFullCrop({ x: 0, y: 0, w: 1, h: 1 })).toBe(true);
+    expect(isFullCrop({ x: 0.1, y: 0, w: 0.9, h: 1 })).toBe(false);
+    expect(isFullCrop({ x: 0, y: 0, w: 0.5, h: 1 })).toBe(false);
   });
 });
