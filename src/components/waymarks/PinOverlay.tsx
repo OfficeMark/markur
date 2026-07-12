@@ -58,6 +58,21 @@ export type PinOverlayProps = {
    * no reposition is already in progress.
    */
   onLongPress?: (assetId: string) => void;
+
+  // Audit-path edit mode (Feature 1) --------------------------------------
+  /**
+   * When true, tapping a pin toggles its membership in the audit path
+   * (instead of opening the drawer). Pins already in the path show a gold
+   * sequence badge; others stay visible and tappable so they can be added.
+   */
+  pathEditMode?: boolean;
+  /**
+   * Map<assetId → 1-based stop number> for pins currently in the path.
+   * Drives the sequence badge in path-edit mode.
+   */
+  pathIndexById?: ReadonlyMap<string, number> | null;
+  /** Toggle a pin in/out of the path (path-edit mode only). */
+  onPathToggle?: (assetId: string) => void;
 };
 
 const LONG_PRESS_MS = 500;
@@ -95,6 +110,9 @@ export function PinOverlay({
   lastAuditByAsset,
   statusOverride,
   onLongPress,
+  pathEditMode,
+  pathIndexById,
+  onPathToggle,
 }: PinOverlayProps) {
   const layerRef = useRef<HTMLDivElement | null>(null);
   const { pinShape, pinSize } = useOrgBranding();
@@ -228,10 +246,15 @@ export function PinOverlay({
         //   - if a deliberate reposition is active, only the targeted pin can
         //     be dragged (lock state intentionally ignored);
         //   - otherwise the M4 quick-nudge path applies: canMove + unlocked.
-        const draggable = isRepositionTarget
-          ? true
-          : !repositionAssetId && canMove && !asset.is_locked;
+        // In path-edit mode pins are never draggable — taps toggle path
+        // membership (mobile-first, no drag-and-drop for ordering).
+        const draggable = pathEditMode
+          ? false
+          : isRepositionTarget
+            ? true
+            : !repositionAssetId && canMove && !asset.is_locked;
         const faded = !!repositionAssetId && !isRepositionTarget;
+        const sequenceNumber = pathEditMode ? pathIndexById?.get(asset.id) ?? null : null;
 
         const pinLabel = formatPinNumber(asset.pin_number);
 
@@ -287,8 +310,9 @@ export function PinOverlay({
               shape={pinShape}
               size={pinSize}
               pinLabel={pinLabel}
+              sequenceNumber={sequenceNumber}
               fillColor={statusOverride ? statusFillColor(status) : undefined}
-              selected={asset.id === selectedAssetId}
+              selected={!pathEditMode && asset.id === selectedAssetId}
               unlocked={draggable && !isRepositionTarget}
               repositioning={isRepositionTarget}
               faded={faded}
@@ -356,6 +380,12 @@ export function PinOverlay({
                 // While a reposition is active, suppress click-to-open-drawer
                 // — the user is mid-action and the drawer would interrupt.
                 if (repositionAssetId) return;
+                // Path-edit mode: a tap adds/removes this pin from the walking
+                // order instead of opening the detail drawer.
+                if (pathEditMode) {
+                  onPathToggle?.(asset.id);
+                  return;
+                }
                 onSelectAsset(asset);
               }}
             />

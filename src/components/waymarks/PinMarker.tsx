@@ -44,6 +44,12 @@ export type PinMarkerProps = {
    * label is hidden by default (M32 Step 1 — hover/press to reveal).
    */
   pinLabel?: string | null;
+  /**
+   * Audit-path edit mode (Feature 1): when set, this pin is stop N in the
+   * walking order and shows a gold sequence badge + gold ring. `null` means the
+   * pin is not (yet) in the path.
+   */
+  sequenceNumber?: number | null;
   onPointerDownDrag?: (e: React.PointerEvent<HTMLButtonElement>) => void;
   onClick?: () => void;
 };
@@ -85,11 +91,13 @@ export const PinMarker = memo(forwardRef<HTMLButtonElement, PinMarkerProps>(func
     faded,
     fillColor,
     pinLabel,
+    sequenceNumber,
     onPointerDownDrag,
     onClick,
   },
   ref
 ) {
+  const inPath = sequenceNumber != null;
   const Icon = ICON_BY_STATUS[status];
   const dragAccept = unlocked || repositioning;
   const lockSuffix = repositioning
@@ -140,7 +148,9 @@ export const PinMarker = memo(forwardRef<HTMLButtonElement, PinMarkerProps>(func
         e.stopPropagation();
         onClick?.();
       }}
-      aria-label={`${ariaPrefix}${name} (${typeName}, ${statusLabel(status)}${lockSuffix})`}
+      aria-label={`${ariaPrefix}${name} (${typeName}, ${statusLabel(status)}${lockSuffix}${
+        inPath ? `, audit path stop ${sequenceNumber}` : ''
+      })`}
       style={{
         backgroundColor: isTeardrop ? 'transparent' : resolvedFill,
         width: px,
@@ -167,6 +177,8 @@ export const PinMarker = memo(forwardRef<HTMLButtonElement, PinMarkerProps>(func
         unlocked && !repositioning &&
           'after:pointer-events-none after:absolute after:-inset-1 after:animate-pulse after:rounded-full after:border-2 after:border-dashed after:border-waymarks-gold',
         !unlocked && !repositioning && selected && 'ring-4 ring-waymarks-gold',
+        // Audit-path stop: a gold ring so path pins read as a connected set.
+        inPath && !repositioning && !unlocked && !selected && 'ring-2 ring-waymarks-gold',
         pendingSync && 'border-dashed',
         faded && 'opacity-40'
       )}
@@ -198,6 +210,20 @@ export const PinMarker = memo(forwardRef<HTMLButtonElement, PinMarkerProps>(func
           aria-hidden
           className="absolute -right-1 -top-1 h-2.5 w-2.5 rounded-full border border-white bg-danger"
         />
+      )}
+      {/* Audit-path sequence badge (Feature 1): the pin's stop number in the
+          walking order. Fixed size so it stays legible on the smallest pins;
+          counter-rotated so it reads upright even on a diamond pin. */}
+      {inPath && (
+        <span
+          aria-hidden
+          className={cn(
+            'absolute -left-2 -top-2 inline-flex h-[15px] min-w-[15px] items-center justify-center rounded-full border border-white bg-waymarks-gold px-[3px] text-[9px] font-bold leading-none text-white shadow-sm',
+            iconCounterRotate && '-rotate-45'
+          )}
+        >
+          {sequenceNumber}
+        </span>
       )}
     </button>
   );
