@@ -1,18 +1,33 @@
-import { lazy, Suspense, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, type ComponentType } from 'react';
 import { Link, useParams } from 'react-router-dom';
-import { ArrowLeft, ChevronRight, ClipboardCheck, ImageOff, LayoutGrid, Map as MapIcon, Maximize2, MapPin, Minimize2, NotebookPen, Shapes, Trash2 } from 'lucide-react';
+import { AlertTriangle, ArrowLeft, ChevronRight, ClipboardCheck, ImageOff, LayoutGrid, Map as MapIcon, Maximize2, MapPin, Minimize2, NotebookPen, Shapes, Trash2 } from 'lucide-react';
 import { AppShell } from '@/components/waymarks/AppShell';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { Button } from '@/components/ui/Button';
 import { Tooltip } from '@/components/ui/Tooltip';
 import { FloorPlanCanvas } from '@/components/waymarks/FloorPlanCanvas';
-// Lazy: the plan-prep + pdfjs graph (~400 kB) loads only when the upload dialog
-// is actually opened — never on plain floor open (Plan Prep v2 bundling law).
-const FloorPlanUploadDialog = lazy(() =>
-  import('@/components/waymarks/FloorPlanUploadDialog').then((m) => ({
-    default: m.FloorPlanUploadDialog,
-  }))
-);
+import type { FloorPlanUploadDialogProps } from '@/components/waymarks/FloorPlanUploadDialog';
+
+// The plan-prep + pdfjs graph (~400 kB) loads only when the upload dialog is
+// actually opened — never on plain floor open (Plan Prep v2 bundling law). We
+// load it imperatively (not via React.lazy/Suspense) so we control every
+// outcome: a failed import is retryable (React.lazy caches rejections forever),
+// a hung import times out into a real error instead of an endless spinner, and
+// a cancel fully resets. The module promise is cached only once it RESOLVES —
+// a rejection nulls the cache so the next tap re-attempts a clean import.
+type UploadDialogComponent = ComponentType<FloorPlanUploadDialogProps>;
+type UploadDialogModule = { FloorPlanUploadDialog: UploadDialogComponent };
+let uploadDialogPromise: Promise<UploadDialogModule> | null = null;
+function loadUploadDialogModule(): Promise<UploadDialogModule> {
+  if (!uploadDialogPromise) {
+    uploadDialogPromise = import('@/components/waymarks/FloorPlanUploadDialog').catch((err) => {
+      uploadDialogPromise = null; // don't cache the failure — allow a clean retry
+      throw err;
+    });
+  }
+  return uploadDialogPromise;
+}
+const UPLOAD_LOAD_TIMEOUT_MS = 15_000;
 import { PinOverlay } from '@/components/waymarks/PinOverlay';
 import { NewAssetDialog } from '@/components/waymarks/NewAssetDialog';
 import { AssetDrawer } from '@/components/waymarks/AssetDrawer';
@@ -89,13 +104,21 @@ export function Floor() {
   // path was saved — they render struck-through and are dropped on Save.
   const [pathOrder, setPathOrder] = useState<string[]>([]);
 
-  // The upload/replace dialog is tied to the floor it was opened on. We track
-  // the requested floor id (not a bare boolean) so the request can never
-  // surface on a different floor than the one tapped: it's derived-open only
-  // while the requested floor matches the current route floor. Navigating away
-  // cancels it. This also drives instant feedback (a lightweight "Opening…"
-  // overlay via Suspense while the lazy plan-prep chunk loads).
-  const [uploadReqFloor, setUploadReqFloor] = useState<string | null>(null);
+  // The upload/replace dialog is tied to the floor it was opened on, and loaded
+  // imperatively on tap. `uploadState` is a small machine — idle → opening
+  // (spinner) → open | error — all stamped with the floor id so the request can
+  // never surface on a different floor than the one tapped. `uploadReqToken`
+  // invalidates any in-flight chunk load on cancel / floor change / reopen, so a
+  // slow or stale load can never resolve onto the wrong floor, and a cancel
+  // always leaves a clean slate for the next tap.
+  type UploadState =
+    | { status: 'idle' }
+    | { status: 'opening'; floorId: string }
+    | { status: 'open'; floorId: string }
+    | { status: 'error'; floorId: string; message: string };
+  const [uploadState, setUploadState] = useState<UploadState>({ status: 'idle' });
+  const [UploadDialog, setUploadDialog] = useState<UploadDialogComponent | null>(null);
+  const uploadReqToken = useRef(0);
   const [signedUrl, setSignedUrl] = useState<string | null>(null);
   const [signedUrlError, setSignedUrlError] = useState<string | null>(null);
   const [placing, setPlacing] = useState(false);
@@ -103,15 +126,59 @@ export function Floor() {
   const [newAssetOpen, setNewAssetOpen] = useState(false);
   const [selectedAssetId, setSelectedAssetId] = useState<string | null>(null);
 
-  // The dialog is open only while its requested floor is the one we're on.
-  const uploadOpen = uploadReqFloor != null && uploadReqFloor === id;
-  const openUploadDialog = () => setUploadReqFloor(id ?? null);
-  const closeUploadDialog = () => setUploadReqFloor(null);
+  // Cancel: bump the token (invalidating any in-flight load) and reset to idle.
+  // This is the single reset path — Radix close, the spinner's Cancel button,
+  // the error's Cancel, and floor-change all funnel through it, guaranteeing the
+  // next tap starts fresh.
+  const closeUploadDialog = useCallback(() => {
+    uploadReqToken.current += 1;
+    setUploadState({ status: 'idle' });
+  }, []);
+
+  const openUploadDialog = useCallback(() => {
+    if (id == null) return;
+    const token = (uploadReqToken.current += 1);
+    const floorId = id;
+    // Chunk already loaded this session → open immediately, no spinner flash.
+    if (UploadDialog) {
+      setUploadState({ status: 'open', floorId });
+      return;
+    }
+    // Instant feedback, then load the chunk with a timeout guard.
+    setUploadState({ status: 'opening', floorId });
+    Promise.race([
+      loadUploadDialogModule(),
+      new Promise<never>((_, reject) =>
+        setTimeout(
+          () => reject(new Error('Plan tools took too long to load. Check your connection and try again.')),
+          UPLOAD_LOAD_TIMEOUT_MS
+        )
+      ),
+    ]).then(
+      (m) => {
+        if (uploadReqToken.current !== token) return; // superseded (cancelled / floor changed / reopened)
+        setUploadDialog(() => m.FloorPlanUploadDialog);
+        setUploadState({ status: 'open', floorId });
+      },
+      (err: unknown) => {
+        if (uploadReqToken.current !== token) return;
+        setUploadState({
+          status: 'error',
+          floorId,
+          message: err instanceof Error ? err.message : 'Could not open plan tools.',
+        });
+      }
+    );
+  }, [id, UploadDialog]);
+
   // Cancel a pending/open upload request when the floor changes, so a slow
-  // lazy-chunk load can never resolve onto a different floor's plan.
+  // chunk load can never resolve onto — or a loaded dialog linger on — a
+  // different floor's plan.
   useEffect(() => {
-    if (uploadReqFloor != null && uploadReqFloor !== id) setUploadReqFloor(null);
-  }, [id, uploadReqFloor]);
+    if (uploadState.status !== 'idle' && uploadState.floorId !== id) {
+      closeUploadDialog();
+    }
+  }, [id, uploadState, closeUploadDialog]);
 
 
   // M10c — view mode (Map / Grid) + filter-by-type set.
@@ -861,19 +928,27 @@ export function Floor() {
         )}
       </div>
 
-      {canUploadPlan && uploadOpen && (
-        <Suspense fallback={<UploadDialogOpening onCancel={closeUploadDialog} />}>
-          <FloorPlanUploadDialog
-            open
-            onOpenChange={(o) => {
-              if (!o) closeUploadDialog();
-            }}
-            floorId={floor.id}
-            floorLabel={floor.label}
-            buildingName={building?.name ?? 'Building'}
-            existingPlanUrl={floor.plan_url}
-          />
-        </Suspense>
+      {canUploadPlan && uploadState.status === 'opening' && uploadState.floorId === id && (
+        <UploadDialogOpening onCancel={closeUploadDialog} />
+      )}
+      {canUploadPlan && uploadState.status === 'error' && uploadState.floorId === id && (
+        <UploadDialogError
+          message={uploadState.message}
+          onRetry={openUploadDialog}
+          onCancel={closeUploadDialog}
+        />
+      )}
+      {canUploadPlan && UploadDialog && uploadState.status === 'open' && uploadState.floorId === id && (
+        <UploadDialog
+          open
+          onOpenChange={(o) => {
+            if (!o) closeUploadDialog();
+          }}
+          floorId={floor.id}
+          floorLabel={floor.label}
+          buildingName={building?.name ?? 'Building'}
+          existingPlanUrl={floor.plan_url}
+        />
       )}
 
       {canCreate && (
@@ -940,9 +1015,8 @@ export function Floor() {
 }
 
 /**
- * Instant feedback while the lazy plan-prep chunk loads after tapping Upload /
- * Replace. Rendered as the Suspense fallback so the user sees an immediate
- * response (never a dead tap). Clicking the backdrop cancels the request.
+ * Instant feedback while the plan-prep chunk loads after tapping Upload /
+ * Replace, so the user never sees a dead tap. Cancel resets cleanly.
  */
 function UploadDialogOpening({ onCancel }: { onCancel: () => void }) {
   return (
@@ -961,6 +1035,45 @@ function UploadDialogOpening({ onCancel }: { onCancel: () => void }) {
         >
           Cancel
         </button>
+      </div>
+    </div>
+  );
+}
+
+/**
+ * Shown when the plan-prep chunk fails or times out loading (stale build,
+ * flaky connection). Retry re-attempts a clean import — never a dead spinner
+ * or a silent no-op.
+ */
+function UploadDialogError({
+  message,
+  onRetry,
+  onCancel,
+}: {
+  message: string;
+  onRetry: () => void;
+  onCancel: () => void;
+}) {
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4"
+      role="alertdialog"
+      aria-modal="true"
+      aria-label="Couldn't open plan tools"
+    >
+      <div className="w-[min(92vw,420px)] rounded-xl border border-black/10 bg-surface p-5 text-text shadow-sheet dark:border-white/10">
+        <div className="flex items-start gap-2 text-sm text-danger">
+          <AlertTriangle size={16} aria-hidden className="mt-0.5 shrink-0" />
+          <span>{message}</span>
+        </div>
+        <div className="mt-4 flex justify-end gap-2">
+          <Button variant="secondary" onClick={onCancel}>
+            Cancel
+          </Button>
+          <Button variant="gold" onClick={onRetry}>
+            Try again
+          </Button>
+        </div>
       </div>
     </div>
   );

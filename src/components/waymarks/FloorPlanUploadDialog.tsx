@@ -69,7 +69,7 @@ function redrawMailto(ctx: { buildingName: string; floorLabel: string }): string
   return `mailto:hello@officemark.ca?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
 }
 
-type FloorPlanUploadDialogProps = {
+export type FloorPlanUploadDialogProps = {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   floorId: string;
