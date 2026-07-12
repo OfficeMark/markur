@@ -22,7 +22,7 @@ import {
 } from '@/lib/upload';
 import {
   cropPlateBlob,
-  enhanceScanFile,
+  enhanceScanBlob,
   produceDisplayPlate,
   stampPlanPrep,
   type CropRect,
@@ -284,16 +284,15 @@ export function FloorPlanUploadDialog({
     [buildingName, floorLabel, hasPins]
   );
 
-  // Open the scan/image cleanup Enhance: produce both the default plate (before)
-  // and the enhanced plate (after) for the comparison.
+  // Open the scan cleanup Enhance. Runs on the baked display PNG, so it works
+  // uniformly for any upload (image or PDF) with no detector: produce the
+  // default plate (before), then clean it up (after) for the comparison.
   const openScanEnhance = useCallback(
     async (file: File, source: PlanSource) => {
       setStage({ kind: 'processing', message: 'Enhancing your plan…' });
       try {
-        const [before, enhanced] = await Promise.all([
-          produceDisplayPlate(file, source),
-          enhanceScanFile(file),
-        ]);
+        const before = await produceDisplayPlate(file, source);
+        const enhanced = await enhanceScanBlob(before.blob);
         setStage({
           kind: 'enhance-scan',
           file,
@@ -642,8 +641,9 @@ function ReviewPanel(props: {
   redrawHref: string;
 }) {
   const Icon = props.file.type === 'application/pdf' ? FileText : ImageIcon;
-  // Scan cleanup (deskew/contrast/despeckle) only helps raster images.
-  const showClean = props.canEnhance && props.source === 'image';
+  // Scan cleanup runs on the baked plate, so it's offered for any upload
+  // (image or PDF) — user-triggered, no detector.
+  const showClean = props.canEnhance;
   return (
     <div className="space-y-4">
       <div className="flex items-center gap-3 rounded-lg border border-black/10 bg-surface p-3 text-sm dark:border-white/10">
