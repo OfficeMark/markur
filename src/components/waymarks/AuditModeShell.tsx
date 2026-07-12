@@ -1,9 +1,12 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   Check,
+  ChevronLeft,
   ChevronRight,
   ClipboardList,
   Flag,
+  Footprints,
+  Shuffle,
   SkipForward,
   X,
 } from 'lucide-react';
@@ -14,7 +17,12 @@ import { AuditCompleteSummary } from '@/components/waymarks/AuditCompleteSummary
 import { AuditFlagDialog } from '@/components/waymarks/AuditFlagDialog';
 import { useAuditEvents, useCreateAuditEvent, useEndAudit, summarizeSession } from '@/hooks/useAudit';
 import { useUpdateAsset } from '@/hooks/useAssets';
-import { nextPinInCycle, orderByPinNumber } from '@/lib/audit-cycle';
+import {
+  assetsNotOnPath,
+  nextPinInCycle,
+  orderByPinNumber,
+  routeFromPath,
+} from '@/lib/audit-cycle';
 import { createFlag } from '@/lib/queries/flags';
 import type { AssetStatus } from '@/lib/asset-status';
 import type { Asset, AuditSession } from '@/types/database';
@@ -41,6 +49,11 @@ export type AuditModeShellProps = {
   planKind: 'pdf' | 'image';
   /** Pin to pre-select on open (drawer "Log a flag" CTA); null = none. */
   initialAssetId?: string | null;
+  /**
+   * Saved walking order for the floor (Feature 1). When present and non-empty,
+   * Audit Mode offers "Follow path" (default) alongside free-roam.
+   */
+  auditPath?: string[] | null;
   onClose: () => void;
 };
 
@@ -52,6 +65,7 @@ export function AuditModeShell({
   planUrl,
   planKind,
   initialAssetId,
+  auditPath,
   onClose,
 }: AuditModeShellProps) {
   const { data: events = [] } = useAuditEvents(session.id);
@@ -90,15 +104,56 @@ export function AuditModeShell({
 
   const current = currentId ? assets.find((a) => a.id === currentId) ?? null : null;
 
-  // The walkthrough order is pin-number order; "Start audit here" picks the
-  // starting pin (via initialAssetId), and the cycle wraps from there to cover
-  // the whole floor.
-  const orderedAssets = useMemo(() => orderByPinNumber(assets), [assets]);
+  // Feature 1 — the saved path's walking route (present assets only). Assets
+  // deleted since the path was saved are silently dropped (routeFromPath);
+  // assets added since are surfaced as "not on the path" at the end.
+  const route = useMemo(() => routeFromPath(assets, auditPath ?? []), [assets, auditPath]);
+  const hasPath = route.length > 0;
+  const notOnPath = useMemo(
+    () => (hasPath ? assetsNotOnPath(assets, auditPath ?? []) : []),
+    [assets, auditPath, hasPath]
+  );
 
-  // Advance to the next unvisited pin in cycle order, wrapping past the end.
+  // Follow a saved path by default when one exists; free-roam is always
+  // available (a path is a guide, not a cage).
+  const [mode, setMode] = useState<'follow' | 'roam'>(hasPath ? 'follow' : 'roam');
+  const following = mode === 'follow' && hasPath;
+
+  // The walkthrough order: the saved route in follow mode, else pin-number
+  // order. "Start audit here" picks the starting pin (via initialAssetId), and
+  // the cycle wraps from there to cover the floor.
+  const orderedAssets = useMemo(
+    () => (following ? route : orderByPinNumber(assets)),
+    [following, route, assets]
+  );
+
+  // Advance to the next unvisited pin in the active order, wrapping past the end.
   function advanceToNext() {
     setCurrentId(nextPinInCycle(orderedAssets, currentId, (id) => lastByAsset.has(id)));
   }
+
+  // Follow-mode explicit stepping (Next/Back walk the route in order, even over
+  // already-audited stops, so the surveyor can move freely).
+  const routeIndex = following ? route.findIndex((a) => a.id === currentId) : -1;
+  const routeVisited = useMemo(
+    () => (following ? route.filter((a) => lastByAsset.has(a.id)).length : 0),
+    [following, route, lastByAsset]
+  );
+  function stepRoute(delta: -1 | 1) {
+    if (route.length === 0) return;
+    const from = routeIndex < 0 ? (delta === 1 ? -1 : route.length) : routeIndex;
+    const next = Math.min(route.length - 1, Math.max(0, from + delta));
+    setCurrentId(route[next]!.id);
+  }
+  const routeComplete = following && route.every((a) => lastByAsset.has(a.id));
+
+  // Follow mode starts the surveyor at the first stop (unless a specific pin was
+  // pre-selected, or the route is already fully audited).
+  useEffect(() => {
+    if (following && currentId === null && !routeComplete && route.length > 0) {
+      setCurrentId(route[0]!.id);
+    }
+  }, [following, currentId, routeComplete, route]);
 
   /**
    * Discard the audit entirely without writing a summary or completing the
@@ -220,12 +275,46 @@ export function AuditModeShell({
           <p className="truncate text-xs text-text-faint">{buildingName}</p>
           <p className="truncate text-sm font-medium text-text">{floorLabel}</p>
         </div>
+        {hasPath && (
+          <div
+            role="group"
+            aria-label="Audit navigation mode"
+            className="inline-flex h-8 shrink-0 overflow-hidden rounded-lg border border-black/15 dark:border-white/15"
+          >
+            <button
+              type="button"
+              onClick={() => setMode('follow')}
+              aria-pressed={mode === 'follow'}
+              className={
+                'inline-flex items-center gap-1.5 px-2 text-xs font-medium transition-colors ' +
+                (mode === 'follow'
+                  ? 'bg-waymarks-gold text-white'
+                  : 'text-text-muted hover:bg-black/5 dark:hover:bg-white/5')
+              }
+            >
+              <Footprints size={13} aria-hidden /> <span className="hidden sm:inline">Follow path</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => setMode('roam')}
+              aria-pressed={mode === 'roam'}
+              className={
+                'border-l border-black/10 px-2 text-xs font-medium transition-colors dark:border-white/10 ' +
+                (mode === 'roam'
+                  ? 'bg-waymarks-ink text-white'
+                  : 'text-text-muted hover:bg-black/5 dark:hover:bg-white/5')
+              }
+            >
+              <Shuffle size={13} aria-hidden /> <span className="hidden sm:inline">Free roam</span>
+            </button>
+          </div>
+        )}
         <div className="hidden flex-col items-end sm:flex">
           <p className="text-[11px] font-medium uppercase tracking-[0.18em] text-text-faint">
-            Progress
+            {following ? 'Path' : 'Progress'}
           </p>
           <p className="font-mono text-sm text-text">
-            {auditedCount} / {total}
+            {following ? `${routeVisited} / ${route.length}` : `${auditedCount} / ${total}`}
           </p>
         </div>
         <Button
@@ -277,8 +366,21 @@ export function AuditModeShell({
         busy={createEvent.isPending}
         lastOutcome={current ? lastByAsset.get(current.id)?.outcome ?? null : null}
         onOutcome={handleOutcome}
-        onNext={advanceToNext}
+        onNext={following ? () => stepRoute(1) : advanceToNext}
         hasUnvisited={assets.some((a) => !lastByAsset.has(a.id))}
+        follow={
+          following
+            ? {
+                position: routeIndex >= 0 ? routeIndex + 1 : null,
+                total: route.length,
+                onBack: () => stepRoute(-1),
+                canBack: routeIndex > 0,
+                canNext: routeIndex < route.length - 1,
+                complete: routeComplete,
+                notOnPathCount: notOnPath.length,
+              }
+            : null
+        }
       />
 
       <AuditCompleteSummary
@@ -315,6 +417,16 @@ export function AuditModeShell({
   );
 }
 
+type FollowState = {
+  position: number | null;
+  total: number;
+  onBack: () => void;
+  canBack: boolean;
+  canNext: boolean;
+  complete: boolean;
+  notOnPathCount: number;
+};
+
 function BottomSheet({
   current,
   busy,
@@ -322,6 +434,7 @@ function BottomSheet({
   onOutcome,
   onNext,
   hasUnvisited,
+  follow,
 }: {
   current: Asset | null;
   busy: boolean;
@@ -329,13 +442,29 @@ function BottomSheet({
   onOutcome: (outcome: AuditOutcome) => void;
   onNext: () => void;
   hasUnvisited: boolean;
+  follow: FollowState | null;
 }) {
+  // In follow mode Next/Back step the route explicitly; otherwise Next jumps to
+  // the next unvisited pin.
+  const nextDisabled = follow ? !follow.canNext : !hasUnvisited;
   return (
     <footer className="border-t border-black/10 bg-surface p-3 dark:border-white/10">
+      {follow && (follow.complete || follow.notOnPathCount > 0) && (
+        <p className="mb-2 rounded-md border border-waymarks-gold/30 bg-waymarks-gold-soft px-2.5 py-1.5 text-xs text-waymarks-ink dark:bg-white/5 dark:text-white">
+          {follow.complete && 'Path complete. '}
+          {follow.notOnPathCount > 0 &&
+            `${follow.notOnPathCount} pin${follow.notOnPathCount === 1 ? '' : 's'} not on the path — switch to Free roam to catch ${follow.notOnPathCount === 1 ? 'it' : 'them'}.`}
+        </p>
+      )}
       {current ? (
         <div className="space-y-2">
           <div className="flex items-start justify-between gap-3">
             <div className="min-w-0 flex-1">
+              {follow && follow.position != null && (
+                <p className="text-[11px] font-medium uppercase tracking-[0.16em] text-waymarks-gold">
+                  Stop {follow.position} of {follow.total}
+                </p>
+              )}
               <p className="truncate text-sm font-medium text-text">{current.name}</p>
               <p className="truncate text-xs text-text-faint">
                 {prettyType(current.type)}
@@ -343,15 +472,28 @@ function BottomSheet({
                 {lastOutcome ? ` · last: ${lastOutcome}` : ''}
               </p>
             </div>
-            <Button
-              size="sm"
-              variant="ghost"
-              iconRight={<ChevronRight size={12} aria-hidden />}
-              onClick={onNext}
-              disabled={!hasUnvisited}
-            >
-              Next
-            </Button>
+            <div className="flex shrink-0 items-center gap-1">
+              {follow && (
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  iconLeft={<ChevronLeft size={12} aria-hidden />}
+                  onClick={follow.onBack}
+                  disabled={!follow.canBack}
+                >
+                  Back
+                </Button>
+              )}
+              <Button
+                size="sm"
+                variant="ghost"
+                iconRight={<ChevronRight size={12} aria-hidden />}
+                onClick={onNext}
+                disabled={nextDisabled}
+              >
+                Next
+              </Button>
+            </div>
           </div>
           <div className="flex flex-wrap gap-2">
             <Button

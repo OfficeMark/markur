@@ -9,6 +9,7 @@ import {
   Check,
   Download,
   Eye,
+  Footprints,
 } from 'lucide-react';
 import { PLAN_PROVENANCE_OPTIONS } from '@/lib/plan-provenance';
 import { useSetFloorProvenance } from '@/hooks/useFloors';
@@ -31,6 +32,7 @@ export function FloorMoreMenu({
   canUploadPlan,
   canEditPins,
   onReplacePlan,
+  onEditPath,
   offline,
   onVisualize,
 }: {
@@ -42,6 +44,8 @@ export function FloorMoreMenu({
   canUploadPlan: boolean;
   canEditPins: boolean;
   onReplacePlan: () => void;
+  /** Enter audit-path edit mode (Feature 1). Shown to editors when the floor has pins. */
+  onEditPath?: () => void;
   /**
    * When provided, an Offline (take-offline) item is shown at the top — used by
    * the narrow (<lg) toolbar where Offline collapses into this menu.
@@ -142,6 +146,13 @@ export function FloorMoreMenu({
                 </DropdownMenu.SubContent>
               </DropdownMenu.Portal>
             </DropdownMenu.Sub>
+          )}
+
+          {onEditPath && canEditPins && hasPins && (
+            <DropdownMenu.Item className={itemCls} onSelect={onEditPath}>
+              <Footprints size={14} aria-hidden className="text-text-muted" />
+              Edit audit path
+            </DropdownMenu.Item>
           )}
 
           {canEditPins && hasPins && (

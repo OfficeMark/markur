@@ -19,7 +19,13 @@ import { FilterByZonePopover } from '@/components/waymarks/FilterByZonePopover';
 import { FloorFilterSheet } from '@/components/waymarks/FloorFilterSheet';
 import { FloorMoreMenu } from '@/components/waymarks/FloorMoreMenu';
 import { FloorNotesButton } from '@/components/waymarks/FloorNotesButton';
+import { AuditPathEditBar } from '@/components/waymarks/AuditPathEditBar';
 import { useAssetsWithVideos } from '@/hooks/useAuditVideos';
+import {
+  useClearFloorAuditPath,
+  useFloorAuditPath,
+  useSaveFloorAuditPath,
+} from '@/hooks/useAuditPath';
 import { useFloor } from '@/hooks/useFloors';
 import { useBuilding } from '@/hooks/useBuildings';
 import { PlanProvenanceCaption } from '@/components/waymarks/PlanProvenanceCaption';
@@ -67,6 +73,15 @@ export function Floor() {
   // Pin to pre-select when entering Audit Mode (set by the AssetDrawer
   // "Log a flag" CTA; null for a normal audit start).
   const [auditInitialAssetId, setAuditInitialAssetId] = useState<string | null>(null);
+
+  // Feature 1 — audit path (a saved walking order for the floor).
+  const { data: savedAuditPath } = useFloorAuditPath(id);
+  const savePath = useSaveFloorAuditPath(id ?? '');
+  const clearPath = useClearFloorAuditPath(id ?? '');
+  const [editingPath, setEditingPath] = useState(false);
+  // Working order while editing. May include ids of assets deleted since the
+  // path was saved — they render struck-through and are dropped on Save.
+  const [pathOrder, setPathOrder] = useState<string[]>([]);
 
   const [uploadOpen, setUploadOpen] = useState(false);
   const [signedUrl, setSignedUrl] = useState<string | null>(null);
@@ -245,6 +260,58 @@ export function Floor() {
       setInAudit(true);
     } catch {
       // Errors surface in console; user can tap again.
+    }
+  }
+
+  // ── Audit-path edit helpers (Feature 1) ───────────────────────────────────
+  const presentAssetIds = useMemo(() => new Set(assets.map((a) => a.id)), [assets]);
+  // 1-based stop number for each present pin in the working order (deleted ids
+  // in pathOrder are skipped so the numbers the surveyor sees stay consecutive).
+  const pathIndexById = useMemo(() => {
+    const m = new Map<string, number>();
+    let n = 0;
+    for (const pid of pathOrder) {
+      if (presentAssetIds.has(pid)) {
+        n += 1;
+        m.set(pid, n);
+      }
+    }
+    return m;
+  }, [pathOrder, presentAssetIds]);
+
+  function startEditPath() {
+    setSelectedAssetId(null);
+    setPlacing(false);
+    setRepositionAssetId(null);
+    setViewMode('map');
+    setPathOrder(savedAuditPath?.path ?? []);
+    setEditingPath(true);
+  }
+  function exitEditPath() {
+    setEditingPath(false);
+    setPathOrder([]);
+  }
+  function togglePathPin(assetId: string) {
+    setPathOrder((prev) =>
+      prev.includes(assetId) ? prev.filter((x) => x !== assetId) : [...prev, assetId]
+    );
+  }
+  async function saveAuditPath() {
+    // Drop ids for pins deleted since the path was saved — re-saving cleans them.
+    const cleaned = pathOrder.filter((pid) => presentAssetIds.has(pid));
+    try {
+      await savePath.mutateAsync(cleaned);
+      exitEditPath();
+    } catch {
+      // Non-fatal; the bar stays open so the user can retry.
+    }
+  }
+  async function clearAuditPath() {
+    try {
+      await clearPath.mutateAsync();
+      exitEditPath();
+    } catch {
+      // Non-fatal; retry available.
     }
   }
 
@@ -515,6 +582,7 @@ export function Floor() {
       canUploadPlan={canUploadPlan}
       canEditPins={canEdit}
       onReplacePlan={() => setUploadOpen(true)}
+      onEditPath={floor.plan_url ? startEditPath : undefined}
       offline={
         floor.plan_url
           ? { cached: cacheState === 'cached', busy: cacheState === 'caching', onToggle: () => void takeOffline() }
@@ -702,9 +770,11 @@ export function Floor() {
                 }}
                 pinOverlay={
                   <PinOverlay
-                    assets={visibleAssets}
+                    // While editing the path every pin must be reachable, so
+                    // bypass the type/layer filters.
+                    assets={editingPath ? assets : visibleAssets}
                     selectedAssetId={selectedAssetId}
-                    canMove={canEdit}
+                    canMove={canEdit && !editingPath}
                     onSelectAsset={(a: Asset) => setSelectedAssetId(a.id)}
                     onReposition={(assetId, x, y) =>
                       updateAsset.mutate({ id: assetId, patch: { x, y } })
@@ -715,7 +785,10 @@ export function Floor() {
                       pendingMove ? { x: pendingMove.to.x, y: pendingMove.to.y } : null
                     }
                     lastAuditByAsset={lastAuditByAsset ?? null}
-                    onLongPress={canEdit ? startReposition : undefined}
+                    onLongPress={canEdit && !editingPath ? startReposition : undefined}
+                    pathEditMode={editingPath}
+                    pathIndexById={editingPath ? pathIndexById : null}
+                    onPathToggle={togglePathPin}
                   />
                 }
               />
@@ -735,6 +808,19 @@ export function Floor() {
                   onCancel={cancelReposition}
                   onConfirm={() => void confirmMove()}
                   onDismissPending={dismissPendingMove}
+                />
+              )}
+              {editingPath && (
+                <AuditPathEditBar
+                  pathOrder={pathOrder}
+                  assets={assets}
+                  saving={savePath.isPending}
+                  clearing={clearPath.isPending}
+                  hasSavedPath={!!savedAuditPath}
+                  onRemoveStop={togglePathPin}
+                  onSave={() => void saveAuditPath()}
+                  onClear={() => void clearAuditPath()}
+                  onDone={exitEditPath}
                 />
               )}
             </div>
@@ -819,6 +905,7 @@ export function Floor() {
           planUrl={signedUrl}
           planKind={planKind}
           initialAssetId={auditInitialAssetId}
+          auditPath={savedAuditPath?.path ?? null}
           onClose={() => setInAudit(false)}
         />
       )}
