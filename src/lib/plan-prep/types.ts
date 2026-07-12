@@ -64,16 +64,56 @@ export interface PlanPrepRecipe {
 export type OutputFormat = 'svg' | 'png';
 
 /**
- * Shape stored in `floors.plan_metadata` (jsonb) when a plan has been
- * Plan-Prepped. Absence means the plan is a raw upload. `recipe.crop` is the
- * locked coordinate frame re-runs must reuse once the floor has pins.
+ * Current Plan Prep pipeline version. This is the REPROCESSING GATE: a floor is
+ * reprocessed only if a future build ships a higher version AND the user
+ * explicitly asks ("Re-enhance this plan") — never automatically, never in bulk,
+ * never on open. Bump this when the pipeline improves in a way worth re-running.
+ */
+export const PLAN_PIPELINE_VERSION = 1;
+
+/** What the uploaded source was — drives which Enhance is offered + reporting. */
+export type PlanSource = 'vector' | 'scan' | 'image';
+
+/**
+ * Shape stored in `floors.plan_metadata` (jsonb). Written on EVERY upload now
+ * (Plan Prep v2): the default path rasterizes a capped display PNG for all
+ * formats and stamps this. Absence means a pre-v2 raw upload. `recipe` is
+ * present only when the optional vector-declutter Enhance was applied;
+ * `recipe.crop` is the locked coordinate frame re-runs must reuse once the
+ * floor has pins.
  */
 export interface FloorPlanMetadata {
   planPrep?: {
-    version: 1;
-    recipe: PlanPrepRecipe;
-    /** ISO timestamp of when this plate was produced. */
-    appliedAt: string;
+    /** Pipeline version this plate was produced with (reprocessing gate). */
+    version: number;
+    /** True when a display plate was produced; false = fell back to the
+     *  untouched original after a processing failure/timeout. */
+    processed: boolean;
+    /** vector PDF, raster/scanned PDF, or uploaded image. */
+    source: PlanSource;
+    /** True only when the optional Enhance pass was applied AND accepted. */
+    enhanced: boolean;
+    /** ISO timestamp of when this plate was produced (processed_at). */
+    processedAt: string;
+    /** Present only for the vector-declutter Enhance (the reproducible recipe). */
+    recipe?: PlanPrepRecipe;
+  };
+}
+
+/** Build the planPrep metadata stamp for a floors.plan_metadata write. */
+export function stampPlanPrep(fields: {
+  processed: boolean;
+  source: PlanSource;
+  enhanced: boolean;
+  recipe?: PlanPrepRecipe;
+}): NonNullable<FloorPlanMetadata['planPrep']> {
+  return {
+    version: PLAN_PIPELINE_VERSION,
+    processed: fields.processed,
+    source: fields.source,
+    enhanced: fields.enhanced,
+    processedAt: new Date().toISOString(),
+    ...(fields.recipe ? { recipe: fields.recipe } : {}),
   };
 }
 

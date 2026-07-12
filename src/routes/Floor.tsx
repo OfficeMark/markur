@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { lazy, Suspense, useEffect, useMemo, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { ArrowLeft, ChevronRight, ClipboardCheck, ImageOff, LayoutGrid, Map as MapIcon, Maximize2, MapPin, Minimize2, NotebookPen, Shapes, Trash2 } from 'lucide-react';
 import { AppShell } from '@/components/waymarks/AppShell';
@@ -6,7 +6,13 @@ import { EmptyState } from '@/components/ui/EmptyState';
 import { Button } from '@/components/ui/Button';
 import { Tooltip } from '@/components/ui/Tooltip';
 import { FloorPlanCanvas } from '@/components/waymarks/FloorPlanCanvas';
-import { FloorPlanUploadDialog } from '@/components/waymarks/FloorPlanUploadDialog';
+// Lazy: the plan-prep + pdfjs graph (~400 kB) loads only when the upload dialog
+// is actually opened — never on plain floor open (Plan Prep v2 bundling law).
+const FloorPlanUploadDialog = lazy(() =>
+  import('@/components/waymarks/FloorPlanUploadDialog').then((m) => ({
+    default: m.FloorPlanUploadDialog,
+  }))
+);
 import { PinOverlay } from '@/components/waymarks/PinOverlay';
 import { NewAssetDialog } from '@/components/waymarks/NewAssetDialog';
 import { AssetDrawer } from '@/components/waymarks/AssetDrawer';
@@ -839,15 +845,17 @@ export function Floor() {
         )}
       </div>
 
-      {canUploadPlan && (
-        <FloorPlanUploadDialog
-          open={uploadOpen}
-          onOpenChange={setUploadOpen}
-          floorId={floor.id}
-          floorLabel={floor.label}
-          buildingName={building?.name ?? 'Building'}
-          existingPlanUrl={floor.plan_url}
-        />
+      {canUploadPlan && uploadOpen && (
+        <Suspense fallback={null}>
+          <FloorPlanUploadDialog
+            open
+            onOpenChange={setUploadOpen}
+            floorId={floor.id}
+            floorLabel={floor.label}
+            buildingName={building?.name ?? 'Building'}
+            existingPlanUrl={floor.plan_url}
+          />
+        </Suspense>
       )}
 
       {canCreate && (

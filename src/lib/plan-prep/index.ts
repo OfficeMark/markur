@@ -16,9 +16,21 @@ export type {
   PlanPlate,
   PlanPrepAnalysis,
   PlanPrepRecipe,
+  PlanSource,
   RGB,
   VectorPath,
 } from './types';
+export { PLAN_PIPELINE_VERSION, stampPlanPrep } from './types';
+export {
+  MAX_PLATE_EDGE,
+  fitScale,
+  pdfRenderScale,
+  produceDisplayPlate,
+  rasterizeImageToPlate,
+  rasterizePdfToPlate,
+  type DisplayPlate,
+} from './rasterize';
+export { enhanceScanFile, type ScanEnhanceResult } from './enhance-scan';
 export { emitSvg, keptPathCount } from './emit';
 export { SVG_PATH_LIMIT } from './detect';
 export { decomposePdf } from './decompose';

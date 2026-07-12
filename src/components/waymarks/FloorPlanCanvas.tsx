@@ -9,14 +9,26 @@ import {
   type ReactNode,
   type WheelEvent as RWheelEvent,
 } from 'react';
-import { getDocument, GlobalWorkerOptions } from 'pdfjs-dist';
-import pdfWorkerUrl from 'pdfjs-dist/build/pdf.worker.min.mjs?url';
 import { Loader2, ImageOff, LocateFixed } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { clampZoom } from '@/lib/zoom';
 
-if (typeof window !== 'undefined' && !GlobalWorkerOptions.workerSrc) {
-  GlobalWorkerOptions.workerSrc = pdfWorkerUrl;
+/**
+ * pdfjs is heavy (~1.4 MB). Plan Prep v2 renders a display PNG for every plan at
+ * upload, so the common floor-open path serves an image and never needs pdfjs.
+ * We therefore load pdfjs ON DEMAND — only when a floor's plan is still a PDF
+ * (pre-v2 floors, or the rare processing-fallback case). This keeps pdfjs out of
+ * the floor-open graph entirely for image plans.
+ */
+async function loadPdfjs() {
+  const [{ getDocument, GlobalWorkerOptions }, workerMod] = await Promise.all([
+    import('pdfjs-dist'),
+    import('pdfjs-dist/build/pdf.worker.min.mjs?url'),
+  ]);
+  if (typeof window !== 'undefined' && !GlobalWorkerOptions.workerSrc) {
+    GlobalWorkerOptions.workerSrc = workerMod.default;
+  }
+  return { getDocument };
 }
 
 export type FloorPlanCanvasMode = 'view' | 'placing';
@@ -133,6 +145,9 @@ export function FloorPlanCanvas({
     void (async () => {
       try {
         if (kind === 'pdf') {
+          // Load pdfjs only for the rare PDF-plan case (pre-v2 / fallback).
+          const { getDocument } = await loadPdfjs();
+          if (cancelled) return;
           const buf = await fetch(src).then((r) => {
             if (!r.ok) throw new Error(`Failed to load PDF (${r.status})`);
             return r.arrayBuffer();

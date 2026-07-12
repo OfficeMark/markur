@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { lazy, Suspense, useEffect, useRef, useState } from 'react';
 import * as Dialog from '@radix-ui/react-dialog';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
@@ -7,7 +7,11 @@ import { AlertCircle, Layers, Upload, X } from 'lucide-react';
 import { Button } from '@/components/ui/Button';
 import { useCreateFloor } from '@/hooks/useFloors';
 import { validatePlanFile, floorErrorMessage } from '@/lib/upload';
-import { FloorPlanUploadDialog } from './FloorPlanUploadDialog';
+// Lazy: only load the plan-prep + pdfjs graph when a floor is created WITH a
+// plan file (the handoff), never just from opening the Add-Floor dialog.
+const FloorPlanUploadDialog = lazy(() =>
+  import('./FloorPlanUploadDialog').then((m) => ({ default: m.FloorPlanUploadDialog }))
+);
 
 /**
  * Add a floor to a building (M17). Closes the gap left after M5 — there
@@ -247,6 +251,7 @@ export function NewFloorDialog({
     </Dialog.Root>
 
       {handoff && (
+        <Suspense fallback={null}>
         <FloorPlanUploadDialog
           open
           onOpenChange={(o) => {
@@ -263,6 +268,7 @@ export function NewFloorDialog({
           existingPlanUrl={null}
           initialFile={handoff.file}
         />
+        </Suspense>
       )}
     </>
   );
