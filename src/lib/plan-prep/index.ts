@@ -29,4 +29,4 @@ export {
   type CropRect,
   type DisplayPlate,
 } from './rasterize';
-export { enhanceScanFile, type ScanEnhanceResult } from './enhance-scan';
+export { enhanceScanBlob, type ScanEnhanceResult } from './enhance-scan';

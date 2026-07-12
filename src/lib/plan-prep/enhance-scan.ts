@@ -1,21 +1,16 @@
-// Plan Prep v2 — the optional "Enhance" pass for raster/scanned plans and
-// poor-quality images. Never the default: the user opens it deliberately and
-// gets a before/after with Accept / Keep original.
+// Plan Prep v2 — the optional "Enhance" pass for scanned/photographed plans.
+// Never the default: the user opens it deliberately and gets a before/after
+// with Accept / Keep original.
 //
-// Pipeline (all client-side canvas): deskew → grayscale → auto-levels contrast
-// → light despeckle (median 3×3) → upscale only if the source is small. Output
-// is a capped PNG, same as the default plate.
+// It operates on the already-baked display PNG (the default plate), so it's
+// uniform for EVERY upload — image or PDF — and needs no pdfjs and no
+// vector/scan detector. Pipeline (all client-side canvas): deskew → grayscale →
+// auto-levels contrast → light despeckle (median 3×3) → upscale only if small.
+// Output is a capped PNG, same as the default plate.
 //
 // Browser-only. Lives in the lazy upload chunk.
 
-import { GlobalWorkerOptions, getDocument } from 'pdfjs-dist';
-import pdfWorkerUrl from 'pdfjs-dist/build/pdf.worker.min.mjs?url';
-import { prepareForUpload } from '@/lib/image-convert';
-import { MAX_PLATE_EDGE, fitScale, pdfRenderScale } from './rasterize';
-
-if (typeof window !== 'undefined' && !GlobalWorkerOptions.workerSrc) {
-  GlobalWorkerOptions.workerSrc = pdfWorkerUrl;
-}
+import { MAX_PLATE_EDGE, fitScale } from './rasterize';
 
 export interface ScanEnhanceResult {
   blob: Blob;
@@ -23,45 +18,23 @@ export interface ScanEnhanceResult {
   height: number;
 }
 
-/** Draw the uploaded file into a capped source canvas (PDF page 1 or image). */
-async function sourceCanvas(file: File): Promise<HTMLCanvasElement> {
-  if (file.type === 'application/pdf') {
-    const doc = await getDocument({ data: await file.arrayBuffer() }).promise;
-    try {
-      const page = await doc.getPage(1);
-      const base = page.getViewport({ scale: 1 });
-      const viewport = page.getViewport({ scale: pdfRenderScale(base.width, base.height) });
-      const canvas = document.createElement('canvas');
-      canvas.width = Math.max(1, Math.floor(viewport.width));
-      canvas.height = Math.max(1, Math.floor(viewport.height));
-      const ctx = canvas.getContext('2d')!;
-      ctx.fillStyle = '#ffffff';
-      ctx.fillRect(0, 0, canvas.width, canvas.height);
-      await page.render({ canvasContext: ctx, viewport }).promise;
-      return canvas;
-    } finally {
-      await doc.destroy();
-    }
-  }
-  const prepared = await prepareForUpload(file);
-  const url = URL.createObjectURL(prepared);
+/** Draw a baked display-plate PNG into a canvas for the cleanup pass. */
+async function plateCanvas(blob: Blob): Promise<HTMLCanvasElement> {
+  const url = URL.createObjectURL(blob);
   try {
     const img = await new Promise<HTMLImageElement>((resolve, reject) => {
       const el = new Image();
       el.onload = () => resolve(el);
-      el.onerror = () => reject(new Error('Could not read this image.'));
+      el.onerror = () => reject(new Error('Could not read the plan image.'));
       el.src = url;
     });
-    const nw = img.naturalWidth || 1600;
-    const nh = img.naturalHeight || 1200;
-    const s = fitScale(nw, nh);
     const canvas = document.createElement('canvas');
-    canvas.width = Math.max(1, Math.round(nw * s));
-    canvas.height = Math.max(1, Math.round(nh * s));
+    canvas.width = Math.max(1, img.naturalWidth || 1600);
+    canvas.height = Math.max(1, img.naturalHeight || 1200);
     const ctx = canvas.getContext('2d')!;
     ctx.fillStyle = '#ffffff';
     ctx.fillRect(0, 0, canvas.width, canvas.height);
-    ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+    ctx.drawImage(img, 0, 0);
     return canvas;
   } finally {
     URL.revokeObjectURL(url);
@@ -219,12 +192,13 @@ function upscaleIfSmall(src: HTMLCanvasElement): HTMLCanvasElement {
 }
 
 /**
- * Run the full Enhance pass on an uploaded file, returning a cleaned display
- * PNG. Deliberate + reversible: the caller shows before/after and only keeps
- * this if the user Accepts.
+ * Run the full Enhance pass on a baked display-plate PNG, returning a cleaned
+ * display PNG. Deliberate + reversible: the caller shows before/after and only
+ * keeps this if the user Accepts. Works for any upload — image or PDF — because
+ * it starts from the already-rasterized plate.
  */
-export async function enhanceScanFile(file: File): Promise<ScanEnhanceResult> {
-  let canvas = await sourceCanvas(file);
+export async function enhanceScanBlob(plateBlob: Blob): Promise<ScanEnhanceResult> {
+  let canvas = await plateCanvas(plateBlob);
   const ctx0 = canvas.getContext('2d')!;
   let img = ctx0.getImageData(0, 0, canvas.width, canvas.height);
 
