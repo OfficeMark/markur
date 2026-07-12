@@ -1,6 +1,6 @@
 import { Link, useParams } from 'react-router-dom';
 import { useState } from 'react';
-import { ArrowLeft, MapPin, Layers, ImageOff, Trash2, Plus, FileDown, Share2 } from 'lucide-react';
+import { ArrowLeft, MapPin, Layers, ImageOff, Trash2, Plus, FileDown, Share2, Receipt } from 'lucide-react';
 import { AppShell } from '@/components/waymarks/AppShell';
 import { Tooltip } from '@/components/ui/Tooltip';
 import { AccessManagementCard } from '@/components/waymarks/AccessManagementCard';
@@ -103,6 +103,19 @@ export function Building() {
               <span>Audit report</span>
             </Link>
           </Tooltip>
+          {canEdit && (
+            <Tooltip text="Expense report: what signage cost this building, and how much is tenant-recoverable.">
+              <Link
+                to={`/reports/expenses?building=${building.id}`}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex h-9 items-center gap-1.5 rounded-md border border-black/10 bg-surface px-3 text-xs font-medium text-text hover:border-black/20 dark:border-white/10 dark:hover:border-white/20"
+              >
+                <Receipt size={12} aria-hidden />
+                <span>Expense report</span>
+              </Link>
+            </Tooltip>
+          )}
           {canManageAccess && (
             <Tooltip text="Share this building with a client: an expiring full-access link.">
               <button

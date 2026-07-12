@@ -22,6 +22,9 @@ import { handleQueryError, onSessionLost } from '@/lib/queryErrorHandler';
 const Building = lazy(() => import('@/routes/Building').then((m) => ({ default: m.Building })));
 const Floor = lazy(() => import('@/routes/Floor').then((m) => ({ default: m.Floor })));
 const Report = lazy(() => import('@/routes/Report').then((m) => ({ default: m.Report })));
+const ExpenseReport = lazy(() =>
+  import('@/routes/ExpenseReport').then((m) => ({ default: m.ExpenseReport }))
+);
 const Login = lazy(() => import('@/routes/Login').then((m) => ({ default: m.Login })));
 const ResetPassword = lazy(() =>
   import('@/routes/ResetPassword').then((m) => ({ default: m.ResetPassword }))
@@ -171,6 +174,14 @@ export default function App() {
                     element={
                       <ProtectedRoute>
                         <Floor />
+                      </ProtectedRoute>
+                    }
+                  />
+                  <Route
+                    path="/reports/expenses"
+                    element={
+                      <ProtectedRoute>
+                        <ExpenseReport />
                       </ProtectedRoute>
                     }
                   />
