@@ -58,7 +58,7 @@ import {
 } from '@/hooks/useAudit';
 import { useAuth } from '@/lib/auth-context';
 import { useCan } from '@/lib/permissions-context';
-import { planKindForPath, signedUrlForPlan } from '@/lib/upload';
+import { planKindForPath, planRefreshStamp, signedUrlForPlan } from '@/lib/upload';
 import { cn, mapWithConcurrency } from '@/lib/utils';
 import {
   putAssetsForFloor,
@@ -210,7 +210,15 @@ export function Floor() {
   const assetIds = useMemo(() => assets.map((a) => a.id), [assets]);
   const { data: assetsWithVideos } = useAssetsWithVideos(floor?.building_id, assetIds);
 
-  // Resolve a signed URL whenever the plan_url changes.
+  // Resolve a signed URL whenever the plan itself changes. plan_url alone is
+  // NOT enough: Plan Prep v2 writes every display plate to the floor's
+  // canonical slot (`<floorId>.plate.png`), so REPLACING a plan rewrites the
+  // same string and this effect never re-ran — the old image stayed on screen
+  // until a hard reload. planRefreshStamp (planPrep.processedAt) is rewritten
+  // on every upload, so keying on it re-issues a signed URL after each
+  // replace. Signed URLs are unique per issue, so the fresh URL also skips the
+  // browser + service-worker caches and the canvas redraws with the new plan.
+  const planStamp = planRefreshStamp(floor?.plan_metadata);
   useEffect(() => {
     let cancelled = false;
     if (!floor?.plan_url) {
@@ -219,6 +227,12 @@ export function Floor() {
     }
     setSignedUrl(null);
     setSignedUrlError(null);
+    if (import.meta.env.DEV) {
+      // Marker distinguishes "re-resolved after replace" from "never re-ran"
+      // (the failure mode this effect's key exists to prevent). Dev-only so
+      // the prod console stays clean.
+      console.log('[plan] resolving signed URL', { planUrl: floor.plan_url, planStamp });
+    }
     void signedUrlForPlan(floor.plan_url)
       .then((url) => {
         if (!cancelled) setSignedUrl(url);
@@ -231,7 +245,7 @@ export function Floor() {
     return () => {
       cancelled = true;
     };
-  }, [floor?.plan_url]);
+  }, [floor?.plan_url, planStamp]);
 
   // Esc cancels placing mode.
   useEffect(() => {
