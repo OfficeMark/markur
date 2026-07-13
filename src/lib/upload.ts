@@ -137,6 +137,28 @@ export async function signedUrlForPlan(path: string): Promise<string> {
   return data.signedUrl;
 }
 
+/**
+ * The plan's refresh stamp — what actually changes when a plan is REPLACED.
+ *
+ * Plan Prep v2 writes every display plate to the floor's canonical storage
+ * slot (`<floorId>.plate.png`, upsert) and the retained original to
+ * `<floorId>.<ext>`, so replacing a plan rewrites `floors.plan_url` with the
+ * SAME string it already held. Anything keyed on the path alone therefore
+ * never re-runs — the old image stays on screen until a hard reload (the
+ * "Replace does nothing" bug). The `planPrep.processedAt` stamp in
+ * `floors.plan_metadata` is rewritten on EVERY upload (both the plate path and
+ * the processing-fallback path), so `plan_url + stamp` changes exactly when
+ * the plan does. Returns null when there is no v2 stamp (pre-v2 floors) —
+ * for those a replace changes the path itself (they gain the `.plate.png`
+ * slot), so the path is a sufficient key.
+ */
+export function planRefreshStamp(planMetadata: unknown): string | null {
+  const stamp = (
+    planMetadata as { planPrep?: { processedAt?: unknown } } | null | undefined
+  )?.planPrep?.processedAt;
+  return typeof stamp === 'string' ? stamp : null;
+}
+
 export function planKindForPath(path: string | null | undefined): 'pdf' | 'image' | null {
   if (!path) return null;
   if (path.endsWith('.pdf')) return 'pdf';
