@@ -380,6 +380,13 @@ export function FloorPlanUploadDialog({
         <Dialog.Content
           className={cn(
             'fixed left-1/2 top-1/2 z-50 -translate-x-1/2 -translate-y-1/2 rounded-xl border border-black/10 bg-surface p-5 text-text shadow-sheet outline-none dark:border-white/10',
+            // The dialog is viewport-centered, so content taller than the
+            // screen runs off BOTH edges (seen with multi-page PDFs: the
+            // page-count + mismatch warnings stack up in the review step).
+            // Cap the shell to the viewport and scroll inside instead. The
+            // crop stage stays drag-safe: its image self-caps at 52vh and the
+            // crop frame is touch-none with pointer capture.
+            'max-h-[85vh] overflow-y-auto overscroll-contain',
             isWide ? 'w-[min(96vw,860px)]' : 'w-[min(92vw,520px)]'
           )}
           aria-describedby="upload-dialog-desc"
