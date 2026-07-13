@@ -15,6 +15,7 @@ import {
   PLAN_MIME_TYPES,
   formatBytes,
   objectNameForFloor,
+  removeSiblingPlate,
   uploadDisplayPlate,
   uploadFloorPlan,
   validatePlanFile,
@@ -219,6 +220,10 @@ export function FloorPlanUploadDialog({
           planPrep: stampPlanPrep({ processed: true, source: job.source, enhanced }),
         },
       });
+      // The row now points at the new plate — drop the other-format sibling
+      // (a png→jpg replace would otherwise strand the old file). Best-effort,
+      // fire-and-forget: cleanup never delays or fails the upload.
+      void removeSiblingPlate(floorId, path);
     },
     onSuccess: async () => {
       // Refetch the floor row BEFORE closing. The mutation stays pending until

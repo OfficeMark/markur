@@ -101,29 +101,55 @@ export async function uploadPlanObject(
   return { path };
 }
 
+export type PlateExt = 'png' | 'jpg';
+
 /**
  * Canonical storage path for a floor's processed display plate (Plan Prep v2).
- * Always PNG, always `<floorId>.plate.png` — distinct from the retained original
- * (`<floorId>.<origext>`) so both coexist. The RLS helper keys off the
- * `<uuid>.` prefix, which matches this too.
+ * `<floorId>.plate.png` or `<floorId>.plate.jpg` — the encoder keeps whichever
+ * format is smaller per plan (bytes diet), and the extension follows the
+ * format. Distinct from the retained original (`<floorId>.<origext>`) so both
+ * coexist. The RLS helper keys off the `<uuid>.` prefix, which matches this
+ * too.
  */
-export function platePathForFloor(floorId: string): string {
-  return `${floorId}.plate.png`;
+export function platePathForFloor(floorId: string, ext: PlateExt = 'png'): string {
+  return `${floorId}.plate.${ext}`;
 }
 
-/** Upload the processed display PNG to the floor's canonical plate slot. */
+/** The plate extension for an encoded plate blob (by its MIME type). */
+export function plateExtForBlob(blob: Blob): PlateExt {
+  return blob.type === 'image/jpeg' ? 'jpg' : 'png';
+}
+
+/** Upload the processed display image to the floor's canonical plate slot. */
 export async function uploadDisplayPlate(
   floorId: string,
   blob: Blob
 ): Promise<{ path: string }> {
-  const path = platePathForFloor(floorId);
+  const path = platePathForFloor(floorId, plateExtForBlob(blob));
   const { error } = await supabase.storage.from('floor-plans').upload(path, blob, {
-    contentType: 'image/png',
+    contentType: blob.type || 'image/png',
     upsert: true,
     cacheControl: '0',
   });
   if (error) throw error;
   return { path };
+}
+
+/**
+ * Best-effort removal of the OTHER-format plate after a replace. A floor whose
+ * plate flips png↔jpg would otherwise strand the old file in storage forever.
+ * Call this only AFTER the floors row points at the new path — never before,
+ * or a failed write leaves plan_url aimed at a deleted object. Errors are
+ * swallowed: an orphaned file is cosmetic, a failed upload is not.
+ */
+export async function removeSiblingPlate(floorId: string, keptPath: string): Promise<void> {
+  const sibling = platePathForFloor(floorId, keptPath.endsWith('.jpg') ? 'png' : 'jpg');
+  if (sibling === keptPath) return;
+  try {
+    await supabase.storage.from('floor-plans').remove([sibling]);
+  } catch {
+    // Cosmetic cleanup only — never surface.
+  }
 }
 
 /**
