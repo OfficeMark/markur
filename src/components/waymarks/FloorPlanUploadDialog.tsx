@@ -220,9 +220,15 @@ export function FloorPlanUploadDialog({
         },
       });
     },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: floorKeys.detail(floorId) });
-      queryClient.invalidateQueries({ queryKey: floorKeys.all });
+    onSuccess: async () => {
+      // Refetch the floor row BEFORE closing. The mutation stays pending until
+      // onSuccess settles, so the dialog holds its working spinner through the
+      // refetch and the close lands directly on the new-plan swap — instead of
+      // closing onto the stale plan for a beat, which read as "Replace did
+      // nothing" while the row + fresh signed URL caught up. The broad floors
+      // invalidation stays fire-and-forget; lists can refresh behind the swap.
+      await queryClient.invalidateQueries({ queryKey: floorKeys.detail(floorId) });
+      void queryClient.invalidateQueries({ queryKey: floorKeys.all });
       onOpenChange(false);
     },
     onError: (err) =>
