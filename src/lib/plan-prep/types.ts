@@ -10,8 +10,12 @@
  * Current Plan Prep pipeline version. This is the REPROCESSING GATE: a floor is
  * reprocessed only if a future build ships a higher version AND the user
  * explicitly asks — never automatically, never in bulk, never on open.
+ *
+ * v2 (2026-07-13, bytes diet): plate cap 4096 → 3000; encoder keeps the
+ * smaller of PNG/JPEG(0.85) and the plate extension follows the format.
+ * v1 plates keep working — they're just bigger files at the old path.
  */
-export const PLAN_PIPELINE_VERSION = 1;
+export const PLAN_PIPELINE_VERSION = 2;
 
 /** What the uploaded source was — informational + drives which Enhance fits. */
 export type PlanSource = 'vector' | 'scan' | 'image';

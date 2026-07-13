@@ -17,11 +17,13 @@ export type { FloorPlanMetadata, PlanSource } from './types';
 export { PLAN_PIPELINE_VERSION, stampPlanPrep } from './types';
 export {
   MAX_PLATE_EDGE,
+  PLATE_JPEG_QUALITY,
   FULL_CROP,
   clampCrop,
   cropPlateBlob,
   fitScale,
   isFullCrop,
+  pickSmallerPlate,
   pdfRenderScale,
   produceDisplayPlate,
   rasterizeImageToPlate,

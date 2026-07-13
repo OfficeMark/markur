@@ -5,39 +5,70 @@ import {
   fitScale,
   isFullCrop,
   pdfRenderScale,
+  pickSmallerPlate,
 } from '@/lib/plan-prep/rasterize';
-import { platePathForFloor } from '@/lib/upload';
+import { plateExtForBlob, platePathForFloor } from '@/lib/upload';
 import { stampPlanPrep, PLAN_PIPELINE_VERSION } from '@/lib/plan-prep/types';
 
-describe('plan prep v2 — cap scaling (raster)', () => {
+describe('plan prep — cap scaling (raster)', () => {
+  it('pins the bytes-diet cap (deliberate: half the pixels of the old 4096)', () => {
+    expect(MAX_PLATE_EDGE).toBe(3000);
+  });
+
   it('fitScale never upscales and caps the long edge at MAX_PLATE_EDGE', () => {
     // Already small → no change.
     expect(fitScale(800, 600)).toBe(1);
     // Exactly at cap → no change.
     expect(fitScale(MAX_PLATE_EDGE, 2000)).toBe(1);
     // Over cap on the long edge → downscale so long edge hits the cap.
-    expect(fitScale(8192, 4096)).toBeCloseTo(0.5, 5);
-    expect(8192 * fitScale(8192, 4096)).toBeCloseTo(MAX_PLATE_EDGE, 5);
+    const big = MAX_PLATE_EDGE * 2;
+    expect(fitScale(big, MAX_PLATE_EDGE)).toBeCloseTo(0.5, 5);
+    expect(big * fitScale(big, MAX_PLATE_EDGE)).toBeCloseTo(MAX_PLATE_EDGE, 5);
   });
 
   it('fitScale is orientation-agnostic (uses the longest edge)', () => {
-    expect(fitScale(4096, 8192)).toBeCloseTo(0.5, 5);
+    expect(fitScale(MAX_PLATE_EDGE, MAX_PLATE_EDGE * 2)).toBeCloseTo(0.5, 5);
   });
 });
 
-describe('plan prep v2 — pdf render scale (vector)', () => {
+describe('plan prep — pdf render scale (vector)', () => {
   it('upscales small vector pages toward the cap, bounded at 4x', () => {
-    // A 612×792pt page: long edge 792 → 4096/792 ≈ 5.17, capped to 4.
-    expect(pdfRenderScale(612, 792)).toBe(4);
+    // A page whose long edge quarters the cap (or less) hits the 4× bound.
+    const smallEdge = MAX_PLATE_EDGE / 4;
+    expect(pdfRenderScale(smallEdge * 0.8, smallEdge)).toBe(4);
     // A large page downscales to hit the cap exactly.
-    expect(pdfRenderScale(8192, 4096)).toBeCloseTo(0.5, 5);
-    expect(8192 * pdfRenderScale(8192, 4096)).toBeCloseTo(MAX_PLATE_EDGE, 5);
+    const big = MAX_PLATE_EDGE * 2;
+    expect(pdfRenderScale(big, MAX_PLATE_EDGE)).toBeCloseTo(0.5, 5);
+    expect(big * pdfRenderScale(big, MAX_PLATE_EDGE)).toBeCloseTo(MAX_PLATE_EDGE, 5);
   });
 });
 
-describe('plan prep v2 — metadata stamp + plate path', () => {
-  it('platePathForFloor is the canonical plate slot', () => {
+describe('plan prep — plate encoder format choice (bytes diet)', () => {
+  const blob = (size: number, type: string) =>
+    new Blob([new Uint8Array(size)], { type });
+
+  it('keeps the smaller encoding; ties go to PNG (lossless)', () => {
+    const png = blob(1000, 'image/png');
+    const jpg = blob(300, 'image/jpeg');
+    expect(pickSmallerPlate(png, jpg)).toBe(jpg);
+    const bigJpg = blob(2000, 'image/jpeg');
+    expect(pickSmallerPlate(png, bigJpg)).toBe(png);
+    const tie = blob(1000, 'image/jpeg');
+    expect(pickSmallerPlate(png, tie)).toBe(png);
+  });
+
+  it('plateExtForBlob maps the winner to its storage extension', () => {
+    expect(plateExtForBlob(blob(1, 'image/jpeg'))).toBe('jpg');
+    expect(plateExtForBlob(blob(1, 'image/png'))).toBe('png');
+    // Anything unexpected falls back to png (safe, lossless).
+    expect(plateExtForBlob(blob(1, ''))).toBe('png');
+  });
+});
+
+describe('plan prep — metadata stamp + plate path', () => {
+  it('platePathForFloor is the canonical plate slot, extension by format', () => {
     expect(platePathForFloor('abc-123')).toBe('abc-123.plate.png');
+    expect(platePathForFloor('abc-123', 'jpg')).toBe('abc-123.plate.jpg');
   });
 
   it('stampPlanPrep carries the pipeline version + fields; recipe only when given', () => {

@@ -6,11 +6,12 @@
 // uniform for EVERY upload — image or PDF — and needs no pdfjs and no
 // vector/scan detector. Pipeline (all client-side canvas): deskew → grayscale →
 // auto-levels contrast → light despeckle (median 3×3) → upscale only if small.
-// Output is a capped PNG, same as the default plate.
+// Output is a capped image (PNG or JPEG, whichever encodes smaller), same
+// encoder as the default plate.
 //
 // Browser-only. Lives in the lazy upload chunk.
 
-import { MAX_PLATE_EDGE, fitScale } from './rasterize';
+import { MAX_PLATE_EDGE, encodePlateCanvas, fitScale } from './rasterize';
 
 export interface ScanEnhanceResult {
   blob: Blob;
@@ -223,10 +224,6 @@ export async function enhanceScanBlob(plateBlob: Blob): Promise<ScanEnhanceResul
   // Upscale if the source was small.
   const finalCanvas = upscaleIfSmall(canvas);
 
-  const blob = await new Promise<Blob | null>((resolve) =>
-    finalCanvas.toBlob(resolve, 'image/png')
-  );
-  if (!blob) throw new Error('Could not encode the enhanced plan.');
   const capped = Math.max(finalCanvas.width, finalCanvas.height) <= MAX_PLATE_EDGE;
   if (!capped) {
     // Extremely unlikely (source already capped), but guard the output cap.
@@ -236,9 +233,10 @@ export async function enhanceScanBlob(plateBlob: Blob): Promise<ScanEnhanceResul
     c2.height = Math.round(finalCanvas.height * s);
     const cx = c2.getContext('2d')!;
     cx.drawImage(finalCanvas, 0, 0, c2.width, c2.height);
-    const b2 = await new Promise<Blob | null>((r) => c2.toBlob(r, 'image/png'));
-    if (!b2) throw new Error('Could not encode the enhanced plan.');
-    return { blob: b2, width: c2.width, height: c2.height };
+    return { blob: await encodePlateCanvas(c2), width: c2.width, height: c2.height };
   }
+  // Same pick-the-smaller encoder as the default plate (bytes diet) — cleaned
+  // scans are photographic-ish, so they usually come out JPEG and much smaller.
+  const blob = await encodePlateCanvas(finalCanvas);
   return { blob, width: finalCanvas.width, height: finalCanvas.height };
 }

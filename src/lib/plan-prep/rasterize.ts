@@ -2,7 +2,8 @@
 //
 // One law: all processing happens ONCE, at upload. Every uploaded plan —
 // vector PDF, raster/scanned PDF, PNG/JPG/WebP/HEIC, SVG — is rendered here to
-// a single capped display PNG that becomes `plan_url`. The floor-open path then
+// a single capped display image (PNG or JPEG — whichever encodes smaller) that
+// becomes `plan_url`. The floor-open path then
 // only ever draws an image (cheap), never rasterizes a PDF at view time.
 //
 // Browser-only (uses canvas + pdfjs). This module lives in the lazy upload
@@ -19,10 +20,20 @@ if (typeof window !== 'undefined' && !GlobalWorkerOptions.workerSrc) {
 
 /**
  * Hard output cap — the "super complex plan" guard. A dense tower plan yields a
- * bounded PNG (long edge ≤ this), not a 40 MB monster. Complexity costs upload
- * seconds, never open seconds.
+ * bounded image (long edge ≤ this), not a 40 MB monster. Complexity costs
+ * upload seconds, never open seconds.
+ *
+ * Bytes diet (2026-07-13): 4096 → 3000. Half the pixels — plates produce ~2×
+ * faster on a phone and download much faster, while 3000px still out-resolves
+ * every screen we target and keeps room numbers legible at zoom.
  */
-export const MAX_PLATE_EDGE = 4096;
+export const MAX_PLATE_EDGE = 3000;
+
+/**
+ * JPEG quality for the plate encoder. High enough that linework and text stay
+ * clean; scans/photos at this setting are typically 5–20× smaller than PNG.
+ */
+export const PLATE_JPEG_QUALITY = 0.85;
 
 export interface DisplayPlate {
   blob: Blob;
@@ -51,12 +62,37 @@ export function pdfRenderScale(baseW: number, baseH: number, maxEdge = MAX_PLATE
   return Math.min(maxEdge / longest, 4);
 }
 
-async function canvasToPng(canvas: HTMLCanvasElement): Promise<Blob> {
+async function toBlob(
+  canvas: HTMLCanvasElement,
+  type: string,
+  quality?: number
+): Promise<Blob> {
   const blob = await new Promise<Blob | null>((resolve) =>
-    canvas.toBlob(resolve, 'image/png')
+    canvas.toBlob(resolve, type, quality)
   );
   if (!blob) throw new Error('Could not encode the plan image.');
   return blob;
+}
+
+/** Of the two encodings, keep the smaller; ties go to PNG (lossless). Pure. */
+export function pickSmallerPlate(png: Blob, jpg: Blob): Blob {
+  return jpg.size < png.size ? jpg : png;
+}
+
+/**
+ * The plate encoder (bytes diet): encode the canvas as BOTH PNG and JPEG and
+ * keep whichever is smaller. Line drawings usually win as PNG — crisper AND
+ * smaller — while scans/photos win as JPEG by 5–20×. No source detector
+ * needed; the bytes decide. Safe for JPEG's missing alpha because every plate
+ * canvas is composited on white (see newCanvas). The winner's MIME type rides
+ * on the blob and drives the storage extension (`.plate.png` / `.plate.jpg`).
+ */
+export async function encodePlateCanvas(canvas: HTMLCanvasElement): Promise<Blob> {
+  const [png, jpg] = await Promise.all([
+    toBlob(canvas, 'image/png'),
+    toBlob(canvas, 'image/jpeg', PLATE_JPEG_QUALITY),
+  ]);
+  return pickSmallerPlate(png, jpg);
 }
 
 function newCanvas(w: number, h: number): { canvas: HTMLCanvasElement; ctx: CanvasRenderingContext2D } {
@@ -72,7 +108,7 @@ function newCanvas(w: number, h: number): { canvas: HTMLCanvasElement; ctx: Canv
   return { canvas, ctx };
 }
 
-/** Rasterize page 1 of a PDF to a capped display PNG. `data` is consumed. */
+/** Rasterize page 1 of a PDF to a capped display image. `data` is consumed. */
 export async function rasterizePdfToPlate(
   data: ArrayBuffer,
   maxEdge = MAX_PLATE_EDGE
@@ -84,7 +120,7 @@ export async function rasterizePdfToPlate(
     const viewport = page.getViewport({ scale: pdfRenderScale(base.width, base.height, maxEdge) });
     const { canvas, ctx } = newCanvas(viewport.width, viewport.height);
     await page.render({ canvasContext: ctx, viewport }).promise;
-    return { blob: await canvasToPng(canvas), width: canvas.width, height: canvas.height };
+    return { blob: await encodePlateCanvas(canvas), width: canvas.width, height: canvas.height };
   } finally {
     await doc.destroy();
   }
@@ -111,7 +147,7 @@ async function loadImageFile(
   }
 }
 
-/** Normalize an image File (png/jpg/webp/heic/svg) to a capped display PNG. */
+/** Normalize an image File (png/jpg/webp/heic/svg) to a capped display image. */
 export async function rasterizeImageToPlate(
   file: File,
   maxEdge = MAX_PLATE_EDGE
@@ -124,7 +160,7 @@ export async function rasterizeImageToPlate(
     const s = fitScale(nw, nh, maxEdge);
     const { canvas, ctx } = newCanvas(nw * s, nh * s);
     ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
-    return { blob: await canvasToPng(canvas), width: canvas.width, height: canvas.height };
+    return { blob: await encodePlateCanvas(canvas), width: canvas.width, height: canvas.height };
   } finally {
     revoke();
   }
@@ -133,7 +169,7 @@ export async function rasterizeImageToPlate(
 /**
  * The DEFAULT plate for any uploaded file — the single entry point the upload
  * flow calls on plain Accept. PDFs render page 1; everything else normalizes as
- * an image. Output is always a capped PNG.
+ * an image. Output is always a capped image (PNG or JPEG, whichever is smaller).
  */
 export async function produceDisplayPlate(
   file: File,
@@ -196,7 +232,7 @@ async function loadBlobImage(blob: Blob): Promise<{ img: HTMLImageElement; revok
 }
 
 /**
- * Crop a display-plate PNG to a normalized rect, returning a new capped PNG.
+ * Crop a display plate to a normalized rect, returning a new capped plate.
  * Everything inside the rect is preserved verbatim (walls, rooms, labels) — the
  * crop only removes what's outside it.
  */
@@ -217,7 +253,7 @@ export async function cropPlateBlob(
     const s = fitScale(sw, sh, maxEdge);
     const { canvas, ctx } = newCanvas(sw * s, sh * s);
     ctx.drawImage(img, sx, sy, sw, sh, 0, 0, canvas.width, canvas.height);
-    return { blob: await canvasToPng(canvas), width: canvas.width, height: canvas.height };
+    return { blob: await encodePlateCanvas(canvas), width: canvas.width, height: canvas.height };
   } finally {
     revoke();
   }
