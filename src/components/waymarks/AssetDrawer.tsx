@@ -26,6 +26,7 @@ import {
   ClipboardCheck,
   Store,
   History,
+  Maximize2,
   Wrench,
   ShoppingCart,
 } from 'lucide-react';
@@ -53,6 +54,7 @@ import { useContacts } from '@/hooks/useContacts';
 import { useAssetVendors, useAddAssetVendor, useRemoveAssetVendor } from '@/hooks/useAssetVendors';
 import { useVendors, useCreateVendor } from '@/hooks/useVendors';
 import { AssetAttachmentsPanel } from './AssetAttachmentsPanel';
+import { PhotoLightbox } from './PhotoLightbox';
 import { AuditVideosPanel } from './AuditVideosPanel';
 import { AuditVideoRecorderDialog } from './AuditVideoRecorderDialog';
 import { ExpensesPanel } from './ExpensesPanel';
@@ -122,6 +124,8 @@ export function AssetDrawer({
   const addPhoto = useAddAssetPhoto(assetId ?? '');
   const delPhoto = useDeleteAssetPhoto(assetId ?? '');
   const [activePhoto, setActivePhoto] = useState(0);
+  // Full-screen zoomable viewer for the pin's photos (opened from the hero).
+  const [photoViewerOpen, setPhotoViewerOpen] = useState(false);
   const [photoError, setPhotoError] = useState<string | null>(null);
 
   async function onPickPhotos(list: FileList | null) {
@@ -344,6 +348,7 @@ export function AssetDrawer({
                       canEdit={canEdit}
                       onEdit={() => setEditing(true)}
                       onDeletePhoto={canEdit && current ? () => onDeletePhoto(current) : undefined}
+                      onOpenViewer={current ? () => setPhotoViewerOpen(true) : undefined}
                     />
                     <StatsStrip asset={asset} flagCount={asset.status === 'flagged' ? 1 : 0} />
                     {bands.map((b) => (
@@ -373,6 +378,16 @@ export function AssetDrawer({
           buildingId={buildingId}
           assetId={asset.id}
           scopeLabel={asset.name?.trim() || 'this asset'}
+        />
+      )}
+      {asset && (
+        <PhotoLightbox
+          open={photoViewerOpen}
+          onOpenChange={setPhotoViewerOpen}
+          photos={photos}
+          index={Math.min(activePhoto, Math.max(0, photos.length - 1))}
+          onIndexChange={setActivePhoto}
+          assetName={asset.name ?? 'Asset'}
         />
       )}
     </Dialog.Root>
@@ -921,6 +936,7 @@ function Hero({
   canEdit,
   onEdit,
   onDeletePhoto,
+  onOpenViewer,
 }: {
   photo: AssetPhoto | undefined;
   loading: boolean;
@@ -932,6 +948,8 @@ function Hero({
   canEdit: boolean;
   onEdit: () => void;
   onDeletePhoto?: () => void;
+  /** Opens the full-screen zoomable viewer. Absent = plain (no photo). */
+  onOpenViewer?: () => void;
 }) {
   // PERF-3: cached signed URL (keyed by path) — revisiting the same photo
   // reuses the same URL, so browser/SW caches hit instead of re-downloading.
@@ -978,7 +996,18 @@ function Hero({
             aria-hidden
           />
         ) : photo && url && !errored ? (
-          <img src={url} alt="" className="h-40 w-full object-cover" />
+          onOpenViewer ? (
+            <button
+              type="button"
+              onClick={onOpenViewer}
+              aria-label="View photo full screen"
+              className="block h-40 w-full cursor-zoom-in"
+            >
+              <img src={url} alt="" className="h-40 w-full object-cover" />
+            </button>
+          ) : (
+            <img src={url} alt="" className="h-40 w-full object-cover" />
+          )
         ) : (
           <ImageOff size={32} aria-hidden />
         )}
@@ -1015,6 +1044,16 @@ function Hero({
         </div>
         {photo && !errored && (
           <div className="flex shrink-0 items-center gap-1">
+            {onOpenViewer && (
+              <button
+                type="button"
+                onClick={onOpenViewer}
+                aria-label="Zoom this photo"
+                className="inline-flex h-7 w-7 items-center justify-center rounded-md bg-white/15 text-white backdrop-blur-sm hover:bg-white/25"
+              >
+                <Maximize2 size={12} aria-hidden />
+              </button>
+            )}
             <button
               type="button"
               onClick={handleDownload}

@@ -180,7 +180,17 @@ export function FloorPlanUploadDialog({
   const upload = useMutation({
     mutationFn: async (job: UploadJob) => {
       // The untouched original is ALWAYS retained as the source of truth.
-      await uploadFloorPlan(floorId, job.file);
+      // Start its upload immediately but DON'T await yet — the original is
+      // often the biggest thing in the flow (up to 25 MB), and serializing it
+      // ahead of plate production added its whole upload time to every
+      // replace. Plate production is pure local CPU, so the two overlap
+      // perfectly. Every exit path below awaits this before writing the
+      // floors row (plan_url must never point at objects that may not exist).
+      const originalUpload = uploadFloorPlan(floorId, job.file);
+      // If the upload rejects while plate production is still running, this
+      // no-op branch keeps the browser from logging an unhandled rejection;
+      // the real `await originalUpload` on every path still throws normally.
+      originalUpload.catch(() => undefined);
 
       // Resolve the display plate: pre-produced (enhanced) or produced here
       // (default), with a hard budget + graceful fallback.
@@ -199,6 +209,7 @@ export function FloorPlanUploadDialog({
       if (!plate) {
         // Fallback: serve the untouched original, mark processed:false. Upload
         // never fails just because enhancement struggled.
+        await originalUpload;
         const origPath = objectNameForFloor(floorId, job.file.type as PlanMime);
         await writeFloorPlan({
           plan_url: origPath,
@@ -211,7 +222,11 @@ export function FloorPlanUploadDialog({
         return;
       }
 
-      const { path } = await uploadDisplayPlate(floorId, plate.blob);
+      // Plate + original travel the wire together; the row write waits for both.
+      const [{ path }] = await Promise.all([
+        uploadDisplayPlate(floorId, plate.blob),
+        originalUpload,
+      ]);
       await writeFloorPlan({
         plan_url: path,
         width_px: plate.width,
