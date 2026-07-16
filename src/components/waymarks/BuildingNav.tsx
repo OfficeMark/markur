@@ -56,7 +56,10 @@ export function BuildingNavSheet() {
         <button
           type="button"
           aria-label="Open navigation"
-          className="inline-flex h-9 w-9 items-center justify-center rounded-md text-white hover:bg-white/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-waymarks-gold lg:hidden"
+          // shrink-0 is load-bearing: in an over-constrained phone header,
+          // flexbox crushed this button toward zero width — the menu existed
+          // but was invisible. It must never be the thing that gives way.
+          className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-md text-white hover:bg-white/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-waymarks-gold lg:hidden"
         >
           <Menu size={18} aria-hidden />
         </button>
