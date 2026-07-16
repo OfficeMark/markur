@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type ComponentType } from 'react';
 import { Link, useParams } from 'react-router-dom';
-import { AlertTriangle, ArrowLeft, ChevronRight, ClipboardCheck, ImageOff, LayoutGrid, Map as MapIcon, Maximize2, MapPin, Minimize2, NotebookPen, Shapes, Trash2 } from 'lucide-react';
+import { AlertTriangle, ArrowLeft, ChevronLeft, ChevronRight, ClipboardCheck, ImageOff, LayoutGrid, Map as MapIcon, Maximize2, MapPin, Minimize2, NotebookPen, Shapes, Trash2 } from 'lucide-react';
 import { AppShell } from '@/components/waymarks/AppShell';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { Button } from '@/components/ui/Button';
@@ -48,7 +48,7 @@ import {
   useFloorAuditPath,
   useSaveFloorAuditPath,
 } from '@/hooks/useAuditPath';
-import { useFloor } from '@/hooks/useFloors';
+import { useFloor, useFloors } from '@/hooks/useFloors';
 import { useBuilding } from '@/hooks/useBuildings';
 import { PlanProvenanceCaption } from '@/components/waymarks/PlanProvenanceCaption';
 import { useAssets, useSoftDeleteAsset, useUpdateAsset } from '@/hooks/useAssets';
@@ -76,6 +76,10 @@ export function Floor() {
   const { id } = useParams<{ id: string }>();
   const { data: floor, isLoading: fLoading, error: fError } = useFloor(id);
   const { data: building } = useBuilding(floor?.building_id);
+  // Floor-to-floor navigation: the building's floors in sidebar order, so a
+  // walkthrough steps Ground -> 2 -> 3 without bouncing out to the building
+  // page between floors. Hook lives up here (unconditional) per hooks rules.
+  const { data: buildingFloors } = useFloors(floor?.building_id);
   const { data: assets = [] } = useAssets(id);
   const { user } = useAuth();
 
@@ -555,18 +559,30 @@ export function Floor() {
     <span className="rounded bg-waymarks-ink px-1 font-mono text-[10px] text-white">{n}</span>
   );
 
+  // Prev/next within this building (sidebar order). Ends render dimmed.
+  const floorIdx = buildingFloors?.findIndex((f) => f.id === floor.id) ?? -1;
+  const prevFloor = floorIdx > 0 ? buildingFloors?.[floorIdx - 1] : undefined;
+  const nextFloor =
+    floorIdx >= 0 && buildingFloors && floorIdx < buildingFloors.length - 1
+      ? buildingFloors[floorIdx + 1]
+      : undefined;
+  const stepCls =
+    'inline-flex h-6 w-6 shrink-0 items-center justify-center rounded text-text-muted hover:bg-black/5 hover:text-text dark:hover:bg-white/5';
+
   const breadcrumb = (
     <nav
       aria-label="Breadcrumb"
       className="flex min-w-0 items-center gap-1.5 text-xs text-text-muted"
     >
+      {/* Home + its chevron hide on phones: the hamburger already covers Home,
+          and at 390px every pixel here belongs to the building + floor. */}
       <Link
         to="/"
-        className="inline-flex items-center gap-1 rounded px-1 py-0.5 hover:bg-black/5 hover:text-text dark:hover:bg-white/5"
+        className="inline-flex items-center gap-1 rounded px-1 py-0.5 hover:bg-black/5 hover:text-text max-sm:hidden dark:hover:bg-white/5"
       >
         Home
       </Link>
-      <ChevronRight size={12} aria-hidden className="shrink-0 text-text-faint" />
+      <ChevronRight size={12} aria-hidden className="shrink-0 text-text-faint max-sm:hidden" />
       <Link
         to={`/buildings/${floor.building_id}`}
         className="truncate rounded px-1 py-0.5 hover:bg-black/5 hover:text-text dark:hover:bg-white/5"
@@ -574,7 +590,40 @@ export function Floor() {
         {building?.name ?? 'Building'}
       </Link>
       <ChevronRight size={12} aria-hidden className="shrink-0 text-text-faint" />
-      <span className="truncate font-semibold text-text">Floor {floor.label}</span>
+      {/* The floor cluster never shrinks away (the building name truncates
+          first) — this is the context a field user actually needs. The ‹ ›
+          steppers walk the building's floors without leaving the plan. */}
+      <span className="flex shrink-0 items-center gap-0.5">
+        {prevFloor ? (
+          <Link
+            to={`/floors/${prevFloor.id}`}
+            aria-label={`Previous floor: ${prevFloor.label}`}
+            title={`Previous: ${prevFloor.label}`}
+            className={stepCls}
+          >
+            <ChevronLeft size={14} aria-hidden />
+          </Link>
+        ) : (
+          <span aria-hidden className="inline-flex h-6 w-6 shrink-0 items-center justify-center text-text-faint/40">
+            <ChevronLeft size={14} />
+          </span>
+        )}
+        <span className="max-w-[38vw] truncate font-semibold text-text">Floor {floor.label}</span>
+        {nextFloor ? (
+          <Link
+            to={`/floors/${nextFloor.id}`}
+            aria-label={`Next floor: ${nextFloor.label}`}
+            title={`Next: ${nextFloor.label}`}
+            className={stepCls}
+          >
+            <ChevronRight size={14} aria-hidden />
+          </Link>
+        ) : (
+          <span aria-hidden className="inline-flex h-6 w-6 shrink-0 items-center justify-center text-text-faint/40">
+            <ChevronRight size={14} />
+          </span>
+        )}
+      </span>
     </nav>
   );
 
@@ -786,7 +835,9 @@ export function Floor() {
               {viewSeg()}
               {showFilters && <div className="hidden sm:block">{filterSeg()}</div>}
               {showFilters && <div className="sm:hidden">{combinedFilter}</div>}
-              {focusBtn()}
+              {/* Focus is a presentation feature; on phones the map already
+                  fills the screen and the width belongs to the breadcrumb. */}
+              <div className="hidden sm:block">{focusBtn()}</div>
               {moreMenu}
             </div>
           </div>
