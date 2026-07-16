@@ -566,46 +566,7 @@ export function Floor() {
     floorIdx >= 0 && buildingFloors && floorIdx < buildingFloors.length - 1
       ? buildingFloors[floorIdx + 1]
       : undefined;
-  const stepCls =
-    'inline-flex h-6 w-6 shrink-0 items-center justify-center rounded text-text-muted hover:bg-black/5 hover:text-text dark:hover:bg-white/5';
 
-  // ‹ {floor} › — the lateral navigation cluster. Shared by the desktop
-  // breadcrumb and the phone bar. Never shrinks away; the label truncates
-  // (capped on phones) and the steppers walk the building's floors in
-  // sidebar order without leaving the plan.
-  const floorStepper = (
-    <span className="flex shrink-0 items-center gap-0.5">
-      {prevFloor ? (
-        <Link
-          to={`/floors/${prevFloor.id}`}
-          aria-label={`Previous floor: ${prevFloor.label}`}
-          title={`Previous: ${prevFloor.label}`}
-          className={stepCls}
-        >
-          <ChevronLeft size={14} aria-hidden />
-        </Link>
-      ) : (
-        <span aria-hidden className="inline-flex h-6 w-6 shrink-0 items-center justify-center text-text-faint/40">
-          <ChevronLeft size={14} />
-        </span>
-      )}
-      <span className="max-w-[45vw] truncate font-semibold text-text sm:max-w-none">{floor.label}</span>
-      {nextFloor ? (
-        <Link
-          to={`/floors/${nextFloor.id}`}
-          aria-label={`Next floor: ${nextFloor.label}`}
-          title={`Next: ${nextFloor.label}`}
-          className={stepCls}
-        >
-          <ChevronRight size={14} aria-hidden />
-        </Link>
-      ) : (
-        <span aria-hidden className="inline-flex h-6 w-6 shrink-0 items-center justify-center text-text-faint/40">
-          <ChevronRight size={14} />
-        </span>
-      )}
-    </span>
-  );
 
   const breadcrumb = (
     <nav
@@ -633,7 +594,7 @@ export function Floor() {
         {building?.name ?? 'Building'}
       </Link>
       <ChevronRight size={12} aria-hidden className="shrink-0 text-text-faint" />
-      {floorStepper}
+      <span className="truncate font-semibold text-text">{floor.label}</span>
     </nav>
   );
 
@@ -927,10 +888,11 @@ export function Floor() {
             />
           ) : (
             <div className="relative min-h-0 flex-1">
-              {/* Floor-hop overlay (phones): ‹ › on the map, floor name below
-                  them — the plan window has the room the toolbar never did.
-                  sm+ hides this; the breadcrumb carries the steppers there. */}
-              <div className="absolute left-2 top-2 z-10 flex flex-col items-start gap-1 sm:hidden">
+              {/* Floor-hop overlay: ‹ › on the map, at EVERY width — the one
+                  place floor stepping lives (the breadcrumb is plain text).
+                  The name pill is phone-only; desktop's breadcrumb already
+                  says which floor this is. */}
+              <div className="absolute left-2 top-2 z-10 flex flex-col items-start gap-1">
                 <div className="flex items-center gap-1">
                   {prevFloor ? (
                     <Link
@@ -959,7 +921,7 @@ export function Floor() {
                     </span>
                   )}
                 </div>
-                <span className="max-w-[60vw] truncate rounded-md bg-waymarks-ink/85 px-2 py-1 text-xs font-semibold text-white shadow-sm">
+                <span className="max-w-[60vw] truncate rounded-md bg-waymarks-ink/85 px-2 py-1 text-xs font-semibold text-white shadow-sm sm:hidden">
                   {floor.label}
                 </span>
               </div>
