@@ -11,6 +11,7 @@ import {
   type NewFloorInput,
 } from '@/lib/queries/floors';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import type { Floor } from '@/types/database';
 
 export const floorKeys = {
   all: ['floors'] as const,
@@ -45,8 +46,24 @@ export class FloorNotReadyError extends Error {
 }
 
 export function useFloor(id: string | undefined) {
+  const qc = useQueryClient();
   return useQuery({
     queryKey: id ? floorKeys.detail(id) : ['floors', 'detail', 'none'],
+    // Seed from any already-loaded floors list (the sidebar fetches every
+    // building's floors). The floor row — plan_url + stamp included — is
+    // usually already in cache when the user taps a floor, so the plan's
+    // signed-URL query can start immediately instead of waiting a full
+    // detail round trip. Placeholder only: the real fetch still runs.
+    placeholderData: () => {
+      if (!id) return undefined;
+      for (const [, rows] of qc.getQueriesData<Floor[]>({
+        queryKey: [...floorKeys.all, 'by-building'],
+      })) {
+        const hit = rows?.find((f) => f.id === id);
+        if (hit) return hit;
+      }
+      return undefined;
+    },
     queryFn: async () => {
       if (!id) return null;
       const floor = await getFloor(id);

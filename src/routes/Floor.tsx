@@ -41,6 +41,7 @@ import { FloorFilterSheet } from '@/components/waymarks/FloorFilterSheet';
 import { FloorMoreMenu } from '@/components/waymarks/FloorMoreMenu';
 import { FloorNotesButton } from '@/components/waymarks/FloorNotesButton';
 import { AuditPathEditBar } from '@/components/waymarks/AuditPathEditBar';
+import { useQuery } from '@tanstack/react-query';
 import { useAssetsWithVideos } from '@/hooks/useAuditVideos';
 import {
   useClearFloorAuditPath,
@@ -119,8 +120,6 @@ export function Floor() {
   const [uploadState, setUploadState] = useState<UploadState>({ status: 'idle' });
   const [UploadDialog, setUploadDialog] = useState<UploadDialogComponent | null>(null);
   const uploadReqToken = useRef(0);
-  const [signedUrl, setSignedUrl] = useState<string | null>(null);
-  const [signedUrlError, setSignedUrlError] = useState<string | null>(null);
   const [placing, setPlacing] = useState(false);
   const [placePos, setPlacePos] = useState<{ x: number; y: number } | null>(null);
   const [newAssetOpen, setNewAssetOpen] = useState(false);
@@ -210,42 +209,33 @@ export function Floor() {
   const assetIds = useMemo(() => assets.map((a) => a.id), [assets]);
   const { data: assetsWithVideos } = useAssetsWithVideos(floor?.building_id, assetIds);
 
-  // Resolve a signed URL whenever the plan itself changes. plan_url alone is
-  // NOT enough: Plan Prep v2 writes every display plate to the floor's
-  // canonical slot (`<floorId>.plate.png`), so REPLACING a plan rewrites the
-  // same string and this effect never re-ran — the old image stayed on screen
-  // until a hard reload. planRefreshStamp (planPrep.processedAt) is rewritten
-  // on every upload, so keying on it re-issues a signed URL after each
-  // replace. Signed URLs are unique per issue, so the fresh URL also skips the
-  // browser + service-worker caches and the canvas redraws with the new plan.
+  // The plan's signed URL, as a CACHED query (25-min staleTime, mirrors the
+  // photo PERF-3 pattern). Two jobs at once:
+  //   1. REPLACE CORRECTNESS — the key carries planRefreshStamp
+  //      (planPrep.processedAt) as well as plan_url, because Plan Prep writes
+  //      plates to a canonical slot: a replace rewrites the same plan_url
+  //      string, and a path-only key would keep serving the old image until a
+  //      hard reload. New stamp → new key → new signed URL → fresh download.
+  //   2. RE-OPEN SPEED — within the staleTime, reopening the floor reuses the
+  //      SAME signed URL, so the service worker's cache serves the plate
+  //      instantly instead of re-downloading it on every visit (the profile
+  //      showed each open paying a fresh sign + full plate download).
+  // Signed URLs live 30 min; 25-min staleTime keeps handed-out URLs valid.
+  const planUrl = floor?.plan_url ?? null;
   const planStamp = planRefreshStamp(floor?.plan_metadata);
-  useEffect(() => {
-    let cancelled = false;
-    if (!floor?.plan_url) {
-      setSignedUrl(null);
-      return;
-    }
-    setSignedUrl(null);
-    setSignedUrlError(null);
-    if (import.meta.env.DEV) {
-      // Marker distinguishes "re-resolved after replace" from "never re-ran"
-      // (the failure mode this effect's key exists to prevent). Dev-only so
-      // the prod console stays clean.
-      console.log('[plan] resolving signed URL', { planUrl: floor.plan_url, planStamp });
-    }
-    void signedUrlForPlan(floor.plan_url)
-      .then((url) => {
-        if (!cancelled) setSignedUrl(url);
-      })
-      .catch((err) => {
-        if (!cancelled) {
-          setSignedUrlError(err instanceof Error ? err.message : 'Could not load plan URL');
-        }
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [floor?.plan_url, planStamp]);
+  const signedUrlQuery = useQuery({
+    queryKey: ['plan-signed-url', planUrl, planStamp],
+    queryFn: () => signedUrlForPlan(planUrl as string),
+    enabled: !!planUrl,
+    staleTime: 25 * 60_000,
+    gcTime: 30 * 60_000,
+  });
+  const signedUrl = planUrl ? (signedUrlQuery.data ?? null) : null;
+  const signedUrlError = signedUrlQuery.isError
+    ? signedUrlQuery.error instanceof Error
+      ? signedUrlQuery.error.message
+      : 'Could not load plan URL'
+    : null;
 
   // Esc cancels placing mode.
   useEffect(() => {
