@@ -79,13 +79,16 @@ export function AppShell({
           <div className="flex items-center gap-2 sm:gap-3">
             <EncryptedChip onClick={() => navigate('/admin/security')} />
             <LiveSyncChip />
+            {/* Match the chips beside it (EncryptedChip / SyncChip are h-7
+                rounded-full bordered) so the header reads as one row of
+                equal-height controls. */}
             <Link
               to="/help"
               aria-label="How to use Markur"
               title="How to"
-              className="inline-flex h-9 w-9 items-center justify-center rounded-md text-white/80 transition-colors hover:bg-waymarks-gold hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-waymarks-gold"
+              className="inline-flex h-7 w-7 items-center justify-center rounded-full border border-white/25 text-white/80 transition-colors hover:border-waymarks-gold hover:bg-waymarks-gold hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-waymarks-gold"
             >
-              <HelpCircle size={18} aria-hidden />
+              <HelpCircle size={15} aria-hidden />
             </Link>
             <UserMenu />
           </div>
