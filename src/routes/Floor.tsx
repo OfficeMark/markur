@@ -569,20 +569,63 @@ export function Floor() {
   const stepCls =
     'inline-flex h-6 w-6 shrink-0 items-center justify-center rounded text-text-muted hover:bg-black/5 hover:text-text dark:hover:bg-white/5';
 
+  // ‹ {floor} › — the lateral navigation cluster. Shared by the desktop
+  // breadcrumb and the phone bar. Never shrinks away; the label truncates
+  // (capped on phones) and the steppers walk the building's floors in
+  // sidebar order without leaving the plan.
+  const floorStepper = (
+    <span className="flex shrink-0 items-center gap-0.5">
+      {prevFloor ? (
+        <Link
+          to={`/floors/${prevFloor.id}`}
+          aria-label={`Previous floor: ${prevFloor.label}`}
+          title={`Previous: ${prevFloor.label}`}
+          className={stepCls}
+        >
+          <ChevronLeft size={14} aria-hidden />
+        </Link>
+      ) : (
+        <span aria-hidden className="inline-flex h-6 w-6 shrink-0 items-center justify-center text-text-faint/40">
+          <ChevronLeft size={14} />
+        </span>
+      )}
+      <span className="max-w-[45vw] truncate font-semibold text-text sm:max-w-none">{floor.label}</span>
+      {nextFloor ? (
+        <Link
+          to={`/floors/${nextFloor.id}`}
+          aria-label={`Next floor: ${nextFloor.label}`}
+          title={`Next: ${nextFloor.label}`}
+          className={stepCls}
+        >
+          <ChevronRight size={14} aria-hidden />
+        </Link>
+      ) : (
+        <span aria-hidden className="inline-flex h-6 w-6 shrink-0 items-center justify-center text-text-faint/40">
+          <ChevronRight size={14} />
+        </span>
+      )}
+    </span>
+  );
+
   const breadcrumb = (
     <nav
       aria-label="Breadcrumb"
-      className="flex min-w-0 items-center gap-1.5 text-xs text-text-muted"
+      // overflow-hidden is load-bearing: without it, when the crumb's content
+      // is wider than its flex box, the text doesn't truncate — it PAINTS PAST
+      // the box and disappears UNDER the opaque buttons rendered after it
+      // (Randy's "the words are behind the button, not shorter"). Clipping at
+      // the box edge guarantees worst-case is a clean cut inside the crumb.
+      className="flex min-w-0 items-center gap-1.5 overflow-hidden text-xs text-text-muted"
     >
       {/* Home + its chevron hide on phones: the hamburger already covers Home,
           and at 390px every pixel here belongs to the building + floor. */}
       <Link
         to="/"
-        className="inline-flex items-center gap-1 rounded px-1 py-0.5 hover:bg-black/5 hover:text-text max-sm:hidden dark:hover:bg-white/5"
+        className="inline-flex items-center gap-1 rounded px-1 py-0.5 hover:bg-black/5 hover:text-text dark:hover:bg-white/5"
       >
         Home
       </Link>
-      <ChevronRight size={12} aria-hidden className="shrink-0 text-text-faint max-sm:hidden" />
+      <ChevronRight size={12} aria-hidden className="shrink-0 text-text-faint" />
       <Link
         to={`/buildings/${floor.building_id}`}
         className="truncate rounded px-1 py-0.5 hover:bg-black/5 hover:text-text dark:hover:bg-white/5"
@@ -590,40 +633,7 @@ export function Floor() {
         {building?.name ?? 'Building'}
       </Link>
       <ChevronRight size={12} aria-hidden className="shrink-0 text-text-faint" />
-      {/* The floor cluster never shrinks away (the building name truncates
-          first) — this is the context a field user actually needs. The ‹ ›
-          steppers walk the building's floors without leaving the plan. */}
-      <span className="flex shrink-0 items-center gap-0.5">
-        {prevFloor ? (
-          <Link
-            to={`/floors/${prevFloor.id}`}
-            aria-label={`Previous floor: ${prevFloor.label}`}
-            title={`Previous: ${prevFloor.label}`}
-            className={stepCls}
-          >
-            <ChevronLeft size={14} aria-hidden />
-          </Link>
-        ) : (
-          <span aria-hidden className="inline-flex h-6 w-6 shrink-0 items-center justify-center text-text-faint/40">
-            <ChevronLeft size={14} />
-          </span>
-        )}
-        <span className="max-w-[38vw] truncate font-semibold text-text">Floor {floor.label}</span>
-        {nextFloor ? (
-          <Link
-            to={`/floors/${nextFloor.id}`}
-            aria-label={`Next floor: ${nextFloor.label}`}
-            title={`Next: ${nextFloor.label}`}
-            className={stepCls}
-          >
-            <ChevronRight size={14} aria-hidden />
-          </Link>
-        ) : (
-          <span aria-hidden className="inline-flex h-6 w-6 shrink-0 items-center justify-center text-text-faint/40">
-            <ChevronRight size={14} />
-          </span>
-        )}
-      </span>
+      {floorStepper}
     </nav>
   );
 
@@ -823,7 +833,22 @@ export function Floor() {
             the focal-action labels drop to icons. Hidden entirely in focus mode. */}
         {!focus && (
           <div className="mb-3 flex shrink-0 items-center gap-3">
-            <div className="min-w-0 flex-1">{breadcrumb}</div>
+            {/* sm+: the full trail (Home › building › ‹ floor ›). */}
+            <div className="min-w-0 flex-1 max-sm:hidden">{breadcrumb}</div>
+            {/* Phones — Randy's design: Back (to the building) + ‹ floor ›
+                is all the navigation needed; Home lives in the hamburger.
+                One row, nothing to crush, big tappable targets. */}
+            <div className="flex min-w-0 flex-1 items-center gap-1 overflow-hidden sm:hidden">
+              <Link
+                to={`/buildings/${floor.building_id}`}
+                aria-label={`Back to ${building?.name ?? 'building'}`}
+                title={building?.name ?? 'Building'}
+                className={stepCls}
+              >
+                <ArrowLeft size={15} aria-hidden />
+              </Link>
+              {floorStepper}
+            </div>
             {visibleBadge}
             {hasPrimary && (
               <div className="flex shrink-0 items-center gap-2">
