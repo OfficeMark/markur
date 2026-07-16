@@ -192,26 +192,43 @@ function upscaleIfSmall(src: HTMLCanvasElement): HTMLCanvasElement {
   return dst;
 }
 
+export interface ScanEnhanceOptions {
+  /**
+   * Rotate to correct skew. GEOMETRY-CHANGING: rotation moves content
+   * relative to the frame, so normalized pin coordinates would drift.
+   * Pass false for floors that have pins (the "pin-safe" cleanup —
+   * contrast + despeckle only, which are strictly per-pixel). Default true.
+   */
+  deskew?: boolean;
+}
+
 /**
- * Run the full Enhance pass on a baked display-plate PNG, returning a cleaned
- * display PNG. Deliberate + reversible: the caller shows before/after and only
- * keeps this if the user Accepts. Works for any upload — image or PDF — because
- * it starts from the already-rasterized plate.
+ * Run the Enhance pass on a baked display-plate PNG, returning a cleaned
+ * display image. Deliberate + reversible: the caller shows before/after and
+ * only keeps this if the user Accepts. Works for any upload — image or PDF —
+ * because it starts from the already-rasterized plate.
  */
-export async function enhanceScanBlob(plateBlob: Blob): Promise<ScanEnhanceResult> {
+export async function enhanceScanBlob(
+  plateBlob: Blob,
+  opts: ScanEnhanceOptions = {}
+): Promise<ScanEnhanceResult> {
+  const deskew = opts.deskew ?? true;
   let canvas = await plateCanvas(plateBlob);
   const ctx0 = canvas.getContext('2d')!;
   let img = ctx0.getImageData(0, 0, canvas.width, canvas.height);
 
   // Deskew first (on grayscale luma so the estimate isn't color-biased).
+  // Skipped entirely in pin-safe mode — see ScanEnhanceOptions.
   grayscale(img.data);
-  const angle = estimateSkew(img.data, canvas.width, canvas.height);
-  if (Math.abs(angle) >= 0.25) {
-    ctx0.putImageData(img, 0, 0);
-    canvas = rotateCanvas(canvas, angle);
-    const ctx1 = canvas.getContext('2d')!;
-    img = ctx1.getImageData(0, 0, canvas.width, canvas.height);
-    grayscale(img.data);
+  if (deskew) {
+    const angle = estimateSkew(img.data, canvas.width, canvas.height);
+    if (Math.abs(angle) >= 0.25) {
+      ctx0.putImageData(img, 0, 0);
+      canvas = rotateCanvas(canvas, angle);
+      const ctx1 = canvas.getContext('2d')!;
+      img = ctx1.getImageData(0, 0, canvas.width, canvas.height);
+      grayscale(img.data);
+    }
   }
 
   // Contrast + despeckle.

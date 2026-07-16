@@ -318,7 +318,10 @@ export function FloorPlanUploadDialog({
       setStage({ kind: 'processing', message: 'Enhancing your plan…' });
       try {
         const before = await produceDisplayPlate(file, source);
-        const enhanced = await enhanceScanBlob(before.blob);
+        // Pin-safe on pinned floors: contrast + despeckle only (strictly
+        // per-pixel). Deskew rotates content relative to the frame, which
+        // would drift normalized pin coordinates — pin-free floors only.
+        const enhanced = await enhanceScanBlob(before.blob, { deskew: !hasPins });
         setStage({
           kind: 'enhance-scan',
           file,
@@ -334,7 +337,7 @@ export function FloorPlanUploadDialog({
         });
       }
     },
-    []
+    [hasPins]
   );
 
   // Open Crop-to-plan: produce the full display plate and hand it to the crop UI.
@@ -508,6 +511,7 @@ export function FloorPlanUploadDialog({
                 beforeUrl={stage.beforeUrl}
                 afterUrl={stage.afterUrl}
                 busy={upload.isPending}
+                pinSafe={hasPins}
                 redrawHref={redrawMailto({ buildingName, floorLabel })}
                 onCancel={() => setStage({ kind: 'pick' })}
                 onKeepOriginal={() => startDefaultUpload(stage.file, stage.source)}
@@ -672,9 +676,9 @@ function ReviewPanel(props: {
   redrawHref: string;
 }) {
   const Icon = props.file.type === 'application/pdf' ? FileText : ImageIcon;
-  // Scan cleanup runs on the baked plate, so it's offered for any upload
-  // (image or PDF) — user-triggered, no detector.
-  const showClean = props.canEnhance;
+  // Scan cleanup runs on the baked plate, so it's offered for ANY upload —
+  // including floors with pins, where it runs pin-safe (no deskew; see
+  // enhanceScanBlob). Crop stays pin-free-only: it always moves the frame.
   return (
     <div className="space-y-4">
       <div className="flex items-center gap-3 rounded-lg border border-black/10 bg-surface p-3 text-sm dark:border-white/10">
@@ -708,7 +712,7 @@ function ReviewPanel(props: {
         and label intact — so the floor opens instantly.
         {props.canEnhance
           ? ' Want to trim the title block and border? Use Crop to plan.'
-          : ' This floor already has pins, so the plan keeps its current frame.'}
+          : ' This floor already has pins, so the plan keeps its exact frame — cleanup here is pin-safe (contrast and despeckle only, no rotation or cropping).'}
         {props.isReplace && ' Existing pins on this floor are preserved.'}
       </p>
       <div className="flex flex-wrap items-center justify-between gap-2">
@@ -717,11 +721,9 @@ function ReviewPanel(props: {
           <Button variant="secondary" onClick={props.onCancel}>
             Pick a different file
           </Button>
-          {showClean && (
-            <Button variant="ghost" iconLeft={<Wand2 size={14} aria-hidden />} onClick={props.onCleanScan}>
-              Clean up scan
-            </Button>
-          )}
+          <Button variant="ghost" iconLeft={<Wand2 size={14} aria-hidden />} onClick={props.onCleanScan}>
+            Clean up scan
+          </Button>
           {props.canEnhance && (
             <Button variant="ghost" iconLeft={<Crop size={14} aria-hidden />} onClick={props.onCrop}>
               Crop to plan
@@ -741,6 +743,8 @@ function ScanEnhancePanel(props: {
   beforeUrl: string;
   afterUrl: string;
   busy: boolean;
+  /** True on pinned floors: cleanup ran without deskew (pin-safe). */
+  pinSafe: boolean;
   redrawHref: string;
   onCancel: () => void;
   onKeepOriginal: () => void;
@@ -752,7 +756,11 @@ function ScanEnhancePanel(props: {
         <ComparePane label="Original" badge="as uploaded">
           <img src={props.beforeUrl} alt="Original plan" className="h-full w-full object-contain" />
         </ComparePane>
-        <ComparePane label="Enhanced" badge="deskew · contrast · despeckle" highlight>
+        <ComparePane
+          label="Enhanced"
+          badge={props.pinSafe ? 'contrast · despeckle · pin-safe' : 'deskew · contrast · despeckle'}
+          highlight
+        >
           <img src={props.afterUrl} alt="Enhanced plan" className="h-full w-full object-contain" />
         </ComparePane>
       </div>
