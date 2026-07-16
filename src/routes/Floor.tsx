@@ -835,19 +835,19 @@ export function Floor() {
           <div className="mb-3 flex shrink-0 items-center gap-3">
             {/* sm+: the full trail (Home › building › ‹ floor ›). */}
             <div className="min-w-0 flex-1 max-sm:hidden">{breadcrumb}</div>
-            {/* Phones — Randy's design: Back (to the building) + ‹ floor ›
-                is all the navigation needed; Home lives in the hamburger.
-                One row, nothing to crush, big tappable targets. */}
-            <div className="flex min-w-0 flex-1 items-center gap-1 overflow-hidden sm:hidden">
+            {/* Phones — the control row carries ONLY icons (nothing to trap):
+                Back to the building on the left, buttons on the right. The
+                floor name + ‹ › steppers live as an overlay on the map window
+                itself (top-left), where there's room — Randy's design. */}
+            <div className="flex min-w-0 flex-1 items-center sm:hidden">
               <Link
                 to={`/buildings/${floor.building_id}`}
                 aria-label={`Back to ${building?.name ?? 'building'}`}
                 title={building?.name ?? 'Building'}
-                className={stepCls}
+                className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-black/15 bg-surface text-text-muted hover:bg-black/5 hover:text-text dark:border-white/15 dark:hover:bg-white/5"
               >
-                <ArrowLeft size={15} aria-hidden />
+                <ArrowLeft size={16} aria-hidden />
               </Link>
-              {floorStepper}
             </div>
             {visibleBadge}
             {hasPrimary && (
@@ -927,6 +927,42 @@ export function Floor() {
             />
           ) : (
             <div className="relative min-h-0 flex-1">
+              {/* Floor-hop overlay (phones): ‹ › on the map, floor name below
+                  them — the plan window has the room the toolbar never did.
+                  sm+ hides this; the breadcrumb carries the steppers there. */}
+              <div className="absolute left-2 top-2 z-10 flex flex-col items-start gap-1 sm:hidden">
+                <div className="flex items-center gap-1">
+                  {prevFloor ? (
+                    <Link
+                      to={`/floors/${prevFloor.id}`}
+                      aria-label={`Previous floor: ${prevFloor.label}`}
+                      className="inline-flex h-9 w-9 items-center justify-center rounded-md bg-waymarks-ink/85 text-white/90 shadow-sm hover:bg-waymarks-ink"
+                    >
+                      <ChevronLeft size={18} aria-hidden />
+                    </Link>
+                  ) : (
+                    <span aria-hidden className="inline-flex h-9 w-9 items-center justify-center rounded-md bg-waymarks-ink/40 text-white/40">
+                      <ChevronLeft size={18} />
+                    </span>
+                  )}
+                  {nextFloor ? (
+                    <Link
+                      to={`/floors/${nextFloor.id}`}
+                      aria-label={`Next floor: ${nextFloor.label}`}
+                      className="inline-flex h-9 w-9 items-center justify-center rounded-md bg-waymarks-ink/85 text-white/90 shadow-sm hover:bg-waymarks-ink"
+                    >
+                      <ChevronRight size={18} aria-hidden />
+                    </Link>
+                  ) : (
+                    <span aria-hidden className="inline-flex h-9 w-9 items-center justify-center rounded-md bg-waymarks-ink/40 text-white/40">
+                      <ChevronRight size={18} />
+                    </span>
+                  )}
+                </div>
+                <span className="max-w-[60vw] truncate rounded-md bg-waymarks-ink/85 px-2 py-1 text-xs font-semibold text-white shadow-sm">
+                  {floor.label}
+                </span>
+              </div>
               <FloorPlanCanvas
                 src={signedUrl}
                 kind={planKind}
