@@ -11,10 +11,12 @@ import {
   setBuildingPinAppearance,
   signedBuildingPhotoUrl,
   softDeleteBuilding,
+  updateBuildingName,
   uploadBuildingPhoto,
   type NewBuildingInput,
 } from '@/lib/queries/buildings';
 import type { PinShape, PinSize } from '@/lib/queries/branding';
+import type { BuildingView } from '@/lib/queries/bundles';
 import type { Building } from '@/types/database';
 import { accessKeys } from '@/hooks/useAccess';
 import { floorKeys } from '@/hooks/useFloors';
@@ -208,6 +210,29 @@ export function useSetBuildingExternalLink(buildingId: string | undefined) {
     },
     onSuccess: (b) => {
       patchBuildingInBoot(qc, b);
+    },
+  });
+}
+
+/**
+ * Rename a building. The renamed row is patched into every cache that shows the
+ * name without a refetch: `patchBuildingInBoot` covers the Home cards, the
+ * sidebar nav, and useBuilding(id); the building-view bundle
+ * (`['building-view', id]`, keyed separately from app_boot — see useBundles) is
+ * patched too so the building detail header + breadcrumb update immediately.
+ */
+export function useUpdateBuildingName(buildingId: string | undefined) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (name: string) => {
+      if (!buildingId) throw new Error('No building selected');
+      return updateBuildingName(buildingId, name);
+    },
+    onSuccess: (b) => {
+      patchBuildingInBoot(qc, b);
+      qc.setQueryData<BuildingView>(['building-view', b.id], (prev) =>
+        prev ? { ...prev, building: b } : prev
+      );
     },
   });
 }

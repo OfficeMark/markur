@@ -184,6 +184,25 @@ export async function createBuildingNoReturn(input: NewBuildingInput): Promise<v
   if (error) throw error;
 }
 
+/**
+ * Rename a building. Unlike the INSERT read-back that createBuildingNoReturn
+ * avoids, the `.select()` here is safe: an existing building admin already
+ * satisfies both the UPDATE policy (`configure`) and the SELECT policy (`view`)
+ * on this row, so re-reading the renamed row never trips RLS. Mirrors
+ * uploadBuildingPhoto / setBuildingPinAppearance (same update+read-back shape).
+ * Caller trims the name before passing it in (see NewBuildingDialog's convention).
+ */
+export async function updateBuildingName(id: string, name: string): Promise<Building> {
+  const { data, error } = await supabase
+    .from('buildings')
+    .update({ name })
+    .eq('id', id)
+    .select('*')
+    .single();
+  if (error) throw error;
+  return data;
+}
+
 const BUILDING_PHOTO_BUCKET = 'building-photos';
 
 function buildingPhotoPath(buildingId: string, file: File): string {

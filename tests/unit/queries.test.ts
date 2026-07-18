@@ -63,6 +63,38 @@ describe('queries/buildings', () => {
     const out = await getBuilding('b-1');
     expect(out?.id).toBe('b-1');
   });
+
+  it('updateBuildingName updates name by id and returns the renamed row', async () => {
+    const singleMock = vi.fn(() =>
+      Promise.resolve({ data: { ...exampleBuilding, name: 'North Tower' }, error: null })
+    );
+    const selectMock = vi.fn(() => ({ single: singleMock }));
+    const eqMock = vi.fn(() => ({ select: selectMock }));
+    const updateMock = vi.fn(() => ({ eq: eqMock }));
+    fromMock.mockReturnValue({ update: updateMock });
+    const { updateBuildingName } = await import('@/lib/queries/buildings');
+
+    const out = await updateBuildingName('b-1', 'North Tower');
+
+    expect(fromMock).toHaveBeenCalledWith('buildings');
+    expect(updateMock).toHaveBeenCalledWith({ name: 'North Tower' });
+    expect(eqMock).toHaveBeenCalledWith('id', 'b-1');
+    expect(selectMock).toHaveBeenCalledWith('*');
+    expect(out.name).toBe('North Tower');
+  });
+
+  it('updateBuildingName throws when RLS rejects the update', async () => {
+    const singleMock = vi.fn(() =>
+      Promise.resolve({ data: null, error: { message: 'rls denied' } })
+    );
+    const selectMock = vi.fn(() => ({ single: singleMock }));
+    const eqMock = vi.fn(() => ({ select: selectMock }));
+    const updateMock = vi.fn(() => ({ eq: eqMock }));
+    fromMock.mockReturnValue({ update: updateMock });
+    const { updateBuildingName } = await import('@/lib/queries/buildings');
+
+    await expect(updateBuildingName('b-1', 'x')).rejects.toMatchObject({ message: 'rls denied' });
+  });
 });
 
 describe('queries/floors', () => {

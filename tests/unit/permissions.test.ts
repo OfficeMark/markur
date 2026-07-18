@@ -41,6 +41,16 @@ describe('checkCapability', () => {
     expect(checkCapability(g, 'edit', { type: 'building', id: otherBuildingId })).toBe(false);
   });
 
+  it('non-admins cannot configure (rename) a building', () => {
+    // The rename affordance is gated on `configure` — the same capability the
+    // buildings UPDATE RLS policy requires. Auditors and tenant reps must never
+    // see it (acceptance: edit action hidden for non-admin members).
+    const auditor = grants({ role: 'auditor', scope_type: 'floor', scope_id: floorId });
+    const tenant = grants({ role: 'tenant_rep', scope_type: 'tenant', scope_id: tenantId });
+    expect(checkCapability(auditor, 'configure', { type: 'building', id: buildingId })).toBe(false);
+    expect(checkCapability(tenant, 'configure', { type: 'building', id: buildingId })).toBe(false);
+  });
+
   it('auditor on a floor can audit and flag, not edit', () => {
     const g = grants({ role: 'auditor', scope_type: 'floor', scope_id: floorId });
     expect(checkCapability(g, 'audit', { type: 'floor', id: floorId })).toBe(true);

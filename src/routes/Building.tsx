@@ -1,10 +1,11 @@
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { useState } from 'react';
-import { ArrowLeft, MapPin, Layers, ImageOff, Trash2, Plus, FileDown, Share2, SlidersHorizontal } from 'lucide-react';
+import { ArrowLeft, MapPin, Layers, ImageOff, Trash2, Plus, FileDown, Share2, SlidersHorizontal, Pencil } from 'lucide-react';
 import { AppShell } from '@/components/waymarks/AppShell';
 import { Tooltip } from '@/components/ui/Tooltip';
 import { AccessManagementCard } from '@/components/waymarks/AccessManagementCard';
 import { BuildingPhotoUpload } from '@/components/waymarks/BuildingPhotoUpload';
+import { EditBuildingNameDialog } from '@/components/waymarks/EditBuildingNameDialog';
 import { NewFloorDialog } from '@/components/waymarks/NewFloorDialog';
 import { ShareBuildingDialog } from '@/components/waymarks/ShareBuildingDialog';
 import { StepUpDialog } from '@/components/waymarks/StepUpDialog';
@@ -25,6 +26,7 @@ export function Building() {
   const building = view?.building ?? null;
   const floors = view?.floors ?? [];
   const [newFloorOpen, setNewFloorOpen] = useState(false);
+  const [editNameOpen, setEditNameOpen] = useState(false);
   const [shareOpen, setShareOpen] = useState(false);
   const [deleteOpen, setDeleteOpen] = useState(false);
   const [deleteError, setDeleteError] = useState<string | null>(null);
@@ -77,7 +79,21 @@ export function Building() {
           <p className="text-[11px] font-medium uppercase tracking-[0.28em] text-waymarks-gold">
             Building
           </p>
-          <h1 className="font-semibold text-4xl leading-tight text-text sm:text-5xl">{building.name}</h1>
+          <div className="flex items-start gap-2">
+            <h1 className="font-semibold text-4xl leading-tight text-text sm:text-5xl">{building.name}</h1>
+            {canConfigure && (
+              <Tooltip text="Rename this building">
+                <button
+                  type="button"
+                  onClick={() => setEditNameOpen(true)}
+                  aria-label={`Rename ${building.name}`}
+                  className="mt-1.5 inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-md border border-black/10 bg-surface text-text-muted hover:border-black/20 hover:text-text dark:border-white/10 dark:hover:border-white/20 sm:mt-2.5"
+                >
+                  <Pencil size={14} aria-hidden />
+                </button>
+              </Tooltip>
+            )}
+          </div>
           <p className="flex items-center gap-1.5 text-base text-text-muted">
             <MapPin size={15} aria-hidden />
             <span>
@@ -226,6 +242,14 @@ export function Building() {
           </section>
         )}
       </div>
+      {building && canConfigure && (
+        <EditBuildingNameDialog
+          open={editNameOpen}
+          onOpenChange={setEditNameOpen}
+          buildingId={building.id}
+          currentName={building.name}
+        />
+      )}
       {building && (
         <NewFloorDialog
           open={newFloorOpen}
