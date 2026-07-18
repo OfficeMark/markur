@@ -1,8 +1,10 @@
 import {
   createFloor,
   getFloor,
+  listDeletedFloorsByBuilding,
   listFloorsByBuilding,
   nextFloorSortOrder,
+  restoreFloor,
   setFloorNotes,
   setFloorProvenance,
   softDeleteFloor,
@@ -10,10 +12,13 @@ import {
 } from '@/lib/queries/floors';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useAppBootRaw, patchAppBoot } from '@/hooks/useAppBootQuery';
+import type { Floor } from '@/types/database';
 
 export const floorKeys = {
   all: ['floors'] as const,
   byBuilding: (buildingId: string) => [...floorKeys.all, 'by-building', buildingId] as const,
+  deletedByBuilding: (buildingId: string) =>
+    [...floorKeys.all, 'deleted-by-building', buildingId] as const,
   detail: (id: string) => [...floorKeys.all, 'detail', id] as const,
 };
 
@@ -59,12 +64,28 @@ export class FloorNotReadyError extends Error {
 
 export function useFloor(id: string | undefined) {
   const boot = useAppBootRaw();
+  const qc = useQueryClient();
   const fromBoot =
     id && boot.data
       ? boot.data.buildings.flatMap((b) => b.floors).find((f) => f.id === id) ?? null
       : null;
   const query = useQuery({
     queryKey: id ? floorKeys.detail(id) : ['floors', 'detail', 'none'],
+    // Seed from any already-loaded floors list (the sidebar fetches every
+    // building's floors). The floor row — plan_url + stamp included — is
+    // usually already in cache when the user taps a floor, so the plan's
+    // signed-URL query can start immediately instead of waiting a full
+    // detail round trip. Placeholder only: the real fetch still runs.
+    placeholderData: () => {
+      if (!id) return undefined;
+      for (const [, rows] of qc.getQueriesData<Floor[]>({
+        queryKey: [...floorKeys.all, 'by-building'],
+      })) {
+        const hit = rows?.find((f) => f.id === id);
+        if (hit) return hit;
+      }
+      return undefined;
+    },
     queryFn: async () => {
       if (!id) return null;
       const floor = await getFloor(id);
@@ -121,13 +142,49 @@ export function useSoftDeleteFloor(buildingId: string | undefined) {
         })),
       }));
       qc.invalidateQueries({ queryKey: floorKeys.detail(id) });
-      if (buildingId) qc.invalidateQueries({ queryKey: floorKeys.byBuilding(buildingId) });
+      if (buildingId) {
+        qc.invalidateQueries({ queryKey: floorKeys.byBuilding(buildingId) });
+        qc.invalidateQueries({ queryKey: floorKeys.deletedByBuilding(buildingId) });
+      }
+      qc.invalidateQueries({ queryKey: floorKeys.all });
+      // Building screen reads the building-view bundle — refresh it too.
       qc.invalidateQueries({ queryKey: ['building-view'] });
     },
   });
 }
 
-/** Set the floor's plan provenance (the source label). */
+/** Soft-deleted floors for a building (Trash page restore list). Per-table. */
+export function useDeletedFloors(buildingId: string | undefined) {
+  return useQuery({
+    queryKey: buildingId
+      ? floorKeys.deletedByBuilding(buildingId)
+      : ['floors', 'deleted-by-building', 'none'],
+    queryFn: () =>
+      buildingId ? listDeletedFloorsByBuilding(buildingId) : Promise.resolve([]),
+    enabled: !!buildingId,
+  });
+}
+
+/** Restore a soft-deleted floor. Invalidates the active + deleted floor lists. */
+export function useRestoreFloor(buildingId: string | undefined) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) => restoreFloor(id),
+    onSuccess: (_data, id) => {
+      qc.invalidateQueries({ queryKey: floorKeys.detail(id) });
+      if (buildingId) {
+        qc.invalidateQueries({ queryKey: floorKeys.byBuilding(buildingId) });
+        qc.invalidateQueries({ queryKey: floorKeys.deletedByBuilding(buildingId) });
+      }
+      qc.invalidateQueries({ queryKey: floorKeys.all });
+    },
+  });
+}
+
+/**
+ * Set the floor's plan provenance. Per-table: on success invalidates the floor
+ * detail + its building's floor list so the caption re-reads. No bundle keys.
+ */
 export function useSetFloorProvenance(floorId: string | undefined, buildingId?: string | undefined) {
   const qc = useQueryClient();
   return useMutation({
@@ -138,15 +195,17 @@ export function useSetFloorProvenance(floorId: string | undefined, buildingId?: 
     onSuccess: () => {
       if (floorId) qc.invalidateQueries({ queryKey: floorKeys.detail(floorId) });
       if (buildingId) qc.invalidateQueries({ queryKey: floorKeys.byBuilding(buildingId) });
-      // Notes/provenance show on the floor + building screens (the view bundles),
-      // not in any app_boot-driven UI — so refresh those, not the whole boot.
+      // Provenance shows on the floor + building screens (the view bundles).
       qc.invalidateQueries({ queryKey: ['building-view'] });
       if (floorId) qc.invalidateQueries({ queryKey: ['floor-view', floorId] });
     },
   });
 }
 
-/** Set the floor-wide notes (team-only free text). */
+/**
+ * Set the floor-wide team notes. Per-table: invalidates the floor detail + its
+ * building's floor list so the toolbar button re-reads. No bundle keys.
+ */
 export function useSetFloorNotes(floorId: string | undefined, buildingId?: string | undefined) {
   const qc = useQueryClient();
   return useMutation({
@@ -157,8 +216,7 @@ export function useSetFloorNotes(floorId: string | undefined, buildingId?: strin
     onSuccess: () => {
       if (floorId) qc.invalidateQueries({ queryKey: floorKeys.detail(floorId) });
       if (buildingId) qc.invalidateQueries({ queryKey: floorKeys.byBuilding(buildingId) });
-      // Notes/provenance show on the floor + building screens (the view bundles),
-      // not in any app_boot-driven UI — so refresh those, not the whole boot.
+      // Notes show on the floor + building screens (the view bundles).
       qc.invalidateQueries({ queryKey: ['building-view'] });
       if (floorId) qc.invalidateQueries({ queryKey: ['floor-view', floorId] });
     },

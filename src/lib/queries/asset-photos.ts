@@ -36,17 +36,20 @@ function isHeicPath(path: string): boolean {
  */
 
 export const ASSET_PHOTO_MAX_BYTES = 8 * 1024 * 1024;
+// S8 final: displayable web formats only — HEIC is accepted at the PICKER
+// (see PHOTO_ACCEPT + isHeicFile) and converted to JPEG before upload by
+// lib/image-convert.ts, so the stored object is always displayable.
 export const ASSET_PHOTO_MIMES = ['image/png', 'image/jpeg', 'image/webp'] as const;
 export type AssetPhotoMime = (typeof ASSET_PHOTO_MIMES)[number];
 
-/** `accept` value for photo file inputs. HEIC/HEIF allowed — they upload raw and
- *  are served via the Storage image transform (WO-3). */
+/** `accept` value for photo file inputs — HEIC/HEIF included by ext AND MIME. */
 export const PHOTO_ACCEPT =
   'image/png,image/jpeg,image/webp,image/heic,image/heif,.heic,.heif';
 
 /**
- * HEIC/HEIF detection. Checks the MIME type AND the filename extension, because
- * Windows Chrome frequently reports an empty `file.type` for `.heic` files.
+ * HEIC/HEIF detection: MIME type AND filename extension, because Windows
+ * Chrome frequently hands over `.heic` files with an EMPTY `file.type`
+ * (the empty-MIME gotcha from the 2026-06-21 diagnostic).
  */
 export function isHeicFile(file: File): boolean {
   const t = (file.type || '').toLowerCase();
@@ -126,7 +129,10 @@ export async function addAssetPhoto(assetId: string, file: File): Promise<AssetP
       // and we must store it as image/heic so the transform endpoint reads it.
       contentType,
       upsert: false,
-      cacheControl: '0',
+      // PERF-3 (CODE-REVIEW-2026-07-06): paths are immutable UUIDs, so let
+      // browsers/SW actually cache the bytes. '0' forced a re-download on
+      // every view — the old '45s photo opens' disease in miniature.
+      cacheControl: '3600',
     });
   if (uploadErr) throw uploadErr;
 
@@ -170,6 +176,23 @@ export async function deleteAssetPhoto(photo: AssetPhoto): Promise<void> {
   await supabase.storage.from('asset-photos').remove([photo.path]).catch(() => {});
 }
 
+/**
+ * PERF-2: sign MANY paths in one round trip (createSignedUrls, plural).
+ * One call per floor instead of one per pin — pair with listFirstPhotoPaths.
+ */
+export async function signedAssetPhotoUrls(paths: string[]): Promise<Map<string, string>> {
+  if (paths.length === 0) return new Map();
+  const { data, error } = await supabase.storage
+    .from('asset-photos')
+    .createSignedUrls(paths, 60 * 30);
+  if (error) throw error;
+  const map = new Map<string, string>();
+  for (const row of data ?? []) {
+    if (row.path && row.signedUrl && !row.error) map.set(row.path, row.signedUrl);
+  }
+  return map;
+}
+
 export async function signedAssetPhotoUrl(
   path: string,
   transform?: PhotoTransform
@@ -186,48 +209,6 @@ export async function signedAssetPhotoUrl(
     .createSignedUrl(path, 60 * 30, opts);
   if (error) throw error;
   return data.signedUrl;
-}
-
-/**
- * Batch-sign many asset-photo paths in ONE request (createSignedUrls, plural).
- * Returns a path → signed-URL map. Used to collapse the per-pin signing N+1 on
- * floor load: get_floor_view hands back every photo path at once, so we sign
- * them all in a single pass instead of one createSignedUrl per thumbnail.
- */
-export async function signedAssetPhotoUrls(
-  paths: string[],
-  transform?: PhotoTransform
-): Promise<Record<string, string>> {
-  const out: Record<string, string> = {};
-  if (paths.length === 0) return out;
-  // An explicit transform applies to every path (and the batch endpoint can't
-  // carry one), so sign those individually; otherwise only a still-raw HEIC
-  // needs a transform — batch-sign the plain JPEGs in one request.
-  const perPhoto = transform ? paths : paths.filter(isHeicPath);
-  if (perPhoto.length) {
-    const signed = await Promise.all(
-      perPhoto.map((p) =>
-        supabase.storage
-          .from('asset-photos')
-          .createSignedUrl(p, 60 * 30, { transform: transform ?? PHOTO_FULL_TRANSFORM })
-          .then((r) => [p, r.data?.signedUrl ?? null] as const)
-          .catch(() => [p, null] as const)
-      )
-    );
-    for (const [p, url] of signed) if (url) out[p] = url;
-  }
-  const plainPaths = transform ? [] : paths.filter((p) => !isHeicPath(p));
-  if (plainPaths.length === 0) return out;
-  const { data, error } = await supabase.storage
-    .from('asset-photos')
-    .createSignedUrls(plainPaths, 60 * 30);
-  if (error) throw error;
-  // Zip by index — the response preserves request order.
-  (data ?? []).forEach((row, i) => {
-    const p = plainPaths[i];
-    if (p && row?.signedUrl) out[p] = row.signedUrl;
-  });
-  return out;
 }
 
 /**

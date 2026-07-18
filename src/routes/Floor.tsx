@@ -1,15 +1,33 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
-import { Link, useNavigate, useParams } from 'react-router-dom';
-import { ArrowLeft, Check, ChevronRight, ClipboardList, Download, Eye, FileDown, ImageOff, LayoutGrid, Map as MapIcon, Plus, RefreshCw, Trash2, Video } from 'lucide-react';
+import { useCallback, useEffect, useMemo, useRef, useState, type ComponentType } from 'react';
+import { Link, useParams } from 'react-router-dom';
+import { AlertTriangle, ArrowLeft, ChevronLeft, ChevronRight, ClipboardCheck, ImageOff, LayoutGrid, Map as MapIcon, Maximize2, MapPin, Minimize2, NotebookPen, Shapes, Trash2 } from 'lucide-react';
 import { AppShell } from '@/components/waymarks/AppShell';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { Button } from '@/components/ui/Button';
 import { Tooltip } from '@/components/ui/Tooltip';
 import { FloorPlanCanvas } from '@/components/waymarks/FloorPlanCanvas';
-import { PlanSettingsMenu } from '@/components/waymarks/PlanSettingsMenu';
-import { FloorNotesButton } from '@/components/waymarks/FloorNotesButton';
-import { PlanProvenanceCaption } from '@/components/waymarks/PlanProvenanceCaption';
-import { FloorPlanUploadDialog } from '@/components/waymarks/FloorPlanUploadDialog';
+import type { FloorPlanUploadDialogProps } from '@/components/waymarks/FloorPlanUploadDialog';
+
+// The plan-prep + pdfjs graph (~400 kB) loads only when the upload dialog is
+// actually opened — never on plain floor open (Plan Prep v2 bundling law). We
+// load it imperatively (not via React.lazy/Suspense) so we control every
+// outcome: a failed import is retryable (React.lazy caches rejections forever),
+// a hung import times out into a real error instead of an endless spinner, and
+// a cancel fully resets. The module promise is cached only once it RESOLVES —
+// a rejection nulls the cache so the next tap re-attempts a clean import.
+type UploadDialogComponent = ComponentType<FloorPlanUploadDialogProps>;
+type UploadDialogModule = { FloorPlanUploadDialog: UploadDialogComponent };
+let uploadDialogPromise: Promise<UploadDialogModule> | null = null;
+function loadUploadDialogModule(): Promise<UploadDialogModule> {
+  if (!uploadDialogPromise) {
+    uploadDialogPromise = import('@/components/waymarks/FloorPlanUploadDialog').catch((err) => {
+      uploadDialogPromise = null; // don't cache the failure — allow a clean retry
+      throw err;
+    });
+  }
+  return uploadDialogPromise;
+}
+const UPLOAD_LOAD_TIMEOUT_MS = 15_000;
 import { PinOverlay } from '@/components/waymarks/PinOverlay';
 import { NewAssetDialog } from '@/components/waymarks/NewAssetDialog';
 import { AssetDrawer } from '@/components/waymarks/AssetDrawer';
@@ -18,9 +36,19 @@ import { StepUpDialog } from '@/components/waymarks/StepUpDialog';
 import { AuditModeShell } from '@/components/waymarks/AuditModeShell';
 import { AssetGridView } from '@/components/waymarks/AssetGridView';
 import { FilterByTypePopover } from '@/components/waymarks/FilterByTypePopover';
-import { FilterByTextInput } from '@/components/waymarks/FilterByTextInput';
-import { AuditVideoRecorderDialog } from '@/components/waymarks/AuditVideoRecorderDialog';
-import { useSoftDeleteFloor } from '@/hooks/useFloors';
+import { FilterByZonePopover } from '@/components/waymarks/FilterByZonePopover';
+import { FloorFilterSheet } from '@/components/waymarks/FloorFilterSheet';
+import { FloorMoreMenu } from '@/components/waymarks/FloorMoreMenu';
+import { FloorNotesButton } from '@/components/waymarks/FloorNotesButton';
+import { AuditPathEditBar } from '@/components/waymarks/AuditPathEditBar';
+import { useQuery } from '@tanstack/react-query';
+import {
+  useClearFloorAuditPath,
+  useFloorAuditPath,
+  useSaveFloorAuditPath,
+} from '@/hooks/useAuditPath';
+import { useFloors } from '@/hooks/useFloors';
+import { PlanProvenanceCaption } from '@/components/waymarks/PlanProvenanceCaption';
 import { useAssets, useSoftDeleteAsset, useUpdateAsset } from '@/hooks/useAssets';
 import { useAssetTypes } from '@/hooks/useAssetTypes';
 import { useFloorView, useAppBoot } from '@/hooks/useBundles';
@@ -31,15 +59,18 @@ import {
 } from '@/hooks/useAudit';
 import { useAuth } from '@/lib/auth-context';
 import { useCan } from '@/lib/permissions-context';
-import { planKindForPath, signedUrlForPlan } from '@/lib/upload';
+import { planKindForPath, planRefreshStamp, signedUrlForPlan } from '@/lib/upload';
 import { pinAppearanceFromSettings } from '@/lib/pin-appearance';
-import { pinNumberMatchesQuery } from '@/lib/pin-types';
+import { cn, mapWithConcurrency } from '@/lib/utils';
 import {
   putAssetsForFloor,
   putBuilding,
   putFloor,
   putLastAudits,
 } from '@/lib/offline';
+// PERF-5: floor-catalogue pulls in jsPDF; load it only when exporting.
+import { listFirstPhotoPaths, signedAssetPhotoUrl } from '@/lib/queries/asset-photos';
+import { photoToJpegDataUrl } from '@/lib/photo-to-data-url';
 import type { Asset } from '@/types/database';
 
 export function Floor() {
@@ -66,6 +97,10 @@ export function Floor() {
     [building?.settings]
   );
   const { data: assets = [] } = useAssets(id, { enabled: false });
+  // Floor-to-floor navigation: the building's floors in sidebar order, so a
+  // walkthrough steps Ground -> 2 -> 3 without bouncing out to the building
+  // page between floors. Hook lives up here (unconditional) per hooks rules.
+  const { data: buildingFloors } = useFloors(floor?.building_id);
   // Subscribe to the org asset-type catalog so the pin layer recolours the
   // instant the colours load (useAssetTypes writes the runtime colour map during
   // render). It now reads the catalogue from app_boot — no separate fetch.
@@ -75,13 +110,9 @@ export function Floor() {
   const canCreate = useCan('create', { type: 'building', id: floor?.building_id ?? '' });
   const canEdit = useCan('edit', { type: 'building', id: floor?.building_id ?? '' });
   const canAudit = useCan('audit', { type: 'floor', id: id ?? '' });
-  const canDeleteFloor = useCan('delete', { type: 'floor', id: id ?? '' });
   const updateAsset = useUpdateAsset(id);
   const softDelete = useSoftDeleteAsset(id);
-  const softDeleteFloor = useSoftDeleteFloor(floor?.building_id);
-  const navigate = useNavigate();
-  const [deleteFloorOpen, setDeleteFloorOpen] = useState(false);
-  const [deleteFloorError, setDeleteFloorError] = useState<string | null>(null);
+  const [exportingPdf, setExportingPdf] = useState(false);
 
   // M6 — audit walkaround. These read the caches get_floor_view seeds above
   // (enabled:false → no own fetch); start/end-audit + the confirm patch keep
@@ -95,20 +126,100 @@ export function Floor() {
   // "Log a flag" CTA; null for a normal audit start).
   const [auditInitialAssetId, setAuditInitialAssetId] = useState<string | null>(null);
 
-  const [uploadOpen, setUploadOpen] = useState(false);
-  const [signedUrl, setSignedUrl] = useState<string | null>(null);
-  const [signedUrlError, setSignedUrlError] = useState<string | null>(null);
+  // Feature 1 — audit path (a saved walking order for the floor).
+  const { data: savedAuditPath } = useFloorAuditPath(id);
+  const savePath = useSaveFloorAuditPath(id ?? '');
+  const clearPath = useClearFloorAuditPath(id ?? '');
+  const [editingPath, setEditingPath] = useState(false);
+  // Working order while editing. May include ids of assets deleted since the
+  // path was saved — they render struck-through and are dropped on Save.
+  const [pathOrder, setPathOrder] = useState<string[]>([]);
+
+  // The upload/replace dialog is tied to the floor it was opened on, and loaded
+  // imperatively on tap. `uploadState` is a small machine — idle → opening
+  // (spinner) → open | error — all stamped with the floor id so the request can
+  // never surface on a different floor than the one tapped. `uploadReqToken`
+  // invalidates any in-flight chunk load on cancel / floor change / reopen, so a
+  // slow or stale load can never resolve onto the wrong floor, and a cancel
+  // always leaves a clean slate for the next tap.
+  type UploadState =
+    | { status: 'idle' }
+    | { status: 'opening'; floorId: string }
+    | { status: 'open'; floorId: string }
+    | { status: 'error'; floorId: string; message: string };
+  const [uploadState, setUploadState] = useState<UploadState>({ status: 'idle' });
+  const [UploadDialog, setUploadDialog] = useState<UploadDialogComponent | null>(null);
+  const uploadReqToken = useRef(0);
   const [placing, setPlacing] = useState(false);
   const [placePos, setPlacePos] = useState<{ x: number; y: number } | null>(null);
   const [newAssetOpen, setNewAssetOpen] = useState(false);
   const [selectedAssetId, setSelectedAssetId] = useState<string | null>(null);
 
+  // Cancel: bump the token (invalidating any in-flight load) and reset to idle.
+  // This is the single reset path — Radix close, the spinner's Cancel button,
+  // the error's Cancel, and floor-change all funnel through it, guaranteeing the
+  // next tap starts fresh.
+  const closeUploadDialog = useCallback(() => {
+    uploadReqToken.current += 1;
+    setUploadState({ status: 'idle' });
+  }, []);
+
+  const openUploadDialog = useCallback(() => {
+    if (id == null) return;
+    const token = (uploadReqToken.current += 1);
+    const floorId = id;
+    // Chunk already loaded this session → open immediately, no spinner flash.
+    if (UploadDialog) {
+      setUploadState({ status: 'open', floorId });
+      return;
+    }
+    // Instant feedback, then load the chunk with a timeout guard.
+    setUploadState({ status: 'opening', floorId });
+    Promise.race([
+      loadUploadDialogModule(),
+      new Promise<never>((_, reject) =>
+        setTimeout(
+          () => reject(new Error('Plan tools took too long to load. Check your connection and try again.')),
+          UPLOAD_LOAD_TIMEOUT_MS
+        )
+      ),
+    ]).then(
+      (m) => {
+        if (uploadReqToken.current !== token) return; // superseded (cancelled / floor changed / reopened)
+        setUploadDialog(() => m.FloorPlanUploadDialog);
+        setUploadState({ status: 'open', floorId });
+      },
+      (err: unknown) => {
+        if (uploadReqToken.current !== token) return;
+        setUploadState({
+          status: 'error',
+          floorId,
+          message: err instanceof Error ? err.message : 'Could not open plan tools.',
+        });
+      }
+    );
+  }, [id, UploadDialog]);
+
+  // Cancel a pending/open upload request when the floor changes, so a slow
+  // chunk load can never resolve onto — or a loaded dialog linger on — a
+  // different floor's plan.
+  useEffect(() => {
+    if (uploadState.status !== 'idle' && uploadState.floorId !== id) {
+      closeUploadDialog();
+    }
+  }, [id, uploadState, closeUploadDialog]);
+
 
   // M10c — view mode (Map / Grid) + filter-by-type set.
   // M22 (#6) — additional free-text filter that ANDs with the type filter.
   const [viewMode, setViewMode] = useState<'map' | 'grid'>('map');
+  // Focus / presentation mode — hides all chrome so the plan gets the full
+  // screen (great for client walkthroughs). Only entered from the map view.
+  const [focus, setFocus] = useState(false);
   const [filterTypes, setFilterTypes] = useState<Set<string>>(new Set());
-  const [filterText, setFilterText] = useState('');
+  // Reskin: a real zone facet alongside type. '' (NO_ZONE) selects pins with a
+  // blank zone. Empty set = all visible.
+  const [filterZones, setFilterZones] = useState<Set<string>>(new Set());
 
   // M9 — take this floor offline (pre-cache for the audit walkaround).
   const [cacheState, setCacheState] = useState<'idle' | 'caching' | 'cached' | 'error'>(
@@ -125,8 +236,6 @@ export function Floor() {
   // Soft-delete confirmation state (M5).
   const [deleteAssetId, setDeleteAssetId] = useState<string | null>(null);
 
-  // M27 — building-level video recording (no asset selected).
-  const [videoRecorderOpen, setVideoRecorderOpen] = useState(false);
   // Which pins have a video — read from the get_floor_view bundle, so the floor
   // doesn't fire a separate assets-with-videos query. Add/delete-video re-seed it.
   const assetsWithVideos = useMemo(
@@ -134,28 +243,33 @@ export function Floor() {
     [floorView.data?.asset_video_ids]
   );
 
-  // Resolve a signed URL whenever the plan_url changes.
-  useEffect(() => {
-    let cancelled = false;
-    if (!floor?.plan_url) {
-      setSignedUrl(null);
-      return;
-    }
-    setSignedUrl(null);
-    setSignedUrlError(null);
-    void signedUrlForPlan(floor.plan_url)
-      .then((url) => {
-        if (!cancelled) setSignedUrl(url);
-      })
-      .catch((err) => {
-        if (!cancelled) {
-          setSignedUrlError(err instanceof Error ? err.message : 'Could not load plan URL');
-        }
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [floor?.plan_url]);
+  // The plan's signed URL, as a CACHED query (25-min staleTime, mirrors the
+  // photo PERF-3 pattern). Two jobs at once:
+  //   1. REPLACE CORRECTNESS — the key carries planRefreshStamp
+  //      (planPrep.processedAt) as well as plan_url, because Plan Prep writes
+  //      plates to a canonical slot: a replace rewrites the same plan_url
+  //      string, and a path-only key would keep serving the old image until a
+  //      hard reload. New stamp → new key → new signed URL → fresh download.
+  //   2. RE-OPEN SPEED — within the staleTime, reopening the floor reuses the
+  //      SAME signed URL, so the service worker's cache serves the plate
+  //      instantly instead of re-downloading it on every visit (the profile
+  //      showed each open paying a fresh sign + full plate download).
+  // Signed URLs live 30 min; 25-min staleTime keeps handed-out URLs valid.
+  const planUrl = floor?.plan_url ?? null;
+  const planStamp = planRefreshStamp(floor?.plan_metadata);
+  const signedUrlQuery = useQuery({
+    queryKey: ['plan-signed-url', planUrl, planStamp],
+    queryFn: () => signedUrlForPlan(planUrl as string),
+    enabled: !!planUrl,
+    staleTime: 25 * 60_000,
+    gcTime: 30 * 60_000,
+  });
+  const signedUrl = planUrl ? (signedUrlQuery.data ?? null) : null;
+  const signedUrlError = signedUrlQuery.isError
+    ? signedUrlQuery.error instanceof Error
+      ? signedUrlQuery.error.message
+      : 'Could not load plan URL'
+    : null;
 
   // Esc cancels placing mode.
   useEffect(() => {
@@ -292,18 +406,134 @@ export function Floor() {
     }
   }
 
+  // ── Audit-path edit helpers (Feature 1) ───────────────────────────────────
+  const presentAssetIds = useMemo(() => new Set(assets.map((a) => a.id)), [assets]);
+  // 1-based stop number for each present pin in the working order (deleted ids
+  // in pathOrder are skipped so the numbers the surveyor sees stay consecutive).
+  const pathIndexById = useMemo(() => {
+    const m = new Map<string, number>();
+    let n = 0;
+    for (const pid of pathOrder) {
+      if (presentAssetIds.has(pid)) {
+        n += 1;
+        m.set(pid, n);
+      }
+    }
+    return m;
+  }, [pathOrder, presentAssetIds]);
+
+  function startEditPath() {
+    setSelectedAssetId(null);
+    setPlacing(false);
+    setRepositionAssetId(null);
+    setViewMode('map');
+    setPathOrder(savedAuditPath?.path ?? []);
+    setEditingPath(true);
+  }
+  function exitEditPath() {
+    setEditingPath(false);
+    setPathOrder([]);
+  }
+  function togglePathPin(assetId: string) {
+    setPathOrder((prev) =>
+      prev.includes(assetId) ? prev.filter((x) => x !== assetId) : [...prev, assetId]
+    );
+  }
+  async function saveAuditPath() {
+    // Drop ids for pins deleted since the path was saved — re-saving cleans them.
+    const cleaned = pathOrder.filter((pid) => presentAssetIds.has(pid));
+    try {
+      await savePath.mutateAsync(cleaned);
+      exitEditPath();
+    } catch {
+      // Non-fatal; the bar stays open so the user can retry.
+    }
+  }
+  async function clearAuditPath() {
+    try {
+      await clearPath.mutateAsync();
+      exitEditPath();
+    } catch {
+      // Non-fatal; retry available.
+    }
+  }
+
   const planKind = useMemo(() => planKindForPath(floor?.plan_url), [floor?.plan_url]);
 
   const baseSet = assets;
-  const trimmedFilterText = filterText.trim().toLowerCase();
+  // Distinct zone values present on this floor (for the zone filter). '' marks
+  // pins with no zone so they can be filtered too; sorted, blank-last.
+  const zoneOptions = useMemo(() => {
+    const set = new Set<string>();
+    for (const a of baseSet) set.add((a.zone ?? '').trim());
+    return Array.from(set).sort((x, y) => {
+      if (x === '') return 1;
+      if (y === '') return -1;
+      return x.localeCompare(y);
+    });
+  }, [baseSet]);
   const visibleAssets = useMemo(() => {
     return baseSet.filter((a) => {
       if (filterTypes.size > 0 && !filterTypes.has(a.type)) return false;
-      if (trimmedFilterText && !matchesAssetText(a, trimmedFilterText)) return false;
+      if (filterZones.size > 0 && !filterZones.has((a.zone ?? '').trim())) return false;
       return true;
     });
-  }, [baseSet, filterTypes, trimmedFilterText]);
-  const filtersActive = filterTypes.size > 0 || trimmedFilterText.length > 0;
+  }, [baseSet, filterTypes, filterZones]);
+  const filtersActive = filterTypes.size > 0 || filterZones.size > 0;
+
+  // S7 — surface the existing floor-catalogue PDF generator from the grid.
+  // Per-table: one query for first-photo paths, then sign + inline each as a
+  // JPEG data URL (same path Report.tsx uses). Photo-less assets render a "No
+  // photo" placeholder card. Entries keep the generator's pin-number order;
+  // grouping by Layer would need generator changes, so it's left as-is.
+  async function exportCatalogue() {
+    if (!floor) return;
+    const when = new Date();
+    const {
+      buildCatalogueDoc,
+      catalogueDownloadName,
+      pickCatalogueSaveTarget,
+      prepareCatalogueEntries,
+      writeCatalogue,
+    } = await import('@/lib/floor-catalogue');
+    const fileName = catalogueDownloadName(building?.name ?? 'Building', floor.label, when);
+    // pickCatalogueSaveTarget must run on the click's user activation, before
+    // the slow photo work — so call it first, then load.
+    const target = await pickCatalogueSaveTarget(fileName);
+    if (target.kind === 'cancelled') return;
+    setExportingPdf(true);
+    try {
+      const drafts = prepareCatalogueEntries(visibleAssets);
+      const photoPaths = await listFirstPhotoPaths(drafts.map((d) => d.assetId));
+      // PERF-6: cap concurrency (see Report.tsx).
+      const entries = await mapWithConcurrency(drafts, 8, async (d) => {
+          const path = photoPaths.get(d.assetId);
+          let photoDataUrl: string | null = null;
+          if (path) {
+            try {
+              photoDataUrl = await photoToJpegDataUrl(await signedAssetPhotoUrl(path));
+            } catch {
+              photoDataUrl = null;
+            }
+          }
+          return { ...d, photoDataUrl };
+      });
+      const addressLine =
+        [building?.address, building?.city].filter(Boolean).join(', ') || null;
+      const doc = buildCatalogueDoc({
+        buildingName: building?.name ?? 'Building',
+        floorLabel: floor.label,
+        addressLine,
+        generatedOn: when,
+        entries,
+      });
+      await writeCatalogue(doc, target, fileName);
+    } catch {
+      // Generation/write failed; the button re-enables so the user can retry.
+    } finally {
+      setExportingPdf(false);
+    }
+  }
 
   if (fLoading) {
     return (
@@ -341,14 +571,7 @@ export function Floor() {
   const buildingId = floor.building_id;
   const showAuditCta = Boolean(floor.plan_url) && canAudit;
 
-  // Map view fills the viewport below the header + trial banner (definite-height
-  // flex chain via AppShell) so the plan canvas's `h-full` resolves at every
-  // breakpoint. Grid view (and the no-plan empty state) keep the normal
-  // scrolling page so a long grid grows past the fold.
-  const fillViewport = Boolean(floor.plan_url) && viewMode === 'map';
-
-  // Floor-wide lock state drives the "Lock all / Unlock all pins" toggle label
-  // in Plan settings (and re-derives live after the RPC invalidates the assets).
+  // Floor-wide pin state for the "⋯ More" menu's Lock all / Unlock all toggle.
   const hasPins = assets.length > 0;
   const allPinsLocked = hasPins && assets.every((a) => a.is_locked);
 
@@ -361,250 +584,309 @@ export function Floor() {
     ? `https://viewmark-app.netlify.app/?building=${encodeURIComponent(building.name)}`
     : 'https://viewmark-app.netlify.app/';
 
-  return (
-    <AppShell fillViewport={fillViewport}>
-      {/* Flex column for the floor view. In map mode AppShell makes the chain a
-          definite height, so `h-full` here fills exactly the space left under
-          the header + trial banner (toolbars take their natural height; the map
-          flexes to fill the rest) — no hardcoded viewport math, and the
-          breadcrumb is never clipped. Grid/empty state fall back to min-h so a
-          tall page scrolls normally. */}
-      <div
-        className={
-          'mx-auto flex w-full max-w-5xl flex-col px-4 py-4 sm:px-6 sm:py-5 ' +
-          (fillViewport ? 'h-full min-h-0' : 'min-h-[calc(100dvh-3.5rem)]')
-        }
-      >
-        {/* Row 1 - breadcrumb left, Map/Grid + Filter right.
-            One row instead of three (was: back link + eyebrow + giant
-            H1 + boxed toolbar). The big floor label is duplicative of
-            the left sidebar highlight. */}
-        <div className="mb-2 flex flex-wrap items-center gap-2">
-          <nav aria-label="Breadcrumb" className="mr-auto flex items-center gap-1.5 text-xs text-text-muted">
-            <Link
-              to="/"
-              className="inline-flex items-center gap-1 rounded px-1 py-0.5 hover:bg-black/5 hover:text-text dark:hover:bg-white/5"
-            >
-              Home
-            </Link>
-            <ChevronRight size={12} aria-hidden className="text-text-faint" />
-            <Link
-              to={`/buildings/${floor.building_id}`}
-              className="rounded px-1 py-0.5 hover:bg-black/5 hover:text-text dark:hover:bg-white/5"
-            >
-              {building?.name ?? 'Building'}
-            </Link>
-            <ChevronRight size={12} aria-hidden className="text-text-faint" />
-            <span className="font-semibold text-text">Floor {floor.label}</span>
-          </nav>
-          {/* Map / Grid toggle - sits with the breadcrumb (its own line on
-              mobile, inline-right on desktop). 28px tall to match the row. */}
-          {floor.plan_url && (
-            <div role="group" aria-label="View mode" className="inline-flex h-7 rounded-md border border-black/15 text-[11px] font-medium dark:border-white/15">
-              <button
-                type="button"
-                onClick={() => setViewMode('map')}
-                aria-pressed={viewMode === 'map'}
-                className={
-                  'inline-flex h-full items-center gap-1 rounded-l-md px-2.5 transition-colors ' +
-                  (viewMode === 'map'
-                    ? 'bg-waymarks-ink text-white'
-                    : 'text-text-muted hover:bg-black/5 dark:hover:bg-white/5')
-                }
-              >
-                <MapIcon size={11} aria-hidden /> Map
-              </button>
-              <button
-                type="button"
-                onClick={() => setViewMode('grid')}
-                aria-pressed={viewMode === 'grid'}
-                className={
-                  'inline-flex h-full items-center gap-1 rounded-r-md border-l border-black/10 px-2.5 transition-colors dark:border-white/10 ' +
-                  (viewMode === 'grid'
-                    ? 'bg-waymarks-ink text-white'
-                    : 'text-text-muted hover:bg-black/5 dark:hover:bg-white/5')
-                }
-              >
-                <LayoutGrid size={11} aria-hidden /> Grid
-              </button>
-            </div>
-          )}
-          {/* Filtered-count badge — mobile only. On phones the filter input +
-              Filter button live in the action grid below (Row 2), so this keeps
-              the "X of Y visible" readout up here. The desktop count lives in
-              the filter cluster to the right. */}
-          {floor.plan_url && filtersActive && assets.length > 0 && (
-            <span className="inline-flex h-7 shrink-0 items-center rounded-md bg-waymarks-gold-soft px-2 text-[11px] font-medium text-waymarks-ink sm:hidden">
-              {visibleAssets.length} of {assets.length} visible
-            </span>
-          )}
-          {/* Desktop filter cluster (sm+ only). On phones these controls move
-              into the Row 2 action grid so all 11 controls share one uniform
-              grid. */}
-          {floor.plan_url && assets.length > 0 && (
-            <div className="hidden w-auto items-center gap-1.5 sm:flex">
-              <div className="w-56">
-                <FilterByTextInput value={filterText} onChange={setFilterText} />
-              </div>
-              <FilterByTypePopover selectedTypes={filterTypes} onChange={setFilterTypes} />
-              {filtersActive && (
-                <span className="inline-flex h-7 shrink-0 items-center rounded-md bg-waymarks-gold-soft px-2 text-[11px] font-medium text-waymarks-ink">
-                  {visibleAssets.length} of {assets.length} visible
-                </span>
-              )}
-            </div>
-          )}
-        </div>
 
-        {/* Name-search + type filter band on phones (WO-5: the funnel was
-            desktop-only; a surveyor on a phone needs to filter by type/status
-            on site). On sm+ this row hides and both live in the Row 1 cluster. */}
-        {floor.plan_url && assets.length > 0 && (
-          <div className="mb-2 flex items-center gap-1.5 sm:hidden">
-            <div className="min-w-0 flex-1">
-              <FilterByTextInput value={filterText} onChange={setFilterText} />
+  // ── Reskinned toolbar controls ────────────────────────────────────────────
+  // Defined once and placed in BOTH the desktop two-row layout and the mobile
+  // uniform stack, so the two layouts stay in lock-step without duplicating JSX.
+  const showFilters = Boolean(floor.plan_url) && assets.length > 0;
+  // Mirror FloorNotesButton's own gate so the segment's rounded corner is right.
+  const notesVisible = canEdit || !!floor.floor_notes?.trim();
+
+  const segCls = (active: boolean) =>
+    'inline-flex h-9 items-center justify-center gap-1.5 px-2 text-xs font-medium transition-colors sm:px-3 ' +
+    (active
+      ? 'bg-waymarks-ink text-white'
+      : 'text-text-muted hover:bg-black/5 dark:hover:bg-white/5');
+  const filterSegCls = (active: boolean) =>
+    'inline-flex h-9 items-center justify-center gap-1.5 px-2 text-xs font-medium transition-colors sm:px-3 ' +
+    (active
+      ? 'bg-waymarks-gold-soft text-waymarks-ink'
+      : 'text-text-muted hover:bg-black/5 dark:hover:bg-white/5');
+  const countBadge = (n: number) => (
+    <span className="rounded bg-waymarks-ink px-1 font-mono text-[10px] text-white">{n}</span>
+  );
+
+  // Prev/next within this building (sidebar order). Ends render dimmed.
+  const floorIdx = buildingFloors?.findIndex((f) => f.id === floor.id) ?? -1;
+  const prevFloor = floorIdx > 0 ? buildingFloors?.[floorIdx - 1] : undefined;
+  const nextFloor =
+    floorIdx >= 0 && buildingFloors && floorIdx < buildingFloors.length - 1
+      ? buildingFloors[floorIdx + 1]
+      : undefined;
+
+
+  const breadcrumb = (
+    <nav
+      aria-label="Breadcrumb"
+      // overflow-hidden is load-bearing: without it, when the crumb's content
+      // is wider than its flex box, the text doesn't truncate — it PAINTS PAST
+      // the box and disappears UNDER the opaque buttons rendered after it
+      // (Randy's "the words are behind the button, not shorter"). Clipping at
+      // the box edge guarantees worst-case is a clean cut inside the crumb.
+      className="flex min-w-0 items-center gap-1.5 overflow-hidden text-xs text-text-muted"
+    >
+      {/* Home + its chevron hide on phones: the hamburger already covers Home,
+          and at 390px every pixel here belongs to the building + floor. */}
+      <Link
+        to="/"
+        className="inline-flex items-center gap-1 rounded px-1 py-0.5 hover:bg-black/5 hover:text-text dark:hover:bg-white/5"
+      >
+        Home
+      </Link>
+      <ChevronRight size={12} aria-hidden className="shrink-0 text-text-faint" />
+      <Link
+        to={`/buildings/${floor.building_id}`}
+        className="truncate rounded px-1 py-0.5 hover:bg-black/5 hover:text-text dark:hover:bg-white/5"
+      >
+        {building?.name ?? 'Building'}
+      </Link>
+      <ChevronRight size={12} aria-hidden className="shrink-0 text-text-faint" />
+      <span className="truncate font-semibold text-text">{floor.label}</span>
+    </nav>
+  );
+
+  // Two focal actions as standard toolbar buttons (retired the oversized round
+  // circles): orange "Add pin" (accent) + dark "Audit" (ink primary). h-9 to
+  // line up with the segmented controls beside them.
+  const addPinBtn = () => floor.plan_url && canCreate && (
+    <Tooltip text={placing ? 'Cancel placing a pin' : 'Place a new pin by clicking the floor plan'}>
+      <Button
+        variant={placing ? 'primary' : 'accent'}
+        size="sm"
+        className="h-9 shrink-0"
+        onClick={() => setPlacing((p) => !p)}
+        aria-label={placing ? 'Cancel placing a pin' : 'Add pin'}
+        iconLeft={<MapPin size={14} aria-hidden />}
+      >
+        <span className="hidden sm:inline">{placing ? 'Cancel' : 'Add pin'}</span>
+      </Button>
+    </Tooltip>
+  );
+  const auditBtn = () => showAuditCta && (
+    <Tooltip text={activeSession ? 'Resume the audit walkaround you started' : 'Walk the floor and confirm every sign'}>
+      <Button
+        variant="primary"
+        size="sm"
+        className="h-9 shrink-0"
+        onClick={() => void startOrResumeAudit()}
+        loading={startAudit.isPending}
+        aria-label={activeSession ? 'Resume audit' : 'Audit'}
+        iconLeft={<ClipboardCheck size={14} aria-hidden />}
+      >
+        <span className="hidden sm:inline">{activeSession ? 'Resume' : 'Audit'}</span>
+      </Button>
+    </Tooltip>
+  );
+  const hasPrimary = Boolean((floor.plan_url && canCreate) || showAuditCta);
+
+  // View segment — Map / Grid / Notes in one bordered control.
+  const viewSeg = () => floor.plan_url ? (
+    <div
+      role="group"
+      aria-label="View mode"
+      className="inline-flex h-9 shrink-0 overflow-hidden rounded-lg border border-black/15 dark:border-white/15"
+    >
+      <button
+        type="button"
+        onClick={() => setViewMode('map')}
+        aria-pressed={viewMode === 'map'}
+        aria-label="Map view"
+        className={segCls(viewMode === 'map')}
+      >
+        <MapIcon size={13} aria-hidden /> <span className="hidden sm:inline">Map</span>
+      </button>
+      <button
+        type="button"
+        onClick={() => setViewMode('grid')}
+        aria-pressed={viewMode === 'grid'}
+        aria-label="Grid view"
+        className={'border-l border-black/10 dark:border-white/10 ' + segCls(viewMode === 'grid')}
+      >
+        <LayoutGrid size={13} aria-hidden /> <span className="hidden sm:inline">Grid</span>
+      </button>
+      {notesVisible && (
+        <FloorNotesButton
+          floorId={floor.id}
+          buildingId={floor.building_id}
+          notes={floor.floor_notes}
+          canEdit={canEdit}
+          trigger={
+            <button
+              type="button"
+              aria-label="Floor notes"
+              className={'relative border-l border-black/10 dark:border-white/10 ' + segCls(false)}
+            >
+              <NotebookPen size={13} aria-hidden /> <span className="hidden sm:inline">Notes</span>
+              {!!floor.floor_notes?.trim() && (
+                <span aria-hidden className="absolute right-1 top-1 inline-block h-1.5 w-1.5 rounded-full bg-waymarks-gold sm:static" />
+              )}
+            </button>
+          }
+        />
+      )}
+    </div>
+  ) : null;
+
+  // "⋯ More" overflow — one variant used at every width now (the toolbar is a
+  // single row). It always carries Visualize, plus Take-offline and the plan
+  // actions when there's a plan — the secondary controls that used to sprawl
+  // across a second toolbar row live in here instead.
+  const onVisualize = () => window.open(viewmarkUrl, '_blank', 'noopener,noreferrer');
+  const moreMenu = (
+    <FloorMoreMenu
+      floorId={floor.id}
+      buildingId={floor.building_id}
+      provenance={floor.plan_provenance}
+      allPinsLocked={allPinsLocked}
+      hasPins={hasPins}
+      canUploadPlan={canUploadPlan}
+      canEditPins={canEdit}
+      onReplacePlan={openUploadDialog}
+      onEditPath={floor.plan_url ? startEditPath : undefined}
+      offline={
+        floor.plan_url
+          ? { cached: cacheState === 'cached', busy: cacheState === 'caching', onToggle: () => void takeOffline() }
+          : undefined
+      }
+      onVisualize={onVisualize}
+    />
+  );
+
+  // Filter segment — Zone / Type, each opening its popover.
+  const filterSeg = () => showFilters ? (
+    <div className="inline-flex h-9 shrink-0 overflow-hidden rounded-lg border border-black/15 dark:border-white/15">
+      <FilterByZonePopover
+        zones={zoneOptions}
+        selectedZones={filterZones}
+        onChange={setFilterZones}
+        trigger={
+          <button type="button" aria-label="Filter pins by layer" className={filterSegCls(filterZones.size > 0)}>
+            <MapIcon size={13} aria-hidden /> Layer {filterZones.size > 0 && countBadge(filterZones.size)}
+          </button>
+        }
+      />
+      <FilterByTypePopover
+        selectedTypes={filterTypes}
+        onChange={setFilterTypes}
+        trigger={
+          <button
+            type="button"
+            aria-label="Filter pins by type"
+            className={'border-l border-black/10 dark:border-white/10 ' + filterSegCls(filterTypes.size > 0)}
+          >
+            <Shapes size={13} aria-hidden /> Type {filterTypes.size > 0 && countBadge(filterTypes.size)}
+          </button>
+        }
+      />
+    </div>
+  ) : null;
+
+  // Phone-tier: Zone + Type collapse into one "Filter" sheet.
+  const combinedFilter = showFilters ? (
+    <FloorFilterSheet
+      zones={zoneOptions}
+      selectedZones={filterZones}
+      onZonesChange={setFilterZones}
+      selectedTypes={filterTypes}
+      onTypesChange={setFilterTypes}
+    />
+  ) : null;
+
+  const visibleBadge = showFilters && filtersActive ? (
+    <span className="inline-flex h-9 shrink-0 items-center rounded-lg bg-waymarks-gold-soft px-2 text-[11px] font-medium text-waymarks-ink">
+      {visibleAssets.length} of {assets.length} visible
+    </span>
+  ) : null;
+
+  // Focus / presentation mode toggle (map only). Hides all chrome.
+  const focusBtn = () => floor.plan_url && viewMode === 'map' ? (
+    <Tooltip text="Focus mode — present the plan full-screen">
+      <button
+        type="button"
+        onClick={() => setFocus(true)}
+        aria-label="Enter focus mode"
+        className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-black/15 bg-surface text-text-muted transition-colors hover:bg-black/5 hover:text-text dark:border-white/15 dark:hover:bg-white/5"
+      >
+        <Maximize2 size={15} aria-hidden />
+      </button>
+    </Tooltip>
+  ) : null;
+
+  // Map mode fills the viewport (definite-height chain via AppShell) so the
+  // plan canvas's h-full resolves and its recenter/zoom controls stay on-screen.
+  // Grid + empty state keep the normal scrolling page.
+  const mapFill = Boolean(floor.plan_url) && viewMode === 'map';
+
+  return (
+    <AppShell fillViewport={mapFill} hideChrome={focus}>
+      <div
+        className={cn(
+          'mx-auto flex w-full flex-col',
+          focus
+            ? 'h-full min-h-0 max-w-none px-2 py-2'
+            : mapFill
+              ? // Map view: no width cap — the plan claims the freed area
+                // (slim sidebar + one-row toolbar). Tighter padding, full width.
+                'h-full min-h-0 max-w-none px-3 py-2 sm:px-4 sm:py-3'
+              : // Grid / empty state: keep a comfortable reading width.
+                'max-w-5xl px-4 py-3 sm:px-6 sm:py-4 min-h-[calc(100dvh-3.5rem)]'
+        )}
+      >
+        {/* Unified toolbar — ONE compact row at every width: breadcrumb (left,
+            truncates) · focal actions + controls (right). No card wrapper and no
+            second row, so laptop (1366) and desktop (1920) render identically —
+            the row just gets more slack between the two zones as it widens.
+            Secondary actions (Take-offline, Visualize, plan ops) live in the "⋯"
+            overflow; on phones the Layer/Type filters collapse into one sheet and
+            the focal-action labels drop to icons. Hidden entirely in focus mode. */}
+        {!focus && (
+          <div className="mb-3 flex shrink-0 items-center gap-3">
+            {/* sm+: the full trail (Home › building › ‹ floor ›). */}
+            <div className="min-w-0 flex-1 max-sm:hidden">{breadcrumb}</div>
+            {/* Phones — the control row carries ONLY icons (nothing to trap):
+                Back to the building on the left, buttons on the right. The
+                floor name + ‹ › steppers live as an overlay on the map window
+                itself (top-left), where there's room — Randy's design. */}
+            <div className="flex min-w-0 flex-1 items-center sm:hidden">
+              <Link
+                to={`/buildings/${floor.building_id}`}
+                aria-label={`Back to ${building?.name ?? 'building'}`}
+                title={building?.name ?? 'Building'}
+                className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-black/15 bg-surface text-text-muted hover:bg-black/5 hover:text-text dark:border-white/15 dark:hover:bg-white/5"
+              >
+                <ArrowLeft size={16} aria-hidden />
+              </Link>
             </div>
-            <FilterByTypePopover selectedTypes={filterTypes} onChange={setFilterTypes} />
-            {filtersActive && (
-              <span className="inline-flex h-7 shrink-0 items-center rounded-md bg-waymarks-gold-soft px-2 text-[11px] font-medium text-waymarks-ink">
-                {visibleAssets.length}/{assets.length}
-              </span>
+            {visibleBadge}
+            {hasPrimary && (
+              <div className="flex shrink-0 items-center gap-2">
+                {addPinBtn()}
+                {auditBtn()}
+              </div>
             )}
+            <div className="flex shrink-0 items-center gap-1.5">
+              {viewSeg()}
+              {showFilters && <div className="hidden sm:block">{filterSeg()}</div>}
+              {showFilters && <div className="sm:hidden">{combinedFilter}</div>}
+              {/* Focus is a presentation feature; on phones the map already
+                  fills the screen and the width belongs to the breadcrumb. */}
+              <div className="hidden sm:block">{focusBtn()}</div>
+              {moreMenu}
+            </div>
           </div>
         )}
 
-        {/* Row 2 - action buttons. On phones a uniform grid: every button the
-            same width and height, Catalogue hidden (PDF export is a desk job)
-            so what's left tiles evenly. `[&>button]`/`[&>a]` give the controls
-            slightly smaller text/padding so the longest labels fit. On sm+ it
-            reverts to the natural right-aligned wrap with Catalogue shown, so
-            desktop is unchanged. */}
-        <div className="mb-3 grid grid-cols-4 gap-1 [&>*]:w-full [&>*]:justify-center [&>*]:whitespace-nowrap [&>a]:px-1.5 [&>a]:text-[10px] [&>button]:px-1.5 [&>button]:text-[10px] sm:flex sm:flex-wrap sm:items-center sm:justify-end sm:gap-1.5 sm:[&>*]:w-auto sm:[&>a]:px-2.5 sm:[&>a]:text-[11px] sm:[&>button]:px-2.5 sm:[&>button]:text-[11px]">
-          {showAuditCta && (
-            <Tooltip text={activeSession ? 'Resume the audit walkaround you started' : 'Walk the floor and confirm every sign'}>
-              <button
-                type="button"
-                onClick={() => void startOrResumeAudit()}
-                disabled={startAudit.isPending}
-                className="inline-flex h-7 items-center gap-1 rounded-md bg-waymarks-gold px-2.5 text-[11px] font-medium text-waymarks-ink hover:bg-waymarks-gold-deep disabled:opacity-60"
-              >
-                <ClipboardList size={11} aria-hidden />
-                {activeSession ? 'Resume audit' : 'Audit'}
-              </button>
-            </Tooltip>
-          )}
-          {assets.length > 0 && (
-            <Tooltip text="View the sign catalogue for this floor (print or download as PDF)">
-              <Link
-                to={`/floors/${id}/catalogue`}
-                // Hidden on phones (PDF export is a desk job); shown on sm+.
-                className="hidden h-7 items-center gap-1 rounded-md border border-black/15 bg-surface px-2.5 text-[11px] font-medium text-text hover:bg-black/5 sm:inline-flex dark:border-white/15 dark:hover:bg-white/5"
-              >
-                <FileDown size={11} aria-hidden />
-                Catalogue
-              </Link>
-            </Tooltip>
-          )}
-          {canEdit && (
-            <Tooltip text="Record a video walkthrough of the building">
-              <button
-                type="button"
-                onClick={() => setVideoRecorderOpen(true)}
-                className="inline-flex h-7 items-center gap-1 rounded-md border border-black/15 bg-surface px-2.5 text-[11px] font-medium text-text hover:bg-black/5 dark:border-white/15 dark:hover:bg-white/5"
-              >
-                <Video size={11} aria-hidden />
-                Record
-              </button>
-            </Tooltip>
-          )}
-          {floor.plan_url && canCreate && (
-            <Tooltip text={placing ? 'Cancel placing a new asset' : 'Place a new asset by clicking on the floor plan'}>
-              <button
-                type="button"
-                onClick={() => setPlacing((p) => !p)}
-                className={
-                  'inline-flex h-7 items-center gap-1 rounded-md px-2.5 text-[11px] font-medium ' +
-                  (placing
-                    ? 'bg-waymarks-gold text-waymarks-ink hover:bg-waymarks-gold-deep'
-                    : 'border border-black/15 bg-surface text-text hover:bg-black/5 dark:border-white/15 dark:hover:bg-white/5')
-                }
-              >
-                <Plus size={11} aria-hidden />
-                {placing ? 'Cancel' : 'Add asset'}
-              </button>
-            </Tooltip>
-          )}
-          {floor.plan_url && (
-            <Tooltip text={cacheState === 'cached' ? 'This floor is saved for offline use — tap to refresh' : 'Save this floor and its plan for offline use'}>
-              <button
-                type="button"
-                onClick={() => void takeOffline()}
-                disabled={cacheState === 'caching'}
-                className="inline-flex h-7 items-center gap-1 rounded-md border border-black/15 bg-surface px-2.5 text-[11px] font-medium text-text hover:bg-black/5 disabled:opacity-60 dark:border-white/15 dark:hover:bg-white/5"
-              >
-                {cacheState === 'cached' ? <Check size={11} aria-hidden /> : <Download size={11} aria-hidden />}
-                {cacheState === 'cached' ? 'Cached' : 'Offline'}
-              </button>
-            </Tooltip>
-          )}
-          {floor.plan_url && canUploadPlan && (
-            <Tooltip text="Replace the floor plan image">
-              <button
-                type="button"
-                onClick={() => setUploadOpen(true)}
-                className="inline-flex h-7 items-center gap-1 rounded-md border border-black/15 bg-surface px-2.5 text-[11px] font-medium text-text hover:bg-black/5 dark:border-white/15 dark:hover:bg-white/5"
-              >
-                <RefreshCw size={11} aria-hidden />
-                Replace
-              </button>
-            </Tooltip>
-          )}
-          {floor.plan_url && canUploadPlan && (
-            <PlanSettingsMenu
-              floorId={floor.id}
-              buildingId={floor.building_id}
-              provenance={floor.plan_provenance}
-              allPinsLocked={allPinsLocked}
-              hasPins={hasPins}
-            />
-          )}
-          {/* Floor-wide team notes. Self-gates: editors always see it; viewers
-              only when a note exists; never rendered on guest share links. */}
-          <FloorNotesButton
-            floorId={floor.id}
-            buildingId={floor.building_id}
-            notes={floor.floor_notes}
-            canEdit={canEdit}
-          />
-          {/* M14c - Visualize in ViewMark. Gold outline so it reads as a
-              brand-aligned secondary, distinct from the gold-filled
-              Audit primary. */}
-          <Tooltip text="Open ViewMark to mock up signage on a wall photo">
-            <button
-              type="button"
-              onClick={() => window.open(viewmarkUrl, '_blank', 'noopener,noreferrer')}
-              className="inline-flex h-7 items-center gap-1 rounded-md border border-waymarks-gold bg-surface px-2.5 text-[11px] font-medium text-waymarks-gold hover:bg-waymarks-gold-soft"
-            >
-              <Eye size={11} aria-hidden />
-              Visualize
-            </button>
-          </Tooltip>
-          {canDeleteFloor && (
-            <Tooltip text="Soft-delete this floor (recoverable)">
-              <button
-                type="button"
-                onClick={() => {
-                  setDeleteFloorError(null);
-                  setDeleteFloorOpen(true);
-                }}
-                className="inline-flex h-7 items-center gap-1 rounded-md border border-black/15 bg-surface px-2.5 text-[11px] font-medium text-text-muted hover:border-danger hover:bg-danger-bg hover:text-danger dark:border-white/15 sm:ml-1"
-              >
-                <Trash2 size={11} aria-hidden />
-                Delete floor
-              </button>
-            </Tooltip>
-          )}
-        </div>
+        {/* Focus mode: a small floating control to restore normal view. */}
+        {focus && (
+          <button
+            type="button"
+            onClick={() => setFocus(false)}
+            className="fixed right-3 top-3 z-50 inline-flex h-9 items-center gap-1.5 rounded-lg bg-waymarks-ink/85 px-3 text-xs font-medium text-white shadow-sheet backdrop-blur transition-colors hover:bg-waymarks-ink"
+          >
+            <Minimize2 size={14} aria-hidden />
+            Exit focus
+          </button>
+        )}
 
         {cacheError && (
           <div className="mb-4 rounded-md border border-danger/30 bg-danger-bg p-3 text-xs text-danger">
@@ -618,7 +900,7 @@ export function Floor() {
             aria-live="polite"
             className="mb-4 flex flex-wrap items-center gap-2 rounded-md border border-waymarks-gold bg-waymarks-gold-soft p-3 text-sm dark:bg-white/5"
           >
-            <ClipboardList size={14} aria-hidden className="text-waymarks-gold" />
+            <ClipboardCheck size={14} aria-hidden className="text-waymarks-gold" />
             <p className="flex-1 text-waymarks-ink dark:text-white">
               You have an audit in progress on this floor.
             </p>
@@ -652,9 +934,48 @@ export function Floor() {
               onSelectAsset={(a: Asset) => setSelectedAssetId(a.id)}
               lastAuditByAsset={lastAuditByAsset ?? null}
               assetsWithVideos={assetsWithVideos ?? null}
+              onExportPdf={() => void exportCatalogue()}
+              exporting={exportingPdf}
             />
           ) : (
-            <div className="relative flex-1 min-h-0">
+            <div className="relative min-h-0 flex-1">
+              {/* Floor-hop overlay: ‹ › on the map, at EVERY width — the one
+                  place floor stepping lives (the breadcrumb is plain text).
+                  The name pill is phone-only; desktop's breadcrumb already
+                  says which floor this is. */}
+              <div className="absolute left-2 top-2 z-10 flex flex-col items-start gap-1">
+                <div className="flex items-center gap-1">
+                  {prevFloor ? (
+                    <Link
+                      to={`/floors/${prevFloor.id}`}
+                      aria-label={`Previous floor: ${prevFloor.label}`}
+                      className="inline-flex h-9 w-9 items-center justify-center rounded-md bg-waymarks-ink/85 text-white/90 shadow-sm hover:bg-waymarks-ink"
+                    >
+                      <ChevronLeft size={18} aria-hidden />
+                    </Link>
+                  ) : (
+                    <span aria-hidden className="inline-flex h-9 w-9 items-center justify-center rounded-md bg-waymarks-ink/40 text-white/40">
+                      <ChevronLeft size={18} />
+                    </span>
+                  )}
+                  {nextFloor ? (
+                    <Link
+                      to={`/floors/${nextFloor.id}`}
+                      aria-label={`Next floor: ${nextFloor.label}`}
+                      className="inline-flex h-9 w-9 items-center justify-center rounded-md bg-waymarks-ink/85 text-white/90 shadow-sm hover:bg-waymarks-ink"
+                    >
+                      <ChevronRight size={18} aria-hidden />
+                    </Link>
+                  ) : (
+                    <span aria-hidden className="inline-flex h-9 w-9 items-center justify-center rounded-md bg-waymarks-ink/40 text-white/40">
+                      <ChevronRight size={18} />
+                    </span>
+                  )}
+                </div>
+                <span className="max-w-[60vw] truncate rounded-md bg-waymarks-ink/85 px-2 py-1 text-xs font-semibold text-white shadow-sm sm:hidden">
+                  {floor.label}
+                </span>
+              </div>
               <FloorPlanCanvas
                 src={signedUrl}
                 kind={planKind}
@@ -667,20 +988,33 @@ export function Floor() {
                 }}
                 pinOverlay={
                   <PinOverlay
-                    assets={visibleAssets}
+                    // While editing the path every pin must be reachable, so
+                    // bypass the type/layer filters.
+                    assets={editingPath ? assets : visibleAssets}
                     selectedAssetId={selectedAssetId}
-                    canMove={canEdit}
+                    canMove={canEdit && !editingPath}
                     onSelectAsset={onSelectAsset}
                     onReposition={onReposition}
                     repositionAssetId={repositionAssetId}
                     onRepositionDragEnd={onRepositionDragEnd}
                     pendingRepositionCoords={pendingRepositionCoords}
                     lastAuditByAsset={lastAuditByAsset ?? null}
-                    onLongPress={canEdit ? startReposition : undefined}
+                    onLongPress={canEdit && !editingPath ? startReposition : undefined}
                     pinShape={pinAppearance.pinShape}
                     pinSize={pinAppearance.pinSize}
+                    pathEditMode={editingPath}
+                    pathIndexById={editingPath ? pathIndexById : null}
+                    onPathToggle={togglePathPin}
                   />
                 }
+              />
+              {/* Plan provenance moved off its own full-width line into the
+                  map card's bottom-left corner (the zoom % + recenter live
+                  bottom-right, so this stays clear). pointer-events-none so it
+                  never intercepts a pan/place click. */}
+              <PlanProvenanceCaption
+                provenance={floor.plan_provenance}
+                className="pointer-events-none absolute bottom-2 left-2 z-10 max-w-[60%] truncate rounded bg-surface/85 px-1.5 py-0.5 backdrop-blur-sm dark:bg-black/50"
               />
               {repositionAssetId && (
                 <RepositionToolbar
@@ -692,6 +1026,19 @@ export function Floor() {
                   onDismissPending={dismissPendingMove}
                 />
               )}
+              {editingPath && (
+                <AuditPathEditBar
+                  pathOrder={pathOrder}
+                  assets={assets}
+                  saving={savePath.isPending}
+                  clearing={clearPath.isPending}
+                  hasSavedPath={!!savedAuditPath}
+                  onRemoveStop={togglePathPin}
+                  onSave={() => void saveAuditPath()}
+                  onClear={() => void clearAuditPath()}
+                  onDone={exitEditPath}
+                />
+              )}
             </div>
           )
         ) : (
@@ -701,17 +1048,29 @@ export function Floor() {
             description="Once a floor plan is uploaded you'll see it here, ready for pins. PDF, PNG, or JPG."
             primaryAction={
               canUploadPlan
-                ? { label: 'Upload floor plan', onClick: () => setUploadOpen(true) }
+                ? { label: 'Upload floor plan', onClick: openUploadDialog }
                 : undefined
             }
           />
         )}
       </div>
 
-      {canUploadPlan && (
-        <FloorPlanUploadDialog
-          open={uploadOpen}
-          onOpenChange={setUploadOpen}
+      {canUploadPlan && uploadState.status === 'opening' && uploadState.floorId === id && (
+        <UploadDialogOpening onCancel={closeUploadDialog} />
+      )}
+      {canUploadPlan && uploadState.status === 'error' && uploadState.floorId === id && (
+        <UploadDialogError
+          message={uploadState.message}
+          onRetry={openUploadDialog}
+          onCancel={closeUploadDialog}
+        />
+      )}
+      {canUploadPlan && UploadDialog && uploadState.status === 'open' && uploadState.floorId === id && (
+        <UploadDialog
+          open
+          onOpenChange={(o) => {
+            if (!o) closeUploadDialog();
+          }}
           floorId={floor.id}
           floorLabel={floor.label}
           buildingName={building?.name ?? 'Building'}
@@ -776,55 +1135,77 @@ export function Floor() {
           initialAssetId={auditInitialAssetId}
           pinShape={pinAppearance.pinShape}
           pinSize={pinAppearance.pinSize}
+          auditPath={savedAuditPath?.path ?? null}
           onClose={() => setInAudit(false)}
         />
       )}
 
-      {canEdit && floor.building_id && (
-        <AuditVideoRecorderDialog
-          open={videoRecorderOpen}
-          onOpenChange={setVideoRecorderOpen}
-          buildingId={floor.building_id}
-          assetId={null}
-          scopeLabel={`${building?.name ?? 'Building'} · Floor ${floor.label}`}
-        />
-      )}
-
-      <StepUpDialog
-        open={deleteFloorOpen}
-        onOpenChange={(o) => {
-          if (!softDeleteFloor.isPending) setDeleteFloorOpen(o);
-        }}
-        title={`Delete Floor ${floor.label}?`}
-        description={
-          `This soft-deletes the floor and hides it for everyone with access. ` +
-          (assets.length === 0
-            ? `There are no pins on this floor yet. `
-            : assets.length === 1
-              ? `1 asset pin and any audit history go with it. `
-              : `${assets.length} asset pins and any audit history go with them. `) +
-          `Records are kept in the database; support can restore the floor if needed.`
-        }
-        confirmWord="DELETE"
-        confirmLabel="Delete floor"
-        confirmVariant="danger"
-        confirmIcon={<Trash2 size={14} aria-hidden />}
-        busy={softDeleteFloor.isPending}
-        errorMessage={deleteFloorError}
-        onConfirm={async () => {
-          setDeleteFloorError(null);
-          try {
-            await softDeleteFloor.mutateAsync(floor.id);
-            setDeleteFloorOpen(false);
-            navigate(`/buildings/${buildingId}`);
-          } catch (err) {
-            setDeleteFloorError(
-              err instanceof Error ? err.message : 'Could not delete the floor.'
-            );
-          }
-        }}
-      />
     </AppShell>
+  );
+}
+
+/**
+ * Instant feedback while the plan-prep chunk loads after tapping Upload /
+ * Replace, so the user never sees a dead tap. Cancel resets cleanly.
+ */
+function UploadDialogOpening({ onCancel }: { onCancel: () => void }) {
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/40"
+      role="status"
+      aria-live="polite"
+    >
+      <div className="flex items-center gap-3 rounded-xl border border-black/10 bg-surface px-5 py-4 text-sm text-text shadow-sheet dark:border-white/10">
+        <div className="h-5 w-5 animate-spin rounded-full border-2 border-waymarks-gold border-t-transparent" />
+        <span>Opening plan tools…</span>
+        <button
+          type="button"
+          onClick={onCancel}
+          className="ml-1 rounded-md px-2 py-1 text-xs font-medium text-text-muted hover:bg-black/5 hover:text-text dark:hover:bg-white/5"
+        >
+          Cancel
+        </button>
+      </div>
+    </div>
+  );
+}
+
+/**
+ * Shown when the plan-prep chunk fails or times out loading (stale build,
+ * flaky connection). Retry re-attempts a clean import — never a dead spinner
+ * or a silent no-op.
+ */
+function UploadDialogError({
+  message,
+  onRetry,
+  onCancel,
+}: {
+  message: string;
+  onRetry: () => void;
+  onCancel: () => void;
+}) {
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4"
+      role="alertdialog"
+      aria-modal="true"
+      aria-label="Couldn't open plan tools"
+    >
+      <div className="w-[min(92vw,420px)] rounded-xl border border-black/10 bg-surface p-5 text-text shadow-sheet dark:border-white/10">
+        <div className="flex items-start gap-2 text-sm text-danger">
+          <AlertTriangle size={16} aria-hidden className="mt-0.5 shrink-0" />
+          <span>{message}</span>
+        </div>
+        <div className="mt-4 flex justify-end gap-2">
+          <Button variant="secondary" onClick={onCancel}>
+            Cancel
+          </Button>
+          <Button variant="gold" onClick={onRetry}>
+            Try again
+          </Button>
+        </div>
+      </div>
+    </div>
   );
 }
 
@@ -832,32 +1213,3 @@ export function Floor() {
 // Filter helpers (M22 #6)
 // =============================================================================
 
-/**
- * Case-insensitive substring match against the user-visible text fields
- * we care about: pin ID number, name, location notes, room number, notes,
- * and the two vendor-contact strings. `q` is expected to already be trimmed
- * and lower-cased by the caller.
- */
-function matchesAssetText(a: Asset, q: string): boolean {
-  if (!q) return true;
-  // Pin ID: typing "3", "003", or "#003" finds the asset by its floor number.
-  if (pinNumberMatchesQuery(a.pin_number, q)) return true;
-  const haystacks: Array<string | null | undefined> = [
-    a.name,
-    a.location_notes,
-    a.room_number,
-    a.notes,
-  ];
-  const v = a.vendor_contact as
-    | { name?: string | null; company?: string | null }
-    | null
-    | undefined;
-  if (v) {
-    haystacks.push(v.name);
-    haystacks.push(v.company);
-  }
-  for (const h of haystacks) {
-    if (h && h.toLowerCase().includes(q)) return true;
-  }
-  return false;
-}

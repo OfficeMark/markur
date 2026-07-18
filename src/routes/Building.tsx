@@ -1,13 +1,14 @@
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { useState } from 'react';
-import { ArrowLeft, MapPin, Layers, ImageOff, Trash2, Plus, FileDown, Share2, SlidersHorizontal, Pencil } from 'lucide-react';
+import { ArrowLeft, MapPin, Layers, ImageOff, Trash2, Plus, FileDown, Share2, SlidersHorizontal, Receipt, Pencil } from 'lucide-react';
 import { AppShell } from '@/components/waymarks/AppShell';
 import { Tooltip } from '@/components/ui/Tooltip';
 import { AccessManagementCard } from '@/components/waymarks/AccessManagementCard';
+import { ShareBuildingDialog } from '@/components/waymarks/ShareBuildingDialog';
+import { DemoAccessBanner } from '@/components/waymarks/DemoAccessBanner';
 import { BuildingPhotoUpload } from '@/components/waymarks/BuildingPhotoUpload';
 import { EditBuildingNameDialog } from '@/components/waymarks/EditBuildingNameDialog';
 import { NewFloorDialog } from '@/components/waymarks/NewFloorDialog';
-import { ShareBuildingDialog } from '@/components/waymarks/ShareBuildingDialog';
 import { StepUpDialog } from '@/components/waymarks/StepUpDialog';
 import { ResumeAuditBanner } from '@/components/waymarks/ResumeAuditBanner';
 import { SectionErrorBoundary } from '@/components/waymarks/SectionErrorBoundary';
@@ -103,6 +104,7 @@ export function Building() {
           </p>
         </header>
 
+        <DemoAccessBanner buildingId={building.id} />
         <SectionErrorBoundary>
           <ResumeAuditBanner buildingId={building.id} />
         </SectionErrorBoundary>
@@ -130,15 +132,29 @@ export function Building() {
               <span>Audit report</span>
             </Link>
           </Tooltip>
+          {canEdit && (
+            <Tooltip text="Expense report: what signage cost this building, and how much is tenant-recoverable.">
+              <Link
+                to={`/reports/expenses?building=${building.id}`}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex h-9 items-center gap-1.5 rounded-md border border-black/10 bg-surface px-3 text-xs font-medium text-text hover:border-black/20 dark:border-white/10 dark:hover:border-white/20"
+              >
+                <Receipt size={12} aria-hidden />
+                <span>Expense report</span>
+              </Link>
+            </Tooltip>
+          )}
           {canManageAccess && (
-            <Tooltip text="Create a view-only link to share this building with a client">
+            <Tooltip text="Share this building with a client: an expiring full-access link.">
+
               <button
                 type="button"
                 onClick={() => setShareOpen(true)}
                 className="inline-flex h-9 items-center gap-1.5 rounded-md border border-black/10 bg-surface px-3 text-xs font-medium text-text hover:border-black/20 dark:border-white/10 dark:hover:border-white/20"
               >
                 <Share2 size={12} aria-hidden />
-                <span>Share building</span>
+                <span>Share</span>
               </button>
             </Tooltip>
           )}

@@ -1,17 +1,21 @@
 import { isHeicFile } from '@/lib/queries/asset-photos';
 
 /**
- * Convert HEIC (or any natively-decodable image) to a capped JPEG File using the
- * browser's NATIVE decoder + canvas — no WASM, no worker.
+ * S8 — convert HEIC (or any natively-decodable image) to a capped JPEG File
+ * using the browser's NATIVE decoder + canvas. No WASM, no worker needed.
  *
- * Why this works without the heic2any freeze: iOS (Safari/Chrome — all WebKit)
- * decodes HEIC natively, and native decode + canvas encode are fast + async, so
- * they don't block the main thread the way the libheif WASM decode did (20-30s).
- * The surveyor — the one shooting HEIC — is always on iOS, so this covers them.
+ * Why this doesn't repeat the heic2any freeze: iOS (all WebKit) decodes HEIC
+ * natively, and native decode + canvas encode are fast and async, unlike the
+ * 20-30s main-thread libheif WASM decode. The auditor shooting HEIC is on an
+ * iPhone, so the conversion happens exactly where the format is supported.
  *
- * Returns null when the browser can't decode the file (e.g. desktop Chrome with a
- * HEIC) — the caller then uploads the raw file, which is served via the Storage
- * transform as a fallback.
+ * Returns null when the browser can't decode the file (e.g. desktop Chrome
+ * with a HEIC). On the rebuild there is no server-side transform fallback, so
+ * `prepareForUpload` treats that as a hard, friendly error rather than
+ * storing a photo no browser could display.
+ *
+ * ⚠️ Verify-first (Randy, 2026-06-21): confirm raw-HEIC behavior in a real
+ * logged-in session before treating this as settled.
  */
 export async function heicToJpegNative(
   file: File,
@@ -59,13 +63,18 @@ export async function heicToJpegNative(
 }
 
 /**
- * Prepare a picked photo for upload: HEIC is converted to a stored JPEG up front
- * (so the stored object is a plain JPEG and views are fast). Non-HEIC files — and
- * HEICs the browser can't decode — pass through unchanged (raw HEIC then served
- * via the transform fallback).
+ * Prepare a picked photo for upload: HEIC is converted to JPEG up front so
+ * the stored object is a plain, universally-displayable JPEG. Non-HEIC files
+ * pass through unchanged. Throws a friendly error when a HEIC can't be
+ * decoded by this browser (no transform fallback exists on the rebuild).
  */
 export async function prepareForUpload(file: File): Promise<File> {
   if (!isHeicFile(file)) return file;
   const jpeg = await heicToJpegNative(file);
-  return jpeg ?? file;
+  if (!jpeg) {
+    throw new Error(
+      `${file.name}: this browser can't convert HEIC photos. Upload from your iPhone, or convert to JPG first.`
+    );
+  }
+  return jpeg;
 }

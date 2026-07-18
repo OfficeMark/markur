@@ -1,6 +1,5 @@
 import { Link, useNavigate } from 'react-router-dom';
 import type { ReactNode } from 'react';
-import { HelpCircle } from 'lucide-react';
 import { EncryptedChip } from './EncryptedChip';
 import { LiveSyncChip } from './LiveSyncChip';
 import { UserMenu } from './UserMenu';
@@ -27,18 +26,35 @@ type AppShellProps = {
    * normal page-scroll behaviour.
    */
   fillViewport?: boolean;
+  /**
+   * Focus / presentation mode: hide ALL chrome (top bar, sidebar, footer) so the
+   * page content gets the whole screen. Implies the definite-height fill chain.
+   * The route is responsible for rendering its own "exit focus" affordance.
+   */
+  hideChrome?: boolean;
 };
 
-export function AppShell({ children, withSidebar = true, fillViewport = false }: AppShellProps) {
+export function AppShell({
+  children,
+  withSidebar = true,
+  fillViewport = false,
+  hideChrome = false,
+}: AppShellProps) {
   const navigate = useNavigate();
+  const fill = fillViewport || hideChrome;
   return (
     <div
       className={cn(
         'flex flex-col bg-waymarks-cream text-text',
-        // Definite viewport height in fill mode so the flex chain below can hand
-        // a real height down to a `h-full` map; min-h (indefinite) otherwise so
-        // tall pages scroll normally.
-        fillViewport ? 'h-dvh overflow-hidden' : 'min-h-screen min-h-dvh'
+        // overflow-x-CLIP (not hidden: clip doesn't create a scroll container,
+        // so the sticky header keeps working): any accidentally-too-wide child
+        // can no longer give the page a horizontal pan — which on phones read
+        // as the whole app wobbling side-to-side while scrolling vertically.
+        'overflow-x-clip',
+        // Definite viewport height in fill/focus mode so the flex chain below can
+        // hand a real height down to a `h-full` map; min-h (indefinite) otherwise
+        // so tall pages scroll normally.
+        fill ? 'h-dvh overflow-hidden' : 'min-h-screen min-h-dvh'
       )}
     >
       <a
@@ -47,6 +63,7 @@ export function AppShell({ children, withSidebar = true, fillViewport = false }:
       >
         Skip to main content
       </a>
+      {!hideChrome && (
       <header className="sticky top-0 z-40 bg-waymarks-ink text-white shadow-[0_2px_0_0_rgb(var(--waymarks-gold))]">
         <div className="mx-auto flex h-14 w-full max-w-[1600px] items-center justify-between gap-3 px-3 sm:px-6">
           <div className="flex items-center gap-1">
@@ -59,11 +76,13 @@ export function AppShell({ children, withSidebar = true, fillViewport = false }:
               <img
                 src="/icons/markur-wordmark-light.png"
                 alt="Markur, by Officemark"
-                // max-w cap: the 1587px-wide source must never size to its
-                // intrinsic width if the height constraint is briefly unapplied
-                // (zero-cache first paint / broken-load on iOS Safari), or it
-                // blows the flex header — and the page — past the viewport.
-                className="h-9 w-auto max-w-[160px] shrink-0"
+                // h-7 on phones so the 390px header fits hamburger + wordmark +
+                // chips + user pill without crushing the hamburger into
+                // invisibility (the "mobile has no menu" report); max-w cap so
+                // the 1587px-wide source can't size to its intrinsic width and
+                // blow the header past the viewport if the height constraint is
+                // briefly unapplied (zero-cache first paint / iOS Safari).
+                className="h-7 w-auto max-w-[160px] shrink-0 sm:h-9"
                 width={1587}
                 height={521}
               />
@@ -71,31 +90,44 @@ export function AppShell({ children, withSidebar = true, fillViewport = false }:
             <OrgCoBrand />
           </div>
           <div className="flex items-center gap-2 sm:gap-3">
-            <EncryptedChip onClick={() => navigate('/admin/security')} />
+            {/* Decorative/informational on phones — hide below lg so the
+                hamburger, sync status, and user pill get the width. The
+                security page stays reachable via Admin on desktop. */}
+            <EncryptedChip className="max-lg:hidden" onClick={() => navigate('/admin/security')} />
             <LiveSyncChip />
+            {/* Match the chips beside it (EncryptedChip / SyncChip are h-7
+                rounded-full bordered). A plain text "?" — NOT lucide's
+                HelpCircle, whose glyph is itself a circled question mark:
+                inside a bordered circle button it doubled the ring and shrank
+                the ? to a speck. The button provides the circle; the glyph
+                just has to be a question mark that fills it. */}
             <Link
               to="/help"
               aria-label="How to use Markur"
               title="How to"
-              className="inline-flex h-9 w-9 items-center justify-center rounded-md text-white/80 transition-colors hover:bg-waymarks-gold hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-waymarks-gold"
+              className="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-full border border-white/25 text-white/80 transition-colors hover:border-waymarks-gold hover:bg-waymarks-gold hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-waymarks-gold"
             >
-              <HelpCircle size={18} aria-hidden />
+              <span aria-hidden className="text-[15px] font-bold leading-none">
+                ?
+              </span>
             </Link>
             <UserMenu />
           </div>
         </div>
       </header>
-      <TrialBanner />
-      <div className={cn('mx-auto flex w-full max-w-[1600px] flex-1', fillViewport && 'min-h-0')}>
-        {withSidebar && <BuildingNav />}
+      )}
+      {!hideChrome && <TrialBanner />}
+      <div className={cn('mx-auto flex w-full max-w-[1600px] flex-1', fill && 'min-h-0')}>
+        {withSidebar && !hideChrome && <BuildingNav />}
         <main
           id="main-content"
           tabIndex={-1}
-          className={cn('flex-1 min-w-0 outline-none', fillViewport && 'min-h-0')}
+          className={cn('flex-1 min-w-0 outline-none', fill && 'min-h-0')}
         >
           {children}
         </main>
       </div>
+      {!hideChrome && (
       <footer className="border-t border-black/5 bg-waymarks-cream py-3">
         {/* flex-wrap + gap-y-1 so support@officemark.ca can drop to a second
             line on a 375-414px iPhone instead of overflowing the viewport. */}
@@ -117,6 +149,7 @@ export function AppShell({ children, withSidebar = true, fillViewport = false }:
           </a>
         </div>
       </footer>
+      )}
     </div>
   );
 }

@@ -33,7 +33,12 @@ type SignInValues = z.infer<typeof signInSchema>;
 type SignUpValues = z.infer<typeof signUpSchema>;
 
 export function Login() {
-  const [mode, setMode] = useState<Mode>('sign-in');
+  const location = useLocation();
+  // Marketing funnel: officemark.ca's /demo and /trial redirect to
+  // /login?mode=signup so the Sign up tab is preselected.
+  const initialMode: Mode =
+    new URLSearchParams(location.search).get('mode') === 'signup' ? 'sign-up' : 'sign-in';
+  const [mode, setMode] = useState<Mode>(initialMode);
   return (
     <div className="flex min-h-screen min-h-dvh items-center justify-center bg-waymarks-cream px-4 py-12 text-text">
       <div className="w-full max-w-md space-y-6">

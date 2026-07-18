@@ -25,6 +25,7 @@ test-results/
 .env.local
 .env.*.local
 .env.demo
+.env.rebuild
 
 # Editors
 .vscode/*
@@ -57,6 +58,11 @@ supabase/.temp
 
 # Husky
 .husky/_
+
+# Local artifacts
+.verify/
+.claude/
+.netlify/
 
 # TypeScript
 *.tsbuildinfo

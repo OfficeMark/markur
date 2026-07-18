@@ -1,7 +1,7 @@
 /**
  * Audit walkthrough ordering. The cycle proceeds in pin-number order; starting
- * the audit at a chosen pin (M-rescue: "Start audit here") just changes where
- * the cycle begins — it still wraps around to cover every pin on the floor.
+ * the audit at a chosen pin ("Start audit here") just changes where the cycle
+ * begins — it still wraps around to cover every pin on the floor.
  */
 
 /** Stable pin-number order, with un-numbered pins last (then input order). */
@@ -32,4 +32,40 @@ export function nextPinInCycle<T extends { id: string }>(
     if (candidate && !visited(candidate.id)) return candidate.id;
   }
   return null;
+}
+
+/**
+ * The assets that make up a saved audit path's walking route, in order. Only
+ * assets still present on the floor are returned — an asset deleted after the
+ * path was saved is silently dropped from the route (Follow-mode edge case).
+ * Duplicate ids in the stored path are de-duplicated.
+ */
+export function routeFromPath<T extends { id: string }>(
+  assets: T[],
+  path: readonly string[]
+): T[] {
+  const byId = new Map(assets.map((a) => [a.id, a]));
+  const seen = new Set<string>();
+  const route: T[] = [];
+  for (const id of path) {
+    const a = byId.get(id);
+    if (a && !seen.has(id)) {
+      route.push(a);
+      seen.add(id);
+    }
+  }
+  return route;
+}
+
+/**
+ * Assets present on the floor that are NOT part of the saved path — i.e. pins
+ * added after the path was set. Surfaced at the end of a followed audit so
+ * nothing on the floor stays invisible.
+ */
+export function assetsNotOnPath<T extends { id: string }>(
+  assets: T[],
+  path: readonly string[]
+): T[] {
+  const inPath = new Set(path);
+  return assets.filter((a) => !inPath.has(a.id));
 }

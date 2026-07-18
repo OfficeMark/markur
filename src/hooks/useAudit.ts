@@ -273,14 +273,9 @@ export function useDrainPendingAuditEvents(online: boolean): void {
         }
       }
       qc.invalidateQueries({ queryKey: ['audit', 'pending-count'] });
-      // Keep polling only while retryable work remains. An empty queue — or one
-      // holding nothing but parked, retry-exhausted events — lets the loop go
-      // idle instead of spinning every 5s forever. A reconnect (the `online`
-      // dependency) or a fresh offline-queued event re-runs the effect and
-      // restarts the drain.
-      if (!cancelled && retryable.length > 0) {
-        timer = window.setTimeout(drain, 5_000);
-      }
+      // PERF-8: re-poll fast only while the queue is non-empty; an idle queue
+      // re-checks lazily so the app isn't spinning a 5s loop forever.
+      timer = window.setTimeout(drain, queue.length > 0 ? 5_000 : 30_000);
     }
     void drain();
     return () => {

@@ -3,8 +3,8 @@ import * as Dialog from '@radix-ui/react-dialog';
 import { AlertCircle, Camera, FileImage, Flag, Trash2, X } from 'lucide-react';
 import { Button } from '@/components/ui/Button';
 import { FLAG_PHOTO_MAX, validateFlagPhotoFile } from '@/lib/queries/flags';
-import { PHOTO_ACCEPT } from '@/lib/queries/asset-photos';
 import { prepareForUpload } from '@/lib/image-convert';
+import { PHOTO_ACCEPT } from '@/lib/queries/asset-photos';
 import { useContacts } from '@/hooks/useContacts';
 import { useFloor } from '@/hooks/useFloors';
 import type { Asset } from '@/types/database';
@@ -65,8 +65,16 @@ export function AuditFlagDialog({
       // renders everywhere and the stored photo is a plain JPEG.
       const file = await prepareForUpload(raw);
       const v = validateFlagPhotoFile(file);
-      if (v) err = v;
-      else accepted.push(file);
+      if (v) {
+        err = v;
+        continue;
+      }
+      try {
+        // S8: HEIC converts to JPEG on-device before upload.
+        accepted.push(await prepareForUpload(file));
+      } catch (e) {
+        err = e instanceof Error ? e.message : 'Could not read that photo.';
+      }
     }
     setPhotos((prev) => {
       const room = Math.max(0, FLAG_PHOTO_MAX - prev.length);

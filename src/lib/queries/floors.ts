@@ -93,6 +93,34 @@ export async function setFloorNotes(id: string, notes: string): Promise<void> {
 }
 
 /**
+ * Soft-deleted floors for a building, newest first. The Trash page lists these
+ * so an admin can restore them. RLS: building_admin/super_admin on the building
+ * see them via `floors_admin_write`/select; non-admins return [].
+ */
+export async function listDeletedFloorsByBuilding(buildingId: string): Promise<Floor[]> {
+  const { data, error } = await supabase
+    .from('floors')
+    .select('*')
+    .eq('building_id', buildingId)
+    .not('deleted_at', 'is', null)
+    .order('deleted_at', { ascending: false });
+  if (error) throw error;
+  return data ?? [];
+}
+
+/**
+ * Restore a soft-deleted floor (clear deleted_at). Its pins/audit history
+ * reappear via the same `deleted_at` visibility filters. Building-edit gated.
+ */
+export async function restoreFloor(id: string): Promise<void> {
+  const { error } = await supabase
+    .from('floors')
+    .update({ deleted_at: null })
+    .eq('id', id);
+  if (error) throw error;
+}
+
+/**
  * Suggest the next sort_order for a new floor in a building. Caller can
  * use this to default the form value so manually-added floors land at
  * the bottom of the existing list.

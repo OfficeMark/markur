@@ -57,7 +57,7 @@ export type CreateAssetInput = {
   contact_id?: string | null;
   installed_at?: string | null;
   audit_cycle_days?: number | null;
-  zone?: string | null;
+  zone?: string | null;  // Feature #3a: free-text zone/department
 };
 
 export async function createAsset(input: CreateAssetInput): Promise<Asset> {
@@ -110,7 +110,7 @@ export type UpdateAssetInput = Partial<{
   is_locked: boolean;
   tenant_scope_id: string | null;
   contact_id: string | null;   // M34 item 1: associated directory contact
-  zone: string | null;
+  zone: string | null;         // Feature #3a: free-text zone/department
   x: number;
   y: number;
 }>;

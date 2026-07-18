@@ -1,12 +1,11 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, type ReactNode } from 'react';
 import * as Dialog from '@radix-ui/react-dialog';
 import { format } from 'date-fns';
 import { Tooltip } from '@/components/ui/Tooltip';
+import { Band } from '@/components/ui/Band';
 import {
   X,
-  MapPin,
   Calendar,
-  Wrench,
   Pencil,
   Plus,
   Trash2,
@@ -19,12 +18,20 @@ import {
   LockOpen,
   Move,
   Eye,
-  ShoppingCart,
   Download,
   ExternalLink,
+  Camera,
+  Tag,
+  MapPin,
+  ClipboardCheck,
+  Store,
+  History,
+  Maximize2,
+  Wrench,
+  ShoppingCart,
 } from 'lucide-react';
+import type { LucideIcon } from 'lucide-react';
 import { Chip } from '@/components/ui/Chip';
-import { MetricCard } from '@/components/ui/MetricCard';
 import { useAsset, useUpdateAsset } from '@/hooks/useAssets';
 import { useBuilding } from '@/hooks/useBuildings';
 import { useFloor } from '@/hooks/useFloors';
@@ -32,32 +39,25 @@ import { useActivity } from '@/hooks/useActivity';
 import {
   useAddAssetPhoto,
   useAssetPhotos,
-  useDeleteAssetPhoto,
-} from '@/hooks/useAssetPhotos';
+  useDeleteAssetPhoto, useSignedAssetPhotoUrl } from '@/hooks/useAssetPhotos';
 import {
   assetPhotoDownloadName,
   signedAssetPhotoDownloadUrl,
-  signedAssetPhotoUrl,
   validateAssetPhotoFile,
-  PHOTO_THUMB_TRANSFORM,
-  PHOTO_FULL_TRANSFORM,
   PHOTO_ACCEPT,
 } from '@/lib/queries/asset-photos';
 import { prepareForUpload } from '@/lib/image-convert';
 import { computeStatus, statusLabel, type AssetStatus } from '@/lib/asset-status';
 import { formatPinNumber } from '@/lib/pin-types';
-import {
-  buildingExternalLinkFromSettings,
-  DEFAULT_ORDER_URL,
-  type BuildingExternalLink,
-} from '@/lib/building-settings';
 import { useContacts } from '@/hooks/useContacts';
 import { NewAssetDialog } from './NewAssetDialog';
 import { useAssetVendors, useAddAssetVendor, useRemoveAssetVendor } from '@/hooks/useAssetVendors';
 import { useVendors, useCreateVendor } from '@/hooks/useVendors';
 import { AssetAttachmentsPanel } from './AssetAttachmentsPanel';
+import { PhotoLightbox } from './PhotoLightbox';
 import { AuditVideosPanel } from './AuditVideosPanel';
 import { AuditVideoRecorderDialog } from './AuditVideoRecorderDialog';
+import { ExpensesPanel } from './ExpensesPanel';
 import { useCan } from '@/lib/permissions-context';
 import { cn } from '@/lib/utils';
 import type { Asset, AssetPhoto, AuditLogEntry } from '@/types/database';
@@ -118,7 +118,6 @@ export function AssetDrawer({
   onStartDelete,
   onLogFlag,
   onStartAuditHere,
-  guest = false,
 }: AssetDrawerProps) {
   const open = !!assetId;
   const { data: asset, isLoading } = useAsset(assetId ?? undefined);
@@ -133,10 +132,49 @@ export function AssetDrawer({
   const [editing, setEditing] = useState(false);
   const [recordOpen, setRecordOpen] = useState(false);
 
+  // Photo hero state — lifted here so the hero (primary photo) and the Media
+  // band's thumbnail strip share one source + selection (Feature #3d).
+  const { data: photos = [], isLoading: photosLoading } = useAssetPhotos(assetId ?? undefined);
+  const addPhoto = useAddAssetPhoto(assetId ?? '');
+  const delPhoto = useDeleteAssetPhoto(assetId ?? '');
+  const [activePhoto, setActivePhoto] = useState(0);
+  // Full-screen zoomable viewer for the pin's photos (opened from the hero).
+  const [photoViewerOpen, setPhotoViewerOpen] = useState(false);
+  const [photoError, setPhotoError] = useState<string | null>(null);
+
+  async function onPickPhotos(list: FileList | null) {
+    if (!list) return;
+    setPhotoError(null);
+    for (const file of Array.from(list)) {
+      const v = validateAssetPhotoFile(file);
+      if (v) {
+        setPhotoError(v);
+        continue;
+      }
+      try {
+        // S8: HEIC converts to JPEG on-device before upload (image-convert.ts).
+        await addPhoto.mutateAsync(await prepareForUpload(file));
+      } catch (e) {
+        setPhotoError(e instanceof Error ? e.message : 'Upload failed.');
+      }
+    }
+  }
+  async function onDeletePhoto(p: AssetPhoto) {
+    setPhotoError(null);
+    try {
+      await delPhoto.mutateAsync(p);
+      setActivePhoto(0);
+    } catch (e) {
+      setPhotoError(e instanceof Error ? e.message : 'Delete failed.');
+    }
+  }
+
   // Reset edit mode whenever the selected asset changes.
   useEffect(() => {
     setEditing(false);
     setRecordOpen(false);
+    setActivePhoto(0);
+    setPhotoError(null);
   }, [assetId]);
 
   return (
@@ -147,114 +185,194 @@ export function AssetDrawer({
           aria-describedby={undefined}
           className="fixed inset-x-0 bottom-0 z-50 flex h-[88dvh] flex-col rounded-t-2xl border-t border-black/10 bg-surface text-text shadow-sheet outline-none dark:border-white/10 sm:inset-x-auto sm:right-0 sm:top-0 sm:h-full sm:w-[min(96vw,440px)] sm:rounded-t-none sm:border-l sm:border-t-0"
         >
-          <header className="flex items-start justify-between gap-3 border-b border-black/10 p-4 dark:border-white/10">
+          {/* Feature #3d: thin near-black topbar. The asset name + status badge
+              + Edit live on the photo hero below; here we keep just the title
+              (for context when scrolled) and Close. */}
+          <header className="flex items-center justify-between gap-3 bg-band-ink px-4 py-3 text-white">
             <Dialog.Title asChild>
-              <div className="min-w-0">
-                <p className="truncate font-semibold text-xl">{asset?.name ?? 'Asset'}</p>
-                {asset && (
-                  <p className="mt-0.5 truncate text-xs text-text-muted">
-                    {prettyType(asset.type)} · {asset.category}
-                  </p>
-                )}
-              </div>
+              <p className="min-w-0 truncate text-sm font-semibold text-white">
+                {asset?.name ?? 'Asset'}
+              </p>
             </Dialog.Title>
-            <div className="flex items-center gap-1">
-              {asset && canEdit && !editing && (
-                <button
-                  type="button"
-                  onClick={() => setEditing(true)}
-                  className="inline-flex h-8 items-center gap-1 rounded-md border border-black/10 px-2 text-xs hover:bg-black/5 dark:border-white/10 dark:hover:bg-white/5"
-                >
-                  <Pencil size={12} aria-hidden />
-                  <span>Edit</span>
-                </button>
-              )}
-              <Dialog.Close asChild>
-                <button
-                  aria-label="Close"
-                  className="rounded-md p-1 text-text-muted hover:bg-black/5 dark:hover:bg-white/5"
-                >
-                  <X size={16} aria-hidden />
-                </button>
-              </Dialog.Close>
-            </div>
+            <Dialog.Close asChild>
+              <button
+                aria-label="Close"
+                className="-mr-1 shrink-0 rounded-md p-1 text-white/80 hover:bg-white/10 hover:text-white"
+              >
+                <X size={18} aria-hidden />
+              </button>
+            </Dialog.Close>
           </header>
 
-          <div className="flex-1 space-y-5 overflow-y-auto p-4">
+          <div className="flex-1 space-y-4 overflow-y-auto bg-band-paper p-4">
             {isLoading || !asset ? (
               <Skeleton />
             ) : (
-              <>
-                {asset.status === 'flagged' && (
-                  <div className="flex items-center gap-2 rounded-md border border-danger/40 bg-danger-bg px-3 py-2 text-sm font-semibold text-danger">
-                    <AlertTriangle size={15} aria-hidden className="shrink-0" />
-                    <span>This asset is flagged</span>
-                  </div>
-                )}
-                <PhotoGallery
-                  assetId={asset.id}
-                  assetName={asset.name ?? 'Asset'}
-                  canEdit={canEdit}
-                />
-                {canEdit && (
+              (() => {
+                const safeActive = Math.min(activePhoto, Math.max(0, photos.length - 1));
+                const current = photos[safeActive];
+                const pinLabel = formatPinNumber(asset.pin_number);
+                const subtitle = [
+                  asset.category.charAt(0).toUpperCase() + asset.category.slice(1),
+                  asset.room_number?.trim() ? `Rm ${asset.room_number.trim()}` : null,
+                  pinLabel ? `Pin #${pinLabel}` : null,
+                ]
+                  .filter(Boolean)
+                  .join(' · ');
+                // Slice 2 — narrative flow per the approved mock. The drawer keeps
+                // its banded styling; sections are re-ordered/re-grouped into:
+                // 1·See it (Photos & video) · 2·What it is (type/name/notes) ·
+                // 3·Where it is (room/zone + pin controls) · 4·A problem or a
+                // change? (Status & audit, then Vendor, then Activity). Step
+                // markers sit above the relevant bands. Presentation only.
+                const bands: Array<{
+                  step?: string;
+                  icon: LucideIcon;
+                  label: string;
+                  hint?: ReactNode;
+                  node: ReactNode;
+                }> = [
+                  {
+                    step: '1 · See it',
+                    icon: Camera,
+                    label: 'Photos & video',
+                    hint:
+                      photos.length > 0
+                        ? `${photos.length} photo${photos.length === 1 ? '' : 's'}`
+                        : undefined,
+                    node: (
+                      <>
+                        <PhotoStrip
+                          photos={photos}
+                          active={safeActive}
+                          loading={photosLoading}
+                          canEdit={canEdit}
+                          adding={addPhoto.isPending}
+                          error={photoError}
+                          onSelect={setActivePhoto}
+                          onPick={onPickPhotos}
+                        />
+                        <AuditVideosPanel
+                          buildingId={buildingId}
+                          assetId={asset.id}
+                          compact
+                          onRecordClick={canEdit ? () => setRecordOpen(true) : undefined}
+                        />
+                        <AssetAttachmentsPanel assetId={asset.id} canEdit={canEdit} />
+                        <VisualizeRow
+                          buildingName={building?.name ?? 'Building'}
+                          floorLabel={floor?.label ?? ''}
+                          pinValue={asset.room_number?.trim() || asset.name}
+                        />
+                      </>
+                    ),
+                  },
+                  {
+                    step: '2 · What it is',
+                    icon: Tag,
+                    label: 'What it is',
+                    node: <WhatItIsBody asset={asset} />,
+                  },
+                  {
+                    step: '3 · Where it is',
+                    icon: MapPin,
+                    label: 'Where it is',
+                    node: (
+                      <WhereItIsBody
+                        asset={asset}
+                        canEdit={canEdit}
+                        busy={update.isPending}
+                        onToggleLock={() =>
+                          update.mutate({ id: asset.id, patch: { is_locked: !asset.is_locked } })
+                        }
+                        canReposition={canReposition && !!onStartReposition}
+                        canDelete={canDelete && !!onStartDelete}
+                        onReposition={() => onStartReposition?.(asset.id)}
+                        onDelete={() => onStartDelete?.(asset.id)}
+                      />
+                    ),
+                  },
+                  {
+                    step: '4 · A problem or a change?',
+                    icon: ClipboardCheck,
+                    label: 'Status & audit',
+                    node: (
+                      <>
+                        <QuickActions
+                          asset={asset}
+                          canAudit={canAudit}
+                          onLogFlag={onLogFlag ? () => onLogFlag(asset.id) : undefined}
+                          onStartAuditHere={
+                            onStartAuditHere ? () => onStartAuditHere(asset.id) : undefined
+                          }
+                        />
+                        <AuditAttrs asset={asset} />
+                        <ActionCard asset={asset} />
+                      </>
+                    ),
+                  },
+                  {
+                    icon: Store,
+                    label: 'Vendor',
+                    node: <VendorPanel asset={asset} canEdit={canEdit} buildingId={buildingId} />,
+                  },
+                  // Expenses band — editor+ only (RLS hides expenses from
+                  // auditors, tenant reps, and guests, so the UI matches).
+                  ...(canEdit
+                    ? [
+                        {
+                          icon: ShoppingCart,
+                          label: 'Expenses',
+                          node: (
+                            <ExpensesPanel
+                              assetId={asset.id}
+                              canEdit={canEdit}
+                              canDelete={canDelete}
+                            />
+                          ),
+                        },
+                      ]
+                    : []),
+                  { icon: History, label: 'Activity', node: <ActivitySection items={activity} /> },
+                ];
+                return (
                   <>
-                    <LockBar
-                      asset={asset}
-                      busy={update.isPending}
-                      onToggleLock={() =>
-                        update.mutate({
-                          id: asset.id,
-                          patch: { is_locked: !asset.is_locked },
-                        })
-                      }
+                    {asset.status === 'flagged' && (
+                      <div className="flex items-center gap-2 rounded-md border border-danger/40 bg-danger-bg px-3 py-2 text-sm font-semibold text-danger">
+                        <AlertTriangle size={15} aria-hidden className="shrink-0" />
+                        <span>This asset is flagged</span>
+                      </div>
+                    )}
+                    <Hero
+                      photo={current}
+                      loading={photosLoading}
+                      name={asset.name ?? 'Asset'}
+                      subtitle={subtitle}
+                      status={asset.status as AssetStatus}
+                      assetName={asset.name ?? 'Asset'}
+                      photoIndex={safeActive}
+                      canEdit={canEdit}
+                      onEdit={() => setEditing(true)}
+                      onDeletePhoto={canEdit && current ? () => onDeletePhoto(current) : undefined}
+                      onOpenViewer={current ? () => setPhotoViewerOpen(true) : undefined}
                     />
-                    <AdminActions
-                      canReposition={canReposition && !!onStartReposition}
-                      canDelete={canDelete && !!onStartDelete}
-                      onReposition={() => onStartReposition?.(asset.id)}
-                      onDelete={() => onStartDelete?.(asset.id)}
-                    />
+                    <StatsStrip asset={asset} flagCount={asset.status === 'flagged' ? 1 : 0} />
+                    {bands.map((b) => (
+                      <div key={b.label}>
+                        {b.step && (
+                          <p className="mb-1.5 ml-0.5 text-[11px] font-bold uppercase tracking-[0.08em] text-accent">
+                            {b.step}
+                          </p>
+                        )}
+                        <Band icon={b.icon} label={b.label} hint={b.hint}>
+                          {b.node}
+                        </Band>
+                      </div>
+                    ))}
+                    <PermissionsFooter />
                   </>
-                )}
-                <QuickActions
-                  asset={asset}
-                  canAudit={canAudit}
-                  canEdit={canEdit}
-                  onSetStatus={(status) => update.mutate({ id: asset.id, patch: { status } })}
-                  onLogFlag={onLogFlag ? () => onLogFlag(asset.id) : undefined}
-                  onStartAuditHere={
-                    onStartAuditHere ? () => onStartAuditHere(asset.id) : undefined
-                  }
-                />
-                {/* Visualize-on-a-wall is a signage mock-up tool — not relevant
-                    to facility pins (stairwells, service/utility rooms). */}
-                {!guest && asset.category === 'signage' && (
-                  <VisualizeRow
-                    buildingName={building?.name ?? 'Building'}
-                    floorLabel={floor?.label ?? ''}
-                    pinValue={asset.room_number?.trim() || asset.name}
-                  />
-                )}
-                {!guest && (
-                  <OrderSignsRow
-                    asset={asset}
-                    externalLink={buildingExternalLinkFromSettings(building?.settings)}
-                  />
-                )}
-                <DetailsSection asset={asset} canEdit={canEdit} buildingId={buildingId} guest={guest} />
-                <StatusRow asset={asset} flagCount={asset.status === 'flagged' ? 1 : 0} />
-                {!guest && <AssetAttachmentsPanel assetId={asset.id} canEdit={canEdit} />}
-                {!guest && (
-                  <AuditVideosPanel
-                    buildingId={buildingId}
-                    assetId={asset.id}
-                    onRecordClick={canEdit ? () => setRecordOpen(true) : undefined}
-                  />
-                )}
-                <AttributesSection asset={asset} />
-                {!guest && <ActivitySection items={activity} />}
-                {!guest && <PermissionsFooter />}
-              </>
+                );
+              })()
             )}
           </div>
         </Dialog.Content>
@@ -277,6 +395,16 @@ export function AssetDrawer({
           floorId={floorId}
           buildingId={buildingId}
           position={null}
+        />
+      )}
+      {asset && (
+        <PhotoLightbox
+          open={photoViewerOpen}
+          onOpenChange={setPhotoViewerOpen}
+          photos={photos}
+          index={Math.min(activePhoto, Math.max(0, photos.length - 1))}
+          onIndexChange={setActivePhoto}
+          assetName={asset.name ?? 'Asset'}
         />
       )}
     </Dialog.Root>
@@ -342,9 +470,10 @@ function LockBar({
 
 /**
  * Read-only status indicators (M33). Status changes happen in Audit Mode --
- * these chips report the current state, they don't set it. The "Log a flag"
- * link routes the user into Audit Mode on this pin, where the flag capture
- * form lives.
+ * these chips report the current state, they don't set it. The "Start audit
+ * here" and "Log a flag" links route the user into Audit Mode on this pin:
+ * the former starts the walkthrough here, the latter opens the flag capture
+ * form.
  */
 function QuickActions({
   asset,
@@ -356,8 +485,8 @@ function QuickActions({
 }: {
   asset: Asset;
   canAudit: boolean;
-  canEdit: boolean;
-  onSetStatus: (status: AssetStatus) => void;
+  canEdit?: boolean;
+  onSetStatus?: (status: AssetStatus) => void;
   onLogFlag?: () => void;
   onStartAuditHere?: () => void;
 }) {
@@ -396,7 +525,7 @@ function QuickActions({
             <button
               key={opt.value}
               type="button"
-              onClick={() => onSetStatus(opt.value)}
+              onClick={() => onSetStatus?.(opt.value)}
               aria-pressed={active}
               className={cn(base, 'transition-colors', !active && 'opacity-70 hover:opacity-100')}
             >
@@ -451,7 +580,7 @@ function VisualizeRow({
   // resolves so we never launch the embed with an empty ?floor= param.
   const ready = !!floorLabel;
   const btnClass =
-    'inline-flex h-8 shrink-0 items-center gap-1.5 rounded-md bg-waymarks-gold px-3 text-xs font-medium text-waymarks-ink hover:bg-waymarks-gold-deep';
+    'inline-flex h-8 shrink-0 items-center gap-1.5 rounded-md bg-accent px-3 text-xs font-medium text-white hover:bg-accent/90';
   return (
     <div className="flex items-center justify-between gap-3 rounded-md border border-waymarks-gold/30 bg-waymarks-gold-soft px-3 py-2 text-xs dark:bg-white/5">
       <div className="min-w-0">
@@ -478,142 +607,6 @@ function VisualizeRow({
   );
 }
 
-function orderMailto(
-  toEmail: string,
-  toName: string | undefined,
-  asset: Asset,
-  intent: 'order' | 'service'
-): string {
-  const subject =
-    intent === 'service' ? `Service request — ${asset.name}` : `Sign order — ${asset.name}`;
-  const action =
-    intent === 'service'
-      ? 'request service or a repair for'
-      : 'order a replacement or new sign for';
-  const body =
-    `Hi${toName ? ` ${toName}` : ''},\n\n` +
-    `I'd like to ${action} "${asset.name}"` +
-    `${asset.room_number ? ` (room ${asset.room_number})` : ''}.\n\n` +
-    `Details:\n\n\nThanks.`;
-  return `mailto:${toEmail}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
-}
-
-/**
- * Action card driven by the asset's CATEGORY (type-driven pin-action-cards
- * brief):
- *   - signage  → "Order or service": an "Order replacement" primary plus a
- *                "Request service" secondary.
- *   - facility → "Request service" only (no sign-order framing); the card still
- *                shows as a prompt even when it has no target.
- *
- * The vendor/contact named in the card comes ONLY from the asset's own data
- * (asset_vendors / contact) — never a stored placeholder. Targets, in priority:
- * vendor email → contact email → vendor URL → building custom link → (signage
- * only) the Officemark default order login. Service targets are the same minus
- * the Officemark fallback. Buttons with no resolvable target are dropped.
- */
-function OrderSignsRow({
-  asset,
-  externalLink,
-}: {
-  asset: Asset;
-  externalLink: BuildingExternalLink;
-}) {
-  const { data: vendors } = useAssetVendors(asset.id);
-  const contacts = useContacts();
-
-  const vendorEmail = (vendors ?? []).find((v) => v.email?.trim());
-  const vendorUrl = (vendors ?? []).find((v) => v.url?.trim());
-  const contact = asset.contact_id
-    ? contacts.list.find((c) => c.id === asset.contact_id)
-    : undefined;
-
-  const isFacility = asset.category === 'facility';
-  const hidden = externalLink.mode === 'hidden';
-
-  // Target resolution from the asset's own data only.
-  const emailTarget = vendorEmail?.email?.trim()
-    ? { email: vendorEmail.email.trim(), name: vendorEmail.name }
-    : contact?.email?.trim()
-      ? { email: contact.email.trim(), name: contact.label }
-      : null;
-  const urlTarget = !emailTarget && vendorUrl?.url?.trim() ? vendorUrlHref(vendorUrl.url.trim()) : null;
-  const customUrl =
-    !emailTarget && !urlTarget && externalLink.mode === 'custom' ? externalLink.url : null;
-
-  const orderHref = emailTarget
-    ? orderMailto(emailTarget.email, emailTarget.name, asset, 'order')
-    : urlTarget ?? customUrl ?? (!isFacility && !hidden ? DEFAULT_ORDER_URL : null);
-  const serviceHref = emailTarget
-    ? orderMailto(emailTarget.email, emailTarget.name, asset, 'service')
-    : urlTarget ?? customUrl ?? null;
-  // mailto opens the user's mail client; url / custom / default open a new tab.
-  const external = !emailTarget;
-
-  // Vendor reference line — from the asset, or "Officemark" as the default sign
-  // vendor when a signage order falls back to it. Display only, never saved.
-  const vendorName =
-    emailTarget?.name ?? vendorUrl?.name ?? (customUrl ? externalLink.label.trim() || null : null);
-  const vendorLine = vendorName
-    ? `via ${vendorName}`
-    : !isFacility && orderHref === DEFAULT_ORDER_URL
-      ? 'via Officemark'
-      : null;
-
-  const title = isFacility ? 'Request service' : 'Order or service';
-  const body = isFacility
-    ? 'Log a service or maintenance request for this location.'
-    : 'Order a replacement sign or request service for this sign.';
-
-  type Btn = { label: string; href: string; primary: boolean; service: boolean };
-  const buttons: Btn[] = [];
-  if (!isFacility && orderHref) {
-    buttons.push({ label: 'Order replacement', href: orderHref, primary: true, service: false });
-  }
-  if (serviceHref) {
-    buttons.push({
-      label: 'Request service',
-      href: serviceHref,
-      primary: isFacility,
-      service: true,
-    });
-  }
-
-  // Signage with the building's fallback hidden and no own target has nothing to
-  // offer; a facility pin always shows its prompt even without a target.
-  if (buttons.length === 0 && !isFacility) return null;
-
-  return (
-    <div className="rounded-md border border-waymarks-gold/30 bg-waymarks-gold-soft px-3 py-2 text-xs dark:bg-white/5">
-      <p className="font-semibold text-waymarks-ink dark:text-white">{title}</p>
-      <p className="mt-0.5 text-text-muted">{body}</p>
-      {vendorLine && <p className="mt-0.5 text-text-faint">{vendorLine}</p>}
-      {buttons.length > 0 && (
-        <div className="mt-2 flex flex-wrap gap-2">
-          {buttons.map((b) => {
-            const Icon = b.service ? Wrench : ShoppingCart;
-            return (
-              <a
-                key={b.label}
-                href={b.href}
-                {...(external ? { target: '_blank', rel: 'noopener noreferrer' } : {})}
-                className={
-                  'inline-flex h-8 items-center gap-1.5 rounded-md px-3 text-xs font-medium ' +
-                  (b.primary
-                    ? 'bg-waymarks-gold text-white hover:bg-waymarks-gold-deep'
-                    : 'border border-waymarks-gold text-waymarks-ink hover:bg-waymarks-gold-soft dark:text-white')
-                }
-              >
-                <Icon size={12} aria-hidden />
-                {b.label}
-              </a>
-            );
-          })}
-        </div>
-      )}
-    </div>
-  );
-}
 
 function AdminActions({
   canReposition,
@@ -666,234 +659,52 @@ function variantClasses(status: AssetStatus, state: 'active' | 'idle'): string {
   return 'border-black/15 bg-surface text-waymarks-ink-muted hover:border-black/25 hover:text-text dark:border-white/15';
 }
 
-function PhotoGallery({
-  assetId,
-  assetName,
-  canEdit,
-}: {
-  assetId: string;
-  assetName: string;
-  canEdit: boolean;
-}) {
-  const { data: photos = [], isLoading } = useAssetPhotos(assetId);
-  const [active, setActive] = useState(0);
-  const add = useAddAssetPhoto(assetId);
-  const del = useDeleteAssetPhoto(assetId);
-  const [errorMsg, setErrorMsg] = useState<string | null>(null);
-  // Tracks an in-flight upload batch ({done, total}). Uploads are sequential, so
-  // a slow batch (esp. HEIC conversion) used to look stuck — picking again while
-  // it ran started a SECOND batch and piled extra photos onto the pin. We now
-  // ignore + disable new picks until the batch finishes, and show its progress.
-  const [batch, setBatch] = useState<{ done: number; total: number } | null>(null);
-  // Instant local previews (WO-3 follow-up): show each picked photo from the
-  // local File the moment it's added, so the surveyor never waits on the upload
-  // round-trip. Cleared (and the object URL revoked) once its upload lands.
-  const [pending, setPending] = useState<{ localId: string; url: string }[]>([]);
-
-  const safeActive = Math.min(active, Math.max(0, photos.length - 1));
-  const current: AssetPhoto | undefined = photos[safeActive];
-
-  async function onPickFiles(list: FileList | null) {
-    if (!list || batch) return;
-    setErrorMsg(null);
-    const files = Array.from(list);
-    setBatch({ done: 0, total: files.length });
-    let done = 0;
-    for (const raw of files) {
-      // Convert HEIC → JPEG on-device using the browser's NATIVE decoder (fast,
-      // async, no freeze on iOS — see lib/image-convert), so the stored object
-      // is a plain JPEG. Non-HEIC (and undecodable HEIC) pass through unchanged.
-      const file = await prepareForUpload(raw);
-      const v = validateAssetPhotoFile(file);
-      if (v) {
-        setErrorMsg(v);
-        setBatch({ done: (done += 1), total: files.length });
-        continue;
-      }
-      // Show the photo immediately from the local file while it uploads.
-      const localId = crypto.randomUUID();
-      const previewUrl = URL.createObjectURL(file);
-      setPending((p) => [...p, { localId, url: previewUrl }]);
-      try {
-        await add.mutateAsync(file);
-      } catch (e) {
-        setErrorMsg(e instanceof Error ? e.message : 'Upload failed.');
-      } finally {
-        setPending((p) => p.filter((x) => x.localId !== localId));
-        URL.revokeObjectURL(previewUrl);
-      }
-      setBatch({ done: (done += 1), total: files.length });
-    }
-    setBatch(null);
-  }
-
-  async function onDelete(p: AssetPhoto) {
-    setErrorMsg(null);
-    try {
-      await del.mutateAsync(p);
-      setActive(0);
-    } catch (e) {
-      setErrorMsg(e instanceof Error ? e.message : 'Delete failed.');
-    }
-  }
-
-  return (
-    <div className="space-y-2">
-      <div className="overflow-hidden rounded-lg border border-black/10 bg-waymarks-gold-soft dark:border-white/10 dark:bg-white/5">
-        {isLoading ? (
-          <div className="flex h-40 animate-pulse items-center justify-center text-text-faint">
-            Loading photos…
-          </div>
-        ) : current ? (
-          <PhotoFrame
-            photo={current}
-            assetName={assetName}
-            index={safeActive}
-            canDelete={canEdit}
-            onDelete={() => onDelete(current)}
-          />
-        ) : (
-          <div className="flex h-32 flex-col items-center justify-center gap-1 text-text-faint">
-            <ImageOff size={20} aria-hidden />
-            <span className="text-xs">No photos yet</span>
-          </div>
-        )}
-      </div>
-
-      {pending.length > 0 && (
-        <div className="flex gap-1 overflow-x-auto">
-          {pending.map((p) => (
-            <div
-              key={p.localId}
-              className="relative h-14 w-14 shrink-0 overflow-hidden rounded-md border border-black/10 dark:border-white/10"
-            >
-              <img src={p.url} alt="" className="h-full w-full object-cover opacity-70" />
-              <div className="absolute inset-0 flex items-center justify-center bg-black/25">
-                <span className="h-3.5 w-3.5 animate-spin rounded-full border-2 border-white border-t-transparent" />
-              </div>
-            </div>
-          ))}
-        </div>
-      )}
-
-      {photos.length > 1 && (
-        <div className="flex gap-1 overflow-x-auto">
-          {photos.map((p, i) => (
-            <ThumbButton
-              key={p.id}
-              photo={p}
-              active={i === safeActive}
-              onSelect={() => setActive(i)}
-            />
-          ))}
-        </div>
-      )}
-
-      {canEdit && (
-        <div className="flex gap-1">
-          <label
-            className={
-              'inline-flex h-8 items-center gap-1 rounded-md border border-black/10 px-2 text-xs dark:border-white/10 ' +
-              (batch ? 'pointer-events-none opacity-60' : 'cursor-pointer hover:bg-black/5 dark:hover:bg-white/5')
-            }
-          >
-            <Plus size={12} aria-hidden />
-            <span>
-              {batch
-                ? `Uploading ${Math.min(batch.done + 1, batch.total)} of ${batch.total}…`
-                : 'Add photo'}
-            </span>
-            <input
-              type="file"
-              accept="image/*"
-              capture="environment"
-              className="sr-only"
-              disabled={!!batch}
-              onChange={(e) => {
-                void onPickFiles(e.target.files);
-                e.target.value = '';
-              }}
-            />
-          </label>
-          <label
-            className={
-              'inline-flex h-8 items-center gap-1 rounded-md border border-black/10 px-2 text-xs dark:border-white/10 ' +
-              (batch ? 'pointer-events-none opacity-60' : 'cursor-pointer hover:bg-black/5 dark:hover:bg-white/5')
-            }
-          >
-            <Pencil size={12} aria-hidden />
-            <span>Choose files</span>
-            <input
-              type="file"
-              accept={PHOTO_ACCEPT}
-              multiple
-              className="sr-only"
-              disabled={!!batch}
-              onChange={(e) => {
-                void onPickFiles(e.target.files);
-                e.target.value = '';
-              }}
-            />
-          </label>
-        </div>
-      )}
-      {errorMsg && <p className="text-xs text-danger">{errorMsg}</p>}
-    </div>
-  );
-}
-
-function PhotoFrame({
+/**
+ * Photo hero (Feature #3d) — the active photo as a banner with a dark bottom
+ * scrim (name + subtitle), a status badge, an Edit control, and Save / Delete
+ * photo actions. Graceful empty state when there is no photo.
+ */
+function Hero({
   photo,
+  loading,
+  name,
+  subtitle,
+  status,
   assetName,
-  index,
-  canDelete,
-  onDelete,
+  photoIndex,
+  canEdit,
+  onEdit,
+  onDeletePhoto,
+  onOpenViewer,
 }: {
-  photo: AssetPhoto;
+  photo: AssetPhoto | undefined;
+  loading: boolean;
+  name: string;
+  subtitle: string;
+  status: AssetStatus;
   assetName: string;
-  index: number;
-  canDelete: boolean;
-  onDelete: () => void;
+  photoIndex: number;
+  canEdit: boolean;
+  onEdit: () => void;
+  onDeletePhoto?: () => void;
+  /** Opens the full-screen zoomable viewer. Absent = plain (no photo). */
+  onOpenViewer?: () => void;
 }) {
-  const [url, setUrl] = useState<string | null>(null);
-  const [errored, setErrored] = useState(false);
+  // PERF-3: cached signed URL (keyed by path) — revisiting the same photo
+  // reuses the same URL, so browser/SW caches hit instead of re-downloading.
+  const signed = useSignedAssetPhotoUrl(photo?.path);
+  const url = signed.data ?? null;
+  const errored = signed.isError;
   const [downloading, setDownloading] = useState(false);
 
-  useEffect(() => {
-    let cancelled = false;
-    setUrl(null);
-    setErrored(false);
-    // Inline drawer photo: a sized ~1400px transform (cheap on a stored JPEG) so
-    // opening a pin is fast — NOT the full ~1 MB original. Tap opens full size.
-    void signedAssetPhotoUrl(photo.path, PHOTO_FULL_TRANSFORM)
-      .then((u) => !cancelled && setUrl(u))
-      .catch(() => !cancelled && setErrored(true));
-    return () => {
-      cancelled = true;
-    };
-  }, [photo.path]);
-
-  // Tap-to-zoom: open the full ~3000px plain JPEG full-screen. Open the tab
-  // synchronously in the click gesture (iOS popup rule), then set its URL once
-  // the plain signed URL resolves.
-  function handleOpenFull() {
-    const w = window.open('', '_blank');
-    void signedAssetPhotoUrl(photo.path)
-      .then((full) => {
-        if (w) w.location.href = full;
-      })
-      .catch(() => w?.close());
-  }
-
   async function handleDownload() {
+    if (!photo) return;
     setDownloading(true);
     try {
       const dlUrl = await signedAssetPhotoDownloadUrl(
         photo.path,
-        assetPhotoDownloadName(assetName, index, photo.path)
+        assetPhotoDownloadName(assetName, photoIndex, photo.path)
       );
-      // The signed URL carries Content-Disposition: attachment, so a plain
-      // anchor click saves the file — works cross-origin to Supabase Storage.
       const a = document.createElement('a');
       a.href = dlUrl;
       a.rel = 'noopener';
@@ -901,58 +712,207 @@ function PhotoFrame({
       a.click();
       a.remove();
     } catch {
-      // Fall back to opening the inline photo in a new tab.
       if (url) window.open(url, '_blank', 'noopener');
     } finally {
       setDownloading(false);
     }
   }
 
-  if (errored) {
-    return (
-      <div className="flex h-40 items-center justify-center text-xs text-danger">
-        Could not load photo
-      </div>
-    );
-  }
-  if (!url) {
-    return (
-      <div className="flex h-40 animate-pulse items-center justify-center text-text-faint">
-        Loading…
-      </div>
-    );
-  }
+  const badge =
+    status === 'flagged'
+      ? { label: 'Flagged', cls: 'bg-danger', Icon: Flag }
+      : status === 'attention'
+        ? { label: 'Attention', cls: 'bg-warning', Icon: AlertTriangle }
+        : { label: 'Good', cls: 'bg-success', Icon: Check };
+  const BadgeIcon = badge.Icon;
+
   return (
-    <div className="relative">
-      <button
-        type="button"
-        onClick={handleOpenFull}
-        aria-label="View photo full size"
-        className="block w-full cursor-zoom-in"
-      >
-        <img src={url} alt="" className="block w-full object-cover" />
-      </button>
-      {/* Download is available to anyone who can view the asset. */}
-      <button
-        type="button"
-        onClick={handleDownload}
-        disabled={downloading}
-        aria-label="Download this photo"
-        className="absolute left-2 top-2 inline-flex h-7 items-center gap-1 rounded-md bg-waymarks-ink/80 px-2 text-[11px] font-medium text-white hover:bg-waymarks-ink disabled:opacity-60"
-      >
-        <Download size={12} aria-hidden />
-        {downloading ? 'Saving…' : 'Save'}
-      </button>
-      {canDelete && (
+    <div className="relative overflow-hidden rounded-2xl border border-black/10 shadow-sm dark:border-white/10">
+      <div className="flex h-40 items-center justify-center bg-band-ink text-white/40">
+        {loading ? (
+          <div
+            className="h-6 w-6 animate-spin rounded-full border-2 border-white/30 border-t-white/70"
+            aria-hidden
+          />
+        ) : photo && url && !errored ? (
+          onOpenViewer ? (
+            <button
+              type="button"
+              onClick={onOpenViewer}
+              aria-label="View photo full screen"
+              className="block h-40 w-full cursor-zoom-in"
+            >
+              <img src={url} alt="" className="h-40 w-full object-cover" />
+            </button>
+          ) : (
+            <img src={url} alt="" className="h-40 w-full object-cover" />
+          )
+        ) : (
+          <ImageOff size={32} aria-hidden />
+        )}
+      </div>
+
+      {/* Edit (top-left) */}
+      {canEdit && (
         <button
           type="button"
-          onClick={onDelete}
-          aria-label="Delete this photo"
-          className="absolute right-2 top-2 inline-flex h-7 w-7 items-center justify-center rounded-full bg-waymarks-ink/80 text-white hover:bg-danger"
+          onClick={onEdit}
+          aria-label="Edit asset"
+          className="absolute left-3 top-3 inline-flex h-8 w-8 items-center justify-center rounded-lg bg-black/45 text-white backdrop-blur-sm hover:bg-black/65"
         >
-          <Trash2 size={12} aria-hidden />
+          <Pencil size={15} aria-hidden />
         </button>
       )}
+
+      {/* Status badge (top-right) */}
+      <span
+        className={cn(
+          'absolute right-3 top-3 inline-flex items-center gap-1 rounded-full px-3 py-1 text-xs font-bold text-white shadow',
+          badge.cls
+        )}
+      >
+        <BadgeIcon size={13} aria-hidden />
+        {badge.label}
+      </span>
+
+      {/* Scrim: name + subtitle (left), photo actions (right) */}
+      <div className="absolute inset-x-0 bottom-0 flex items-end justify-between gap-2 bg-gradient-to-t from-black/85 via-black/45 to-transparent p-3 pt-10">
+        <div className="min-w-0">
+          <p className="truncate text-base font-bold text-white">{name}</p>
+          <p className="truncate text-xs text-white/75">{subtitle}</p>
+        </div>
+        {photo && !errored && (
+          <div className="flex shrink-0 items-center gap-1">
+            {onOpenViewer && (
+              <button
+                type="button"
+                onClick={onOpenViewer}
+                aria-label="Zoom this photo"
+                className="inline-flex h-7 w-7 items-center justify-center rounded-md bg-white/15 text-white backdrop-blur-sm hover:bg-white/25"
+              >
+                <Maximize2 size={12} aria-hidden />
+              </button>
+            )}
+            <button
+              type="button"
+              onClick={handleDownload}
+              disabled={downloading}
+              aria-label="Download this photo"
+              className="inline-flex h-7 items-center gap-1 rounded-md bg-white/15 px-2 text-[11px] font-medium text-white backdrop-blur-sm hover:bg-white/25 disabled:opacity-60"
+            >
+              <Download size={12} aria-hidden />
+              {downloading ? 'Saving…' : 'Save'}
+            </button>
+            {onDeletePhoto && (
+              <button
+                type="button"
+                onClick={onDeletePhoto}
+                aria-label="Delete this photo"
+                className="inline-flex h-7 w-7 items-center justify-center rounded-md bg-white/15 text-white backdrop-blur-sm hover:bg-danger"
+              >
+                <Trash2 size={12} aria-hidden />
+              </button>
+            )}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+/** Dark quick-stats strip under the hero (Last audit · Status · Flags). */
+function StatsStrip({ asset, flagCount }: { asset: Asset; flagCount: number }) {
+  const status = computeStatus({ asset, lastAuditAt: null, openFlagCount: flagCount });
+  return (
+    <div className="grid grid-cols-3 gap-px overflow-hidden rounded-xl bg-band-ink">
+      <Stat k="Last audit" v="—" />
+      <Stat k="Status" v={statusLabel(status)} tone={status === 'good' ? 'ok' : 'bad'} />
+      <Stat k="Flags" v={String(flagCount)} tone={flagCount > 0 ? 'bad' : 'plain'} />
+    </div>
+  );
+}
+
+function Stat({ k, v, tone = 'plain' }: { k: string; v: string; tone?: 'ok' | 'bad' | 'plain' }) {
+  return (
+    <div className="bg-band-ink px-3 py-2.5">
+      <p className="text-[10px] uppercase tracking-[0.09em] text-white/55">{k}</p>
+      <p
+        className={cn(
+          'mt-0.5 text-lg font-bold',
+          tone === 'ok' ? 'text-pin-good' : tone === 'bad' ? 'text-pin-flagged' : 'text-white'
+        )}
+      >
+        {v}
+      </p>
+    </div>
+  );
+}
+
+/** Media photo strip — thumbnails (switch the hero) + Add photo / Choose files. */
+function PhotoStrip({
+  photos,
+  active,
+  loading,
+  canEdit,
+  adding,
+  error,
+  onSelect,
+  onPick,
+}: {
+  photos: AssetPhoto[];
+  active: number;
+  loading: boolean;
+  canEdit: boolean;
+  adding: boolean;
+  error: string | null;
+  onSelect: (i: number) => void;
+  onPick: (list: FileList | null) => void;
+}) {
+  return (
+    <div className="space-y-2.5">
+      {photos.length > 0 ? (
+        <div className="flex gap-1.5 overflow-x-auto">
+          {photos.map((p, i) => (
+            <ThumbButton key={p.id} photo={p} active={i === active} onSelect={() => onSelect(i)} />
+          ))}
+        </div>
+      ) : (
+        !loading && <p className="text-xs text-text-faint">No photos yet.</p>
+      )}
+
+      {canEdit && (
+        <div className="flex flex-wrap gap-2">
+          <label className="inline-flex h-9 cursor-pointer items-center gap-1.5 rounded-lg bg-accent px-3 text-xs font-semibold text-white shadow-sm hover:bg-accent/90">
+            <Plus size={13} aria-hidden />
+            <span>{adding ? 'Uploading…' : 'Add photo'}</span>
+            <input
+              type="file"
+              accept="image/*"
+              capture="environment"
+              className="sr-only"
+              onChange={(e) => {
+                onPick(e.target.files);
+                e.target.value = '';
+              }}
+            />
+          </label>
+          <label className="inline-flex h-9 cursor-pointer items-center gap-1.5 rounded-lg border-[1.5px] border-black/15 bg-surface px-3 text-xs font-medium text-text hover:bg-black/5 dark:border-white/15 dark:hover:bg-white/5">
+            <Pencil size={13} aria-hidden />
+            <span>Choose files</span>
+            <input
+              type="file"
+              accept={PHOTO_ACCEPT}
+              multiple
+              className="sr-only"
+              onChange={(e) => {
+                onPick(e.target.files);
+                e.target.value = '';
+              }}
+            />
+          </label>
+        </div>
+      )}
+      {error && <p className="text-xs text-danger">{error}</p>}
     </div>
   );
 }
@@ -966,17 +926,7 @@ function ThumbButton({
   active: boolean;
   onSelect: () => void;
 }) {
-  const [url, setUrl] = useState<string | null>(null);
-
-  useEffect(() => {
-    let cancelled = false;
-    void signedAssetPhotoUrl(photo.path, PHOTO_THUMB_TRANSFORM)
-      .then((u) => !cancelled && setUrl(u))
-      .catch(() => {});
-    return () => {
-      cancelled = true;
-    };
-  }, [photo.path]);
+  const url = useSignedAssetPhotoUrl(photo.path).data ?? null;
 
   return (
     <button
@@ -998,49 +948,102 @@ function ThumbButton({
   );
 }
 
-function DetailsSection({
+/** Pin meta — pin number · type · category. */
+function PinMeta({ asset }: { asset: Asset }) {
+  const pinLabel = formatPinNumber(asset.pin_number);
+  return (
+    <div className="flex flex-wrap items-center gap-1">
+      {pinLabel && (
+        <span
+          className="inline-flex items-center rounded-md bg-waymarks-ink px-2 py-0.5 font-mono text-xs font-semibold text-white"
+          title="Pin ID — this asset's reference number on the floor"
+        >
+          #{pinLabel}
+        </span>
+      )}
+      <Chip variant="gold">{prettyType(asset.type)}</Chip>
+      <Chip variant="default">{asset.category}</Chip>
+    </div>
+  );
+}
+
+/**
+ * Identity — zone / room / manufacturer chips + the Notes block. Renders
+ * nothing when none are present (preserves the prior "hidden if empty"
+ * behavior). The old "Where on the floor" / location_notes line is gone — the
+ * pin position already conveys that (Feature #3b).
+ */
+/** Read-only labelled value, styled like the mock's field/box. */
+function ReadField({ label, children }: { label: string; children: ReactNode }) {
+  return (
+    <div>
+      <p className="mb-1 text-[10px] font-medium uppercase tracking-[0.14em] text-text-faint">
+        {label}
+      </p>
+      <div className="rounded-md border border-black/10 bg-bg px-3 py-2 text-sm leading-relaxed text-text dark:border-white/10">
+        <span className="block whitespace-pre-wrap break-words">{children}</span>
+      </div>
+    </div>
+  );
+}
+
+/** "What it is" (step 2) — the asset's identity: type, name, notes, maker. */
+function WhatItIsBody({ asset }: { asset: Asset }) {
+  const category = asset.category
+    ? asset.category.charAt(0).toUpperCase() + asset.category.slice(1)
+    : '';
+  return (
+    <>
+      <ReadField label="Asset type">
+        {[prettyType(asset.type), category].filter(Boolean).join(' · ') || '—'}
+      </ReadField>
+      <ReadField label="Name">{asset.name?.trim() || '—'}</ReadField>
+      {asset.manufacturer?.trim() && (
+        <ReadField label="Manufacturer">{asset.manufacturer}</ReadField>
+      )}
+      {asset.notes?.trim() && <ReadField label="Notes">{asset.notes}</ReadField>}
+    </>
+  );
+}
+
+/** "Where it is" (step 3) — location fields plus the pin controls (folds in the
+ *  old "Pin" section). Lock + reposition/delete stay admin-gated. */
+function WhereItIsBody({
   asset,
   canEdit,
-  buildingId,
-  guest = false,
+  busy,
+  onToggleLock,
+  canReposition,
+  canDelete,
+  onReposition,
+  onDelete,
 }: {
   asset: Asset;
   canEdit: boolean;
-  buildingId: string;
-  guest?: boolean;
+  busy: boolean;
+  onToggleLock: () => void;
+  canReposition: boolean;
+  canDelete: boolean;
+  onReposition: () => void;
+  onDelete: () => void;
 }) {
-  const pinLabel = formatPinNumber(asset.pin_number);
   return (
-    <div className="space-y-2.5">
-      <div className="flex flex-wrap items-center gap-1">
-        {pinLabel && (
-          <span
-            className="inline-flex items-center rounded-md bg-waymarks-ink px-2 py-0.5 font-mono text-xs font-semibold text-white"
-            title="Pin ID — this asset's reference number on the floor"
-          >
-            #{pinLabel}
-          </span>
-        )}
-        <Chip variant="gold">{prettyType(asset.type)}</Chip>
-        <Chip variant="default">{asset.category}</Chip>
-        {asset.room_number && (
-          <Chip variant="default" title="Room number">Rm {asset.room_number}</Chip>
-        )}
-      </div>
-      {asset.location_notes && (
-        <p className="flex items-start gap-1.5 text-sm text-text-muted">
-          <MapPin size={12} aria-hidden className="mt-1 shrink-0" />
-          <span>{asset.location_notes}</span>
-        </p>
+    <>
+      {asset.room_number?.trim() && <ReadField label="Room">{asset.room_number}</ReadField>}
+      {asset.zone?.trim() && <ReadField label="Layer">{asset.zone}</ReadField>}
+      <PinMeta asset={asset} />
+      {canEdit && (
+        <>
+          <LockBar asset={asset} busy={busy} onToggleLock={onToggleLock} />
+          <AdminActions
+            canReposition={canReposition}
+            canDelete={canDelete}
+            onReposition={onReposition}
+            onDelete={onDelete}
+          />
+        </>
       )}
-      {asset.notes && (
-        <div className="rounded-md border border-black/10 bg-bg p-2.5 text-xs text-text-muted dark:border-white/10">
-          <p className="mb-1 font-medium uppercase tracking-[0.14em] text-[10px] text-text-faint">Install & service notes</p>
-          <p className="whitespace-pre-wrap text-sm text-text">{asset.notes}</p>
-        </div>
-      )}
-      {!guest && <VendorPanel asset={asset} canEdit={canEdit} buildingId={buildingId} />}
-    </div>
+    </>
   );
 }
 
@@ -1061,6 +1064,124 @@ function vendorUrlHref(raw: string): string {
  * Supersedes the old single `vendor_contact` JSON blob (that column is kept in
  * the DB but no longer read/written here; legacy data was migrated forward).
  */
+function orderMailto(
+  toEmail: string,
+  toName: string | undefined,
+  asset: Asset,
+  intent: 'order' | 'service'
+): string {
+  const subject =
+    intent === 'service' ? `Service request — ${asset.name}` : `Sign order — ${asset.name}`;
+  const action =
+    intent === 'service'
+      ? 'request service or a repair for'
+      : 'order a replacement or new sign for';
+  const body =
+    `Hi${toName ? ` ${toName}` : ''},\n\n` +
+    `I'd like to ${action} "${asset.name}"` +
+    `${asset.room_number ? ` (room ${asset.room_number})` : ''}.\n\n` +
+    `Details:\n\n\nThanks.`;
+  return `mailto:${toEmail}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
+}
+
+/**
+ * S4 — action card driven by the asset's CATEGORY:
+ *   - signage  → "Order or service": "Order replacement" primary + a
+ *                "Request service" secondary.
+ *   - facility → "Request service" only — no sign-order framing; the card
+ *                still shows as a prompt even when it has no target.
+ *
+ * Targets come ONLY from the asset's own data — vendor email → contact
+ * email → vendor URL ("add any vendor with a link", Randy 2026-07-06).
+ * No Officemark fallback, no building-level custom link. Buttons with no
+ * resolvable target are dropped.
+ */
+function ActionCard({ asset }: { asset: Asset }) {
+  const { data: vendors } = useAssetVendors(asset.id);
+  const contacts = useContacts();
+
+  const vendorEmail = (vendors ?? []).find((v) => v.email?.trim());
+  const vendorUrl = (vendors ?? []).find((v) => v.url?.trim());
+  const contact = asset.contact_id
+    ? contacts.list.find((c) => c.id === asset.contact_id)
+    : undefined;
+
+  const isFacility = asset.category === 'facility';
+
+  const emailTarget = vendorEmail?.email?.trim()
+    ? { email: vendorEmail.email.trim(), name: vendorEmail.name }
+    : contact?.email?.trim()
+      ? { email: contact.email.trim(), name: contact.label }
+      : null;
+  const urlTarget =
+    !emailTarget && vendorUrl?.url?.trim() ? vendorUrlHref(vendorUrl.url.trim()) : null;
+
+  const orderHref = emailTarget
+    ? orderMailto(emailTarget.email, emailTarget.name, asset, 'order')
+    : urlTarget;
+  const serviceHref = emailTarget
+    ? orderMailto(emailTarget.email, emailTarget.name, asset, 'service')
+    : urlTarget;
+  const external = !emailTarget;
+
+  const vendorName = emailTarget?.name ?? vendorUrl?.name ?? null;
+  const vendorLine = vendorName ? `via ${vendorName}` : null;
+
+  const title = isFacility ? 'Request service' : 'Order or service';
+  const body = isFacility
+    ? 'Log a service or maintenance request for this location.'
+    : 'Order a replacement sign or request service for this sign.';
+
+  type Btn = { label: string; href: string; primary: boolean; service: boolean };
+  const buttons: Btn[] = [];
+  if (!isFacility && orderHref) {
+    buttons.push({ label: 'Order replacement', href: orderHref, primary: true, service: false });
+  }
+  if (serviceHref) {
+    buttons.push({
+      label: 'Request service',
+      href: serviceHref,
+      primary: isFacility,
+      service: true,
+    });
+  }
+
+  // Signage with no target of its own has nothing to offer; a facility pin
+  // always shows its prompt (add a vendor/contact to make it actionable).
+  if (buttons.length === 0 && !isFacility) return null;
+
+  return (
+    <div className="mt-3 rounded-md border border-waymarks-gold/30 bg-waymarks-gold-soft px-3 py-2 text-xs dark:bg-white/5">
+      <p className="font-semibold text-waymarks-ink dark:text-white">{title}</p>
+      <p className="mt-0.5 text-text-muted">{body}</p>
+      {vendorLine && <p className="mt-0.5 text-text-faint">{vendorLine}</p>}
+      {buttons.length > 0 && (
+        <div className="mt-2 flex flex-wrap gap-2">
+          {buttons.map((b) => {
+            const Icon = b.service ? Wrench : ShoppingCart;
+            return (
+              <a
+                key={b.label}
+                href={b.href}
+                {...(external ? { target: '_blank', rel: 'noopener noreferrer' } : {})}
+                className={
+                  'inline-flex h-8 items-center gap-1.5 rounded-md px-3 text-xs font-medium ' +
+                  (b.primary
+                    ? 'bg-waymarks-gold text-waymarks-ink hover:bg-waymarks-gold-deep'
+                    : 'border border-waymarks-gold text-waymarks-ink hover:bg-waymarks-gold-soft dark:text-white')
+                }
+              >
+                <Icon size={12} aria-hidden />
+                {b.label}
+              </a>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+}
+
 function VendorPanel({
   asset,
   canEdit,
@@ -1289,36 +1410,11 @@ function VendorPanel({
   );
 }
 
-function StatusRow({ asset, flagCount }: { asset: Asset; flagCount: number }) {
-  const status: AssetStatus = computeStatus({
-    asset,
-    lastAuditAt: null,
-    openFlagCount: flagCount,
-  });
 
+/** Audit attributes — installed date + audit cycle (Status & audit group). */
+function AuditAttrs({ asset }: { asset: Asset }) {
   return (
-    <div className="grid grid-cols-3 gap-2">
-      <MetricCard label="Last audit" value="—" />
-      <MetricCard
-        label="Status"
-        value={statusLabel(status)}
-        status={
-          status === 'good' ? 'success' : status === 'attention' ? 'warning' : 'danger'
-        }
-      />
-      <MetricCard
-        label="Flags"
-        value={flagCount}
-        status={flagCount > 0 ? 'danger' : 'neutral'}
-      />
-    </div>
-  );
-}
-
-function AttributesSection({ asset }: { asset: Asset }) {
-  return (
-    <dl className="grid grid-cols-3 gap-x-2 gap-y-2 text-sm">
-      <Attr term="Manufacturer" value={asset.manufacturer ?? '—'} icon={<Wrench size={12} />} />
+    <dl className="grid grid-cols-2 gap-x-2 gap-y-2 text-sm">
       <Attr
         term="Installed"
         value={asset.installed_at ? format(new Date(asset.installed_at), 'PP') : '—'}

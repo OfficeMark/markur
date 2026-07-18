@@ -196,7 +196,11 @@ export async function queueAuditEvent(input: {
 }
 
 export async function listPendingAuditEvents(): Promise<PendingAuditEvent[]> {
-  return offlineDB.pending_audit_events.orderBy('created_at').toArray();
+  // PERF-1 (CODE-REVIEW-2026-07-06): 'created_at' is NOT a Dexie index, so
+  // orderBy('created_at') THREW — and the caller's catch(() => []) swallowed
+  // it, silently making the offline queue undrainable forever. Sort in JS.
+  const rows = await offlineDB.pending_audit_events.toArray();
+  return rows.sort((a, b) => a.created_at.localeCompare(b.created_at));
 }
 
 export async function listPendingForSession(sessionId: string): Promise<PendingAuditEvent[]> {

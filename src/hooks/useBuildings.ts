@@ -34,6 +34,7 @@ function patchBuildingInBoot(qc: QueryClient, b: Building) {
 export const buildingKeys = {
   all: ['buildings'] as const,
   list: () => [...buildingKeys.all, 'list'] as const,
+  deleted: () => [...buildingKeys.all, 'deleted'] as const,
   detail: (id: string) => [...buildingKeys.all, 'detail', id] as const,
   photoUrl: (path: string) => ['building-photos', 'signed', path] as const,
 };

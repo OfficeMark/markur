@@ -63,6 +63,21 @@ export type PinOverlayProps = {
   // parent). Defaults applied so the overlay renders before the building loads.
   pinShape?: PinShape;
   pinSize?: PinSize;
+
+  // Audit-path edit mode (Feature 1) --------------------------------------
+  /**
+   * When true, tapping a pin toggles its membership in the audit path
+   * (instead of opening the drawer). Pins already in the path show a gold
+   * sequence badge; others stay visible and tappable so they can be added.
+   */
+  pathEditMode?: boolean;
+  /**
+   * Map<assetId → 1-based stop number> for pins currently in the path.
+   * Drives the sequence badge in path-edit mode.
+   */
+  pathIndexById?: ReadonlyMap<string, number> | null;
+  /** Toggle a pin in/out of the path (path-edit mode only). */
+  onPathToggle?: (assetId: string) => void;
 };
 
 const LONG_PRESS_MS = 500;
@@ -100,6 +115,8 @@ type PinHandlers = {
   clearLongPress: () => void;
   onSelectAsset: (asset: Asset) => void;
   onLongPress?: (assetId: string) => void;
+  /** Toggle a pin in/out of the audit path (path-edit mode only). */
+  onPathToggle?: (assetId: string) => void;
   dragRef: React.MutableRefObject<DragState | null>;
   longPressTimerRef: React.MutableRefObject<ReturnType<typeof setTimeout> | null>;
   justDraggedRef: React.MutableRefObject<string | null>;
@@ -123,6 +140,10 @@ type PinItemProps = {
   useStatusFill: boolean;
   /** Whether ANY reposition is active (gates long-press start). */
   repositionActive: boolean;
+  /** Audit-path edit mode: taps toggle path membership instead of the drawer. */
+  pathEditMode: boolean;
+  /** 1-based stop number when this pin is in the path (path-edit mode); else null. */
+  sequenceNumber: number | null;
   handlers: PinHandlers;
 };
 
@@ -141,6 +162,8 @@ const PinItem = memo(function PinItem({
   pinSize,
   useStatusFill,
   repositionActive,
+  pathEditMode,
+  sequenceNumber,
   handlers,
 }: PinItemProps) {
   const {
@@ -150,6 +173,7 @@ const PinItem = memo(function PinItem({
     clearLongPress,
     onSelectAsset,
     onLongPress,
+    onPathToggle,
     dragRef,
     longPressTimerRef,
     justDraggedRef,
@@ -196,6 +220,7 @@ const PinItem = memo(function PinItem({
         shape={pinShape}
         size={pinSize}
         pinLabel={pinLabel}
+        sequenceNumber={sequenceNumber}
         fillColor={useStatusFill ? statusFillColor(status) : undefined}
         selected={selected}
         unlocked={draggable && !isRepositionTarget}
@@ -264,6 +289,12 @@ const PinItem = memo(function PinItem({
           // While a reposition is active, suppress click-to-open-drawer — the
           // user is mid-action and the drawer would interrupt.
           if (repositionActive) return;
+          // Path-edit mode: a tap adds/removes this pin from the walking order
+          // instead of opening the detail drawer.
+          if (pathEditMode) {
+            onPathToggle?.(asset.id);
+            return;
+          }
           onSelectAsset(asset);
         }}
       />
@@ -285,6 +316,9 @@ function PinOverlayInner({
   onLongPress,
   pinShape = DEFAULT_PIN_SHAPE,
   pinSize = DEFAULT_PIN_SIZE,
+  pathEditMode,
+  pathIndexById,
+  onPathToggle,
 }: PinOverlayProps) {
   const layerRef = useRef<HTMLDivElement | null>(null);
   // dragRef is always-current; the React state below is for visualization only.
@@ -390,13 +424,14 @@ function PinOverlayInner({
       clearLongPress,
       onSelectAsset,
       onLongPress,
+      onPathToggle,
       dragRef,
       longPressTimerRef,
       justDraggedRef,
       setPreview,
       setTouchedAssetId,
     }),
-    [startDrag, updateDrag, finishDrag, clearLongPress, onSelectAsset, onLongPress]
+    [startDrag, updateDrag, finishDrag, clearLongPress, onSelectAsset, onLongPress, onPathToggle]
   );
 
   const repositionActive = !!repositionAssetId;
@@ -434,10 +469,15 @@ function PinOverlayInner({
         //   - if a deliberate reposition is active, only the targeted pin can
         //     be dragged (lock state intentionally ignored);
         //   - otherwise the M4 quick-nudge path applies: canMove + unlocked.
-        const draggable = isRepositionTarget
-          ? true
-          : !repositionAssetId && canMove && !asset.is_locked;
+        // In path-edit mode pins are never draggable — taps toggle path
+        // membership (mobile-first, no drag-and-drop for ordering).
+        const draggable = pathEditMode
+          ? false
+          : isRepositionTarget
+            ? true
+            : !repositionAssetId && canMove && !asset.is_locked;
         const faded = !!repositionAssetId && !isRepositionTarget;
+        const sequenceNumber = pathEditMode ? pathIndexById?.get(asset.id) ?? null : null;
         const pinLabel = formatPinNumber(asset.pin_number);
         const labelVisible = touchedAssetId === asset.id;
 
@@ -451,13 +491,15 @@ function PinOverlayInner({
             draggable={draggable}
             faded={faded}
             isRepositionTarget={isRepositionTarget}
-            selected={asset.id === selectedAssetId}
+            selected={!pathEditMode && asset.id === selectedAssetId}
             pinLabel={pinLabel}
             labelVisible={labelVisible}
             pinShape={pinShape}
             pinSize={pinSize}
             useStatusFill={useStatusFill}
             repositionActive={repositionActive}
+            pathEditMode={!!pathEditMode}
+            sequenceNumber={sequenceNumber}
             handlers={handlers}
           />
         );

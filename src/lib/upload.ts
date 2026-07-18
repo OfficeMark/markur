@@ -101,6 +101,57 @@ export async function uploadPlanObject(
   return { path };
 }
 
+export type PlateExt = 'png' | 'jpg';
+
+/**
+ * Canonical storage path for a floor's processed display plate (Plan Prep v2).
+ * `<floorId>.plate.png` or `<floorId>.plate.jpg` — the encoder keeps whichever
+ * format is smaller per plan (bytes diet), and the extension follows the
+ * format. Distinct from the retained original (`<floorId>.<origext>`) so both
+ * coexist. The RLS helper keys off the `<uuid>.` prefix, which matches this
+ * too.
+ */
+export function platePathForFloor(floorId: string, ext: PlateExt = 'png'): string {
+  return `${floorId}.plate.${ext}`;
+}
+
+/** The plate extension for an encoded plate blob (by its MIME type). */
+export function plateExtForBlob(blob: Blob): PlateExt {
+  return blob.type === 'image/jpeg' ? 'jpg' : 'png';
+}
+
+/** Upload the processed display image to the floor's canonical plate slot. */
+export async function uploadDisplayPlate(
+  floorId: string,
+  blob: Blob
+): Promise<{ path: string }> {
+  const path = platePathForFloor(floorId, plateExtForBlob(blob));
+  const { error } = await supabase.storage.from('floor-plans').upload(path, blob, {
+    contentType: blob.type || 'image/png',
+    upsert: true,
+    cacheControl: '0',
+  });
+  if (error) throw error;
+  return { path };
+}
+
+/**
+ * Best-effort removal of the OTHER-format plate after a replace. A floor whose
+ * plate flips png↔jpg would otherwise strand the old file in storage forever.
+ * Call this only AFTER the floors row points at the new path — never before,
+ * or a failed write leaves plan_url aimed at a deleted object. Errors are
+ * swallowed: an orphaned file is cosmetic, a failed upload is not.
+ */
+export async function removeSiblingPlate(floorId: string, keptPath: string): Promise<void> {
+  const sibling = platePathForFloor(floorId, keptPath.endsWith('.jpg') ? 'png' : 'jpg');
+  if (sibling === keptPath) return;
+  try {
+    await supabase.storage.from('floor-plans').remove([sibling]);
+  } catch {
+    // Cosmetic cleanup only — never surface.
+  }
+}
+
 /**
  * Get a short-lived signed URL for the floor's plan. Plans are private.
  */
@@ -110,6 +161,28 @@ export async function signedUrlForPlan(path: string): Promise<string> {
     .createSignedUrl(path, 60 * 30); // 30 minutes
   if (error) throw error;
   return data.signedUrl;
+}
+
+/**
+ * The plan's refresh stamp — what actually changes when a plan is REPLACED.
+ *
+ * Plan Prep v2 writes every display plate to the floor's canonical storage
+ * slot (`<floorId>.plate.png`, upsert) and the retained original to
+ * `<floorId>.<ext>`, so replacing a plan rewrites `floors.plan_url` with the
+ * SAME string it already held. Anything keyed on the path alone therefore
+ * never re-runs — the old image stays on screen until a hard reload (the
+ * "Replace does nothing" bug). The `planPrep.processedAt` stamp in
+ * `floors.plan_metadata` is rewritten on EVERY upload (both the plate path and
+ * the processing-fallback path), so `plan_url + stamp` changes exactly when
+ * the plan does. Returns null when there is no v2 stamp (pre-v2 floors) —
+ * for those a replace changes the path itself (they gain the `.plate.png`
+ * slot), so the path is a sufficient key.
+ */
+export function planRefreshStamp(planMetadata: unknown): string | null {
+  const stamp = (
+    planMetadata as { planPrep?: { processedAt?: unknown } } | null | undefined
+  )?.planPrep?.processedAt;
+  return typeof stamp === 'string' ? stamp : null;
 }
 
 export function planKindForPath(path: string | null | undefined): 'pdf' | 'image' | null {

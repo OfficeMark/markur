@@ -15,12 +15,15 @@ export type FilterByTypePopoverProps = {
   onChange: (next: Set<string>) => void;
   /** Extra classes for the trigger button (e.g. responsive show/hide). */
   triggerClassName?: string;
+  /** Optional custom trigger so the floor toolbar can render this as a segment. */
+  trigger?: React.ReactNode;
 };
 
 export function FilterByTypePopover({
   selectedTypes,
   onChange,
   triggerClassName = '',
+  trigger,
 }: FilterByTypePopoverProps) {
   const { signage, facility, list } = useAssetTypes();
   const all = list.map((t) => t.key);
@@ -39,27 +42,27 @@ export function FilterByTypePopover({
   return (
     <Popover.Root>
       <Popover.Trigger asChild>
-        <button
-          type="button"
-          aria-label="Filter pins by type"
-          // h-7 + text-[11px] to match the action buttons and the text input
-          // in the same toolbar (was h-9, which read as oversized next to them).
-          className={
-            'inline-flex h-7 shrink-0 items-center gap-1 rounded-md border px-2.5 text-[11px] font-medium transition-colors ' +
-            (isFiltering
-              ? 'border-waymarks-gold bg-waymarks-gold-soft text-waymarks-ink'
-              : 'border-black/15 bg-surface text-text-muted hover:border-black/25 hover:text-text') +
-            (triggerClassName ? ' ' + triggerClassName : '')
-          }
-        >
-          <Filter size={11} aria-hidden />
-          <span>Filter</span>
-          {isFiltering && (
-            <span className="rounded bg-waymarks-ink px-1 font-mono text-[10px] text-white">
-              {selectedTypes.size}
-            </span>
-          )}
-        </button>
+        {trigger ?? (
+          <button
+            type="button"
+            aria-label="Filter pins by type"
+            className={
+              'inline-flex h-9 items-center gap-1.5 rounded-md border px-3 text-xs font-medium transition-colors ' +
+              (isFiltering
+                ? 'border-waymarks-gold bg-waymarks-gold-soft text-waymarks-ink'
+                : 'border-black/15 bg-surface text-text-muted hover:border-black/25 hover:text-text') +
+              (triggerClassName ? ' ' + triggerClassName : '')
+            }
+          >
+            <Filter size={12} aria-hidden />
+            <span>Filter</span>
+            {isFiltering && (
+              <span className="rounded bg-waymarks-ink px-1 font-mono text-[10px] text-white">
+                {selectedTypes.size}
+              </span>
+            )}
+          </button>
+        )}
       </Popover.Trigger>
       <Popover.Portal>
         <Popover.Content

@@ -40,13 +40,16 @@ export default {
           DEFAULT: 'rgb(var(--color-surface) / <alpha-value>)',
           soft: 'rgb(var(--color-surface-soft) / <alpha-value>)',
         },
-        // Banded form sections (asset add/edit dialog). `mist` is the section
-        // header strip; bodies alternate `paper` and `surface` (white). Both
-        // flip to dark surfaces under .dark — see globals.css.
+        // Banded asset/edit sections (asset add/edit dialog / Feature #3c).
+        // `mist` is the header strip; bodies alternate `paper` and `surface`
+        // (white). Both flip to dark surfaces under .dark — see globals.css.
         band: {
           paper: 'rgb(var(--band-paper) / <alpha-value>)',
           mist: 'rgb(var(--band-mist) / <alpha-value>)',
+          ink: 'rgb(var(--band-ink) / <alpha-value>)',
         },
+        // Filled-primary orange (white text AA, #3d). Deeper than waymarks-gold.
+        accent: 'rgb(var(--accent) / <alpha-value>)',
         // Asset pin status colors (per spec 02 § Status colors)
         pin: {
           good: '#6CC28A',

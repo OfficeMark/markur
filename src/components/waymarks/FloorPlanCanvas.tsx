@@ -9,14 +9,26 @@ import {
   type ReactNode,
   type WheelEvent as RWheelEvent,
 } from 'react';
-import { getDocument, GlobalWorkerOptions } from 'pdfjs-dist';
-import pdfWorkerUrl from 'pdfjs-dist/build/pdf.worker.min.mjs?url';
 import { Loader2, ImageOff, LocateFixed } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { clampZoom } from '@/lib/zoom';
 
-if (typeof window !== 'undefined' && !GlobalWorkerOptions.workerSrc) {
-  GlobalWorkerOptions.workerSrc = pdfWorkerUrl;
+/**
+ * pdfjs is heavy (~1.4 MB). Plan Prep v2 renders a display PNG for every plan at
+ * upload, so the common floor-open path serves an image and never needs pdfjs.
+ * We therefore load pdfjs ON DEMAND — only when a floor's plan is still a PDF
+ * (pre-v2 floors, or the rare processing-fallback case). This keeps pdfjs out of
+ * the floor-open graph entirely for image plans.
+ */
+async function loadPdfjs() {
+  const [{ getDocument, GlobalWorkerOptions }, workerMod] = await Promise.all([
+    import('pdfjs-dist'),
+    import('pdfjs-dist/build/pdf.worker.min.mjs?url'),
+  ]);
+  if (typeof window !== 'undefined' && !GlobalWorkerOptions.workerSrc) {
+    GlobalWorkerOptions.workerSrc = workerMod.default;
+  }
+  return { getDocument };
 }
 
 export type FloorPlanCanvasMode = 'view' | 'placing';
@@ -38,9 +50,9 @@ export type FloorPlanCanvasProps = {
   className?: string;
   /**
    * Fill the parent's height (`h-full`) instead of the default fixed `h-[70vh]`.
-   * Use inside a height-bounded flex column so the map takes the space left
-   * after the toolbars — fixes mobile where the toolbar rows + a 70vh map
-   * overflow the screen and clip the floating controls.
+   * Used by the floor map view so the plan takes the whole viewport below the
+   * compact toolbar (and the recenter/zoom controls stay on-screen on phones).
+   * Requires an ancestor definite-height chain (AppShell `fillViewport`).
    */
   fill?: boolean;
 };
@@ -63,14 +75,12 @@ export function FloorPlanCanvas({
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const [status, setStatus] = useState<Status>('idle');
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
-  // Intrinsic plan dimensions (from the decoded PDF page / image) and the live
-  // measured size of the container. We fit the canvas box in pixels from these
-  // two — deterministic, instead of relying on `max-h-full`/`max-w-full`
-  // percentages that silently resolve to "no constraint" when an ancestor's
-  // height is indefinite (which drew the plan at full intrinsic size — ~2x —
-  // on desktop). The DB stores no plan dimensions, so intrinsic size always
-  // comes from the decoded asset at runtime; re-fit on every container resize.
-  const [dims, setDims] = useState<{ w: number; h: number } | null>(null);
+  // Intrinsic plan size + live container size — together they give the
+  // JS-measured "contain" box used in `fill` mode (so the plan fits BOTH
+  // dimensions, the bottom is never clipped, and the pin overlay shares the
+  // plan's exact bounds). Tracked via a ResizeObserver so it stays correct
+  // through focus toggles, sidebar changes, and window resizes.
+  const [natural, setNatural] = useState<{ w: number; h: number } | null>(null);
   const [containerSize, setContainerSize] = useState<{ w: number; h: number } | null>(null);
 
   const [zoom, setZoom] = useState(1);
@@ -125,7 +135,7 @@ export function FloorPlanCanvas({
     let pdfDoc: { destroy: () => Promise<void> } | null = null;
     setStatus('loading');
     setErrorMsg(null);
-    setDims(null);
+    setNatural(null);
     setZoom(1);
     setPan({ x: 0, y: 0 });
 
@@ -135,6 +145,9 @@ export function FloorPlanCanvas({
     void (async () => {
       try {
         if (kind === 'pdf') {
+          // Load pdfjs only for the rare PDF-plan case (pre-v2 / fallback).
+          const { getDocument } = await loadPdfjs();
+          if (cancelled) return;
           const buf = await fetch(src).then((r) => {
             if (!r.ok) throw new Error(`Failed to load PDF (${r.status})`);
             return r.arrayBuffer();
@@ -150,10 +163,10 @@ export function FloorPlanCanvas({
           if (!ctx) throw new Error('Canvas 2D context unavailable');
           canvas.width = Math.floor(viewport.width);
           canvas.height = Math.floor(viewport.height);
+          setNatural({ w: canvas.width, h: canvas.height });
           renderTask = page.render({ canvasContext: ctx, viewport });
           await renderTask.promise;
           if (cancelled) return;
-          setDims({ w: viewport.width, h: viewport.height });
           setStatus('ready');
         } else {
           const img = new Image();
@@ -175,8 +188,8 @@ export function FloorPlanCanvas({
             const h = img.naturalHeight || 1200;
             canvas.width = w;
             canvas.height = h;
+            setNatural({ w, h });
             ctx.drawImage(img, 0, 0, w, h);
-            setDims({ w, h });
             setStatus('ready');
           };
           img.onerror = () => {
@@ -215,22 +228,6 @@ export function FloorPlanCanvas({
     ro.observe(el);
     return () => ro.disconnect();
   }, []);
-
-  // Largest box with the plan's aspect ratio that fits inside the container.
-  // Centered by the flex wrapper; pins overlay this exact box so they stay
-  // registered to the plan.
-  const fitted = useMemo(() => {
-    if (!dims || !containerSize) return null;
-    if (dims.w <= 0 || dims.h <= 0 || containerSize.w <= 0 || containerSize.h <= 0) return null;
-    const ar = dims.w / dims.h;
-    let w = containerSize.w;
-    let h = w / ar;
-    if (h > containerSize.h) {
-      h = containerSize.h;
-      w = h * ar;
-    }
-    return { w, h };
-  }, [dims, containerSize]);
 
   // Recenter: reset pan + zoom to the initial fit (M12). Used by both the
   // keyboard '0' shortcut and the floating recenter button. Hard to find your
@@ -405,6 +402,16 @@ export function FloorPlanCanvas({
     return () => window.removeEventListener('keydown', onKey);
   }, [recenterView]);
 
+  // The contain box for `fill` mode: the largest plan-aspect rectangle that fits
+  // inside the container (fits BOTH dimensions → no clipped bottom).
+  const fitBox = useMemo(() => {
+    if (!fill || !natural || !containerSize || containerSize.w <= 0 || containerSize.h <= 0) {
+      return null;
+    }
+    const scale = Math.min(containerSize.w / natural.w, containerSize.h / natural.h);
+    return { w: Math.floor(natural.w * scale), h: Math.floor(natural.h * scale) };
+  }, [fill, natural, containerSize]);
+
   const transform = useMemo(
     () => `translate(${pan.x}px, ${pan.y}px) scale(${zoom})`,
     [pan.x, pan.y, zoom]
@@ -431,6 +438,7 @@ export function FloorPlanCanvas({
       style={{ touchAction: 'none' }}
       className={cn(
         'relative w-full overflow-hidden rounded-xl border border-black/10 bg-surface outline-none focus-visible:ring-2 focus-visible:ring-waymarks-gold dark:border-white/10 dark:bg-white/5',
+        // Fill the parent (map view) or fall back to the fixed viewport height.
         fill ? 'h-full' : 'h-[70vh]',
         cursor,
         className
@@ -461,22 +469,28 @@ export function FloorPlanCanvas({
           ['--zoom' as string]: String(zoom),
         } as CSSProperties}
       >
-        {/* The inner wrapper is sized in pixels to the fitted box (largest
-            aspect-correct rectangle inside the measured container). The canvas
-            fills it and the pin overlay shares its exact bounds, so pins stay
-            registered to the plan. Pixel sizing avoids the percentage-height
-            traps that drew the plan at full intrinsic size. Falls back to a
-            shrink-to-fit box until the first measure + decode land (canvas is
-            invisible until `ready`). */}
+        {/* M30: the inner wrapper must inherit a max width/height that's
+            relative to the flex container (not the canvas's intrinsic
+            size), otherwise on mobile the canvas renders at its full
+            PDF.js pixel dimensions and overflows the viewport — which
+            reads as "the working area opens already zoomed in." Putting
+            max-h-full / max-w-full here (and matching styles on the
+            canvas) lets the centered flex container do the fit-to-screen
+            work. */}
         <div
-          className="relative max-h-full max-w-full"
-          style={fitted ? { width: fitted.w, height: fitted.h } : undefined}
+          className={cn('relative', !fill && 'min-h-0 min-w-0 max-h-full max-w-full')}
+          // In fill mode we size the wrapper to the JS-measured contain box
+          // (fits BOTH container dimensions) so the bottom is never clipped and
+          // the pin overlay shares the plan's exact bounds. Non-fill keeps the
+          // CSS max-h-[70vh] fit.
+          style={fill && fitBox ? { width: fitBox.w, height: fitBox.h } : undefined}
         >
           <canvas
             ref={canvasRef}
             aria-hidden
             className={cn(
-              'block h-full w-full select-none shadow-sm',
+              'block select-none shadow-sm',
+              fill ? 'h-full w-full' : 'h-auto w-auto max-h-[70vh] max-w-full',
               status === 'ready' ? 'opacity-100' : 'opacity-0'
             )}
           />
@@ -487,7 +501,12 @@ export function FloorPlanCanvas({
         </div>
       </div>
       {status === 'ready' && (
-        <div className="absolute bottom-2 right-2 flex items-center gap-2">
+        <div
+          className="absolute right-2 flex items-center gap-2"
+          // Float above the phone home indicator / browser chrome so the
+          // recenter button + zoom % are never clipped at the viewport edge.
+          style={{ bottom: 'max(0.5rem, env(safe-area-inset-bottom))' }}
+        >
           <button
             type="button"
             onPointerDown={(e) => e.stopPropagation()}

@@ -1,7 +1,7 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import * as Dialog from '@radix-ui/react-dialog';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
-import { AlertTriangle, FileText, Image as ImageIcon, Lock, Sparkles, Upload, X } from 'lucide-react';
+import { AlertTriangle, Crop, FileText, Image as ImageIcon, PenTool, Sparkles, Upload, Wand2, X } from 'lucide-react';
 import { Button } from '@/components/ui/Button';
 import { supabase } from '@/lib/supabase';
 import {
@@ -15,30 +15,62 @@ import {
   PLAN_MIME_TYPES,
   formatBytes,
   objectNameForFloor,
+  removeSiblingPlate,
+  uploadDisplayPlate,
   uploadFloorPlan,
-  uploadPlanObject,
   validatePlanFile,
   type PlanMime,
 } from '@/lib/upload';
 import {
-  analyzePlan,
-  cropForKeys,
-  emitSvg,
-  keptPathCount,
-  producePlate,
-  type Bbox,
+  cropPlateBlob,
+  enhanceScanBlob,
+  produceDisplayPlate,
+  stampPlanPrep,
+  type CropRect,
+  type DisplayPlate,
   type FloorPlanMetadata,
-  type PlanPlate,
-  type PlanPrepAnalysis,
-  type PlanPrepRecipe,
+  type PlanSource,
 } from '@/lib/plan-prep';
-import { renderPdfFirstPage } from '@/lib/plan-prep/preview';
-import { floorKeys, useFloor } from '@/hooks/useFloors';
+import { PlanCropPanel } from '@/components/waymarks/PlanCropPanel';
+import { floorKeys } from '@/hooks/useFloors';
 import { useAssets } from '@/hooks/useAssets';
 import type { Json } from '@/types/database';
 import { cn } from '@/lib/utils';
 
-type FloorPlanUploadDialogProps = {
+/**
+ * Plate production budget. Beyond this we fall back to storing the untouched
+ * original (processed:false) — the upload NEVER fails or blocks because
+ * enhancement struggled on a huge/complex plan.
+ */
+const PLATE_TIMEOUT_MS = 20_000;
+
+function withTimeout<T>(p: Promise<T>, ms: number): Promise<T> {
+  return Promise.race([
+    p,
+    new Promise<T>((_, reject) =>
+      setTimeout(() => reject(new Error('plate-timeout')), ms)
+    ),
+  ]);
+}
+
+/**
+ * Plan Redraw lead (v1 = minimal): a prefilled email to OfficeMark. No billing,
+ * no order system, no status tracking — it's a lead, not a store.
+ */
+function redrawMailto(ctx: { buildingName: string; floorLabel: string }): string {
+  const subject = `Plan Redraw request — ${ctx.buildingName} · ${ctx.floorLabel}`;
+  const body = [
+    `I'd like OfficeMark to redraw a floor plan.`,
+    ``,
+    `Building: ${ctx.buildingName}`,
+    `Floor: ${ctx.floorLabel}`,
+    ``,
+    `(Please attach or describe the source plan. We'll follow up with details.)`,
+  ].join('\n');
+  return `mailto:hello@officemark.ca?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
+}
+
+export type FloorPlanUploadDialogProps = {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   floorId: string;
@@ -55,15 +87,45 @@ type FloorPlanUploadDialogProps = {
 type Stage =
   | { kind: 'pick' }
   | { kind: 'analyzing'; file: File }
-  | { kind: 'review'; file: File; metadata: PdfMetadata | null; warnings: MismatchWarning[] }
-  | { kind: 'prep'; file: File; analysis: PlanPrepAnalysis; beforeUrl: string }
-  | { kind: 'uploading' }
+  | {
+      kind: 'review';
+      file: File;
+      source: PlanSource;
+      metadata: PdfMetadata | null;
+      warnings: MismatchWarning[];
+    }
+  // Crop-to-plan Enhance: drag a box over the full plate; keeps everything inside.
+  | {
+      kind: 'enhance-crop';
+      file: File;
+      source: PlanSource;
+      full: DisplayPlate;
+      fullUrl: string;
+    }
+  // Scan/image cleanup Enhance (before/after).
+  | {
+      kind: 'enhance-scan';
+      file: File;
+      source: PlanSource;
+      beforeUrl: string;
+      afterUrl: string;
+      enhanced: DisplayPlate;
+    }
+  | { kind: 'processing'; message: string }
   | { kind: 'error'; message: string };
 
 /** What the upload mutation should persist. */
 type UploadJob =
-  | { mode: 'original'; file: File }
-  | { mode: 'cleaned'; original: File; plate: PlanPlate; recipe: PlanPrepRecipe };
+  // Default: produce a capped display PNG here (with timeout + fallback).
+  | { mode: 'default'; file: File; source: PlanSource }
+  // Enhanced/pre-produced (crop or scan cleanup): the plate is already in hand.
+  | {
+      mode: 'plate';
+      file: File;
+      source: PlanSource;
+      plate: DisplayPlate;
+      enhanced: boolean;
+    };
 
 export function FloorPlanUploadDialog({
   open,
@@ -80,57 +142,113 @@ export function FloorPlanUploadDialog({
   const autoRanRef = useRef(false);
   const queryClient = useQueryClient();
 
-  // Frame-lock inputs: a floor that already has pins must keep its plan's
-  // coordinate frame so normalized pins don't drift. Both queries are already
-  // warm (the Floor view populated them), so this adds no network round-trip.
-  const { data: floor } = useFloor(floorId);
+  // A floor that already has pins must keep its plan's extent so normalized pin
+  // coordinates don't drift — so the geometry-changing Enhances (crop, deskew)
+  // are only offered on a pin-free floor. The default full-fidelity upload keeps
+  // the file's own extent and stays pin-safe.
   const { data: assets } = useAssets(floorId);
   const hasPins = (assets?.length ?? 0) > 0;
-  const priorRecipe =
-    (floor?.plan_metadata as FloorPlanMetadata | null)?.planPrep?.recipe ?? null;
-  const lockedCrop: Bbox | null = hasPins ? (priorRecipe?.crop ?? null) : null;
-  const forceFullPage = hasPins && !priorRecipe?.crop;
 
   // Reset state when the dialog opens / closes.
   useEffect(() => {
     if (!open) setStage({ kind: 'pick' });
   }, [open]);
 
-  const upload = useMutation({
-    mutationFn: async (job: UploadJob) => {
-      if (job.mode === 'original') {
-        await uploadFloorPlan(floorId, job.file);
-        const path = objectNameForFloor(floorId, job.file.type as PlanMime);
-        const { error } = await supabase
-          .from('floors')
-          // Clear any stale Plan Prep metadata — this is a raw plan now.
-          .update({ plan_url: path, plan_metadata: null })
-          .eq('id', floorId);
-        if (error) throw error;
-        return;
-      }
-      // Cleaned: keep the original alongside the produced plate (non-destructive).
-      await uploadFloorPlan(floorId, job.original);
-      const cleaned = await uploadPlanObject(floorId, job.plate.blob, job.plate.ext, job.plate.mime);
-      const metadata: FloorPlanMetadata = {
-        planPrep: { version: 1, recipe: job.recipe, appliedAt: new Date().toISOString() },
-      };
+  const writeFloorPlan = useCallback(
+    async (fields: {
+      plan_url: string;
+      plan_metadata: FloorPlanMetadata;
+      width_px: number | null;
+      height_px: number | null;
+    }) => {
       const { error } = await supabase
         .from('floors')
         .update({
-          plan_url: cleaned.path,
+          plan_url: fields.plan_url,
           // FloorPlanMetadata is JSON-shaped but TS won't infer Json from the
           // interface; the cast is safe (only plain objects/arrays/primitives).
-          plan_metadata: metadata as unknown as Json,
-          width_px: job.plate.width,
-          height_px: job.plate.height,
+          plan_metadata: fields.plan_metadata as unknown as Json,
+          width_px: fields.width_px,
+          height_px: fields.height_px,
         })
         .eq('id', floorId);
       if (error) throw error;
     },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: floorKeys.detail(floorId) });
-      queryClient.invalidateQueries({ queryKey: floorKeys.all });
+    [floorId]
+  );
+
+  const upload = useMutation({
+    mutationFn: async (job: UploadJob) => {
+      // The untouched original is ALWAYS retained as the source of truth.
+      // Start its upload immediately but DON'T await yet — the original is
+      // often the biggest thing in the flow (up to 25 MB), and serializing it
+      // ahead of plate production added its whole upload time to every
+      // replace. Plate production is pure local CPU, so the two overlap
+      // perfectly. Every exit path below awaits this before writing the
+      // floors row (plan_url must never point at objects that may not exist).
+      const originalUpload = uploadFloorPlan(floorId, job.file);
+      // If the upload rejects while plate production is still running, this
+      // no-op branch keeps the browser from logging an unhandled rejection;
+      // the real `await originalUpload` on every path still throws normally.
+      originalUpload.catch(() => undefined);
+
+      // Resolve the display plate: pre-produced (enhanced) or produced here
+      // (default), with a hard budget + graceful fallback.
+      let plate: DisplayPlate | null;
+      let enhanced = false;
+      if (job.mode === 'plate') {
+        plate = job.plate;
+        enhanced = job.enhanced;
+      } else {
+        plate = await withTimeout(
+          produceDisplayPlate(job.file, job.source),
+          PLATE_TIMEOUT_MS
+        ).catch(() => null);
+      }
+
+      if (!plate) {
+        // Fallback: serve the untouched original, mark processed:false. Upload
+        // never fails just because enhancement struggled.
+        await originalUpload;
+        const origPath = objectNameForFloor(floorId, job.file.type as PlanMime);
+        await writeFloorPlan({
+          plan_url: origPath,
+          width_px: null,
+          height_px: null,
+          plan_metadata: {
+            planPrep: stampPlanPrep({ processed: false, source: job.source, enhanced: false }),
+          },
+        });
+        return;
+      }
+
+      // Plate + original travel the wire together; the row write waits for both.
+      const [{ path }] = await Promise.all([
+        uploadDisplayPlate(floorId, plate.blob),
+        originalUpload,
+      ]);
+      await writeFloorPlan({
+        plan_url: path,
+        width_px: plate.width,
+        height_px: plate.height,
+        plan_metadata: {
+          planPrep: stampPlanPrep({ processed: true, source: job.source, enhanced }),
+        },
+      });
+      // The row now points at the new plate — drop the other-format sibling
+      // (a png→jpg replace would otherwise strand the old file). Best-effort,
+      // fire-and-forget: cleanup never delays or fails the upload.
+      void removeSiblingPlate(floorId, path);
+    },
+    onSuccess: async () => {
+      // Refetch the floor row BEFORE closing. The mutation stays pending until
+      // onSuccess settles, so the dialog holds its working spinner through the
+      // refetch and the close lands directly on the new-plan swap — instead of
+      // closing onto the stale plan for a beat, which read as "Replace did
+      // nothing" while the row + fresh signed URL caught up. The broad floors
+      // invalidation stays fire-and-forget; lists can refresh behind the swap.
+      await queryClient.invalidateQueries({ queryKey: floorKeys.detail(floorId) });
+      void queryClient.invalidateQueries({ queryKey: floorKeys.all });
       onOpenChange(false);
     },
     onError: (err) =>
@@ -139,6 +257,14 @@ export function FloorPlanUploadDialog({
         message: err instanceof Error ? err.message : 'Upload failed.',
       }),
   });
+
+  const startDefaultUpload = useCallback(
+    (file: File, source: PlanSource) => {
+      setStage({ kind: 'processing', message: 'Preparing your floor plan…' });
+      upload.mutate({ mode: 'default', file, source });
+    },
+    [upload]
+  );
 
   const pickFile = useCallback(
     async (file: File) => {
@@ -151,7 +277,6 @@ export function FloorPlanUploadDialog({
           name: file.name,
           size: file.size,
           hasPins,
-          forceFullPage,
         });
       }
       const v = validatePlanFile(file);
@@ -162,24 +287,18 @@ export function FloorPlanUploadDialog({
       setStage({ kind: 'analyzing', file });
 
       if (file.type !== 'application/pdf') {
-        // Images skip Plan Prep — single-step review, current behavior.
-        setStage({ kind: 'review', file, metadata: null, warnings: [] });
+        // Image/SVG: source 'image'. Default Upload produces a capped display
+        // PNG; Crop and scan-cleanup Enhances are offered (pin-free floors).
+        setStage({ kind: 'review', file, source: 'image', metadata: null, warnings: [] });
         return;
       }
 
+      // PDFs: read metadata for the mismatch warning + label source 'vector'.
+      // (We no longer decompose — the default rasterize keeps all content.)
       try {
-        const buf = await file.arrayBuffer();
-        // getDocument consumes (detaches) the buffer, so clone per parse.
-        const analysis = await analyzePlan(buf.slice(0), { lockedCrop, forceFullPage });
-        if (analysis.kind === 'vector') {
-          const before = await renderPdfFirstPage(buf.slice(0), 600);
-          setStage({ kind: 'prep', file, analysis, beforeUrl: before.url });
-        } else {
-          // Raster/scanned PDF: nothing to clean — fall through to plain review.
-          const metadata = await readPdfMetadata(file);
-          const warnings = detectMismatch(metadata, { buildingName, floorLabel });
-          setStage({ kind: 'review', file, metadata, warnings });
-        }
+        const metadata = await readPdfMetadata(file);
+        const warnings = detectMismatch(metadata, { buildingName, floorLabel });
+        setStage({ kind: 'review', file, source: 'vector', metadata, warnings });
       } catch (err) {
         setStage({
           kind: 'error',
@@ -188,8 +307,52 @@ export function FloorPlanUploadDialog({
         });
       }
     },
-    [buildingName, floorLabel, lockedCrop, forceFullPage, hasPins]
+    [buildingName, floorLabel, hasPins]
   );
+
+  // Open the scan cleanup Enhance. Runs on the baked display PNG, so it works
+  // uniformly for any upload (image or PDF) with no detector: produce the
+  // default plate (before), then clean it up (after) for the comparison.
+  const openScanEnhance = useCallback(
+    async (file: File, source: PlanSource) => {
+      setStage({ kind: 'processing', message: 'Enhancing your plan…' });
+      try {
+        const before = await produceDisplayPlate(file, source);
+        // Pin-safe on pinned floors: contrast + despeckle only (strictly
+        // per-pixel). Deskew rotates content relative to the frame, which
+        // would drift normalized pin coordinates — pin-free floors only.
+        const enhanced = await enhanceScanBlob(before.blob, { deskew: !hasPins });
+        setStage({
+          kind: 'enhance-scan',
+          file,
+          source,
+          enhanced,
+          beforeUrl: URL.createObjectURL(before.blob),
+          afterUrl: URL.createObjectURL(enhanced.blob),
+        });
+      } catch (err) {
+        setStage({
+          kind: 'error',
+          message: err instanceof Error ? `Couldn't enhance this plan: ${err.message}` : "Couldn't enhance this plan.",
+        });
+      }
+    },
+    [hasPins]
+  );
+
+  // Open Crop-to-plan: produce the full display plate and hand it to the crop UI.
+  const openCrop = useCallback(async (file: File, source: PlanSource) => {
+    setStage({ kind: 'processing', message: 'Preparing your floor plan…' });
+    try {
+      const full = await produceDisplayPlate(file, source);
+      setStage({ kind: 'enhance-crop', file, source, full, fullUrl: URL.createObjectURL(full.blob) });
+    } catch (err) {
+      setStage({
+        kind: 'error',
+        message: err instanceof Error ? `Couldn't prepare this plan: ${err.message}` : "Couldn't prepare this plan.",
+      });
+    }
+  }, []);
 
   // Handoff path (e.g. from the Add-Floor modal): auto-run the shared handler on
   // the provided file once, when the dialog opens. Guarantees this entry point
@@ -224,7 +387,9 @@ export function FloorPlanUploadDialog({
     ? "Replacing a plan keeps existing pins on the floor. Pin coordinates are normalized — they'll appear in the same relative position on the new plan."
     : `Pick a PDF, PNG, JPG, WebP, or SVG of ${floorLabel}'s plan. Up to ${formatBytes(PLAN_MAX_BYTES)}.`;
 
-  const isPrep = stage.kind === 'prep';
+  const isWide = stage.kind === 'enhance-crop' || stage.kind === 'enhance-scan';
+  // Geometry-changing enhances (crop, deskew) only on pin-free floors.
+  const canEnhance = !hasPins;
 
   return (
     <Dialog.Root open={open} onOpenChange={onOpenChange}>
@@ -233,19 +398,32 @@ export function FloorPlanUploadDialog({
         <Dialog.Content
           className={cn(
             'fixed left-1/2 top-1/2 z-50 -translate-x-1/2 -translate-y-1/2 rounded-xl border border-black/10 bg-surface p-5 text-text shadow-sheet outline-none dark:border-white/10',
-            isPrep ? 'w-[min(96vw,860px)]' : 'w-[min(92vw,520px)]'
+            // The dialog is viewport-centered, so content taller than the
+            // screen runs off BOTH edges (seen with multi-page PDFs: the
+            // page-count + mismatch warnings stack up in the review step).
+            // Cap the shell to the viewport and scroll inside instead. The
+            // crop stage stays drag-safe: its image self-caps at 52vh and the
+            // crop frame is touch-none with pointer capture.
+            'max-h-[85vh] overflow-y-auto overscroll-contain',
+            isWide ? 'w-[min(96vw,860px)]' : 'w-[min(92vw,520px)]'
           )}
           aria-describedby="upload-dialog-desc"
         >
           <div className="flex items-start justify-between gap-3">
             <div>
               <Dialog.Title className="font-semibold text-xl">
-                {isPrep ? `Clean up ${floorLabel}'s plan` : title}
+                {stage.kind === 'enhance-crop'
+                  ? `Crop ${floorLabel}'s plan`
+                  : stage.kind === 'enhance-scan'
+                    ? `Enhance ${floorLabel}'s plan`
+                    : title}
               </Dialog.Title>
               <Dialog.Description id="upload-dialog-desc" className="mt-1 text-sm text-text-muted">
-                {isPrep
-                  ? 'We removed the legend, title block, and discipline clutter and cropped to the floor. Use the cleaned plan, or keep your original.'
-                  : description}
+                {stage.kind === 'enhance-crop'
+                  ? 'Frame the floor plan to drop the title block, legend, and border. Everything inside the box is kept.'
+                  : stage.kind === 'enhance-scan'
+                    ? 'Compare the cleaned-up plan with what we have now. Use the enhanced version, or keep the original.'
+                    : description}
               </Dialog.Description>
             </div>
             <Dialog.Close asChild>
@@ -278,56 +456,78 @@ export function FloorPlanUploadDialog({
             {stage.kind === 'review' && (
               <ReviewPanel
                 file={stage.file}
+                source={stage.source}
                 metadata={stage.metadata}
                 warnings={stage.warnings}
                 isReplace={isReplace}
-                uploading={upload.isPending}
+                canEnhance={canEnhance}
                 onCancel={() => setStage({ kind: 'pick' })}
-                onConfirm={() => {
-                  setStage({ kind: 'uploading' });
-                  upload.mutate({ mode: 'original', file: stage.file });
-                }}
+                onUpload={() => startDefaultUpload(stage.file, stage.source)}
+                onCrop={() => void openCrop(stage.file, stage.source)}
+                onCleanScan={() => void openScanEnhance(stage.file, stage.source)}
+                redrawHref={redrawMailto({ buildingName, floorLabel })}
               />
             )}
-            {stage.kind === 'prep' && (
-              <PlanPrepPanel
-                analysis={stage.analysis}
-                beforeUrl={stage.beforeUrl}
-                pageWidth={stage.analysis.decompose.pageWidth}
-                pageHeight={stage.analysis.decompose.pageHeight}
+            {stage.kind === 'enhance-crop' && (
+              <PlanCropPanel
+                imageUrl={stage.fullUrl}
                 busy={upload.isPending}
+                redrawHref={redrawMailto({ buildingName, floorLabel })}
                 onCancel={() => setStage({ kind: 'pick' })}
-                onKeepOriginal={() => {
-                  setStage({ kind: 'uploading' });
-                  upload.mutate({ mode: 'original', file: stage.file });
-                }}
-                onAccept={async (selection) => {
+                onKeepFull={() =>
+                  upload.mutate({
+                    mode: 'plate',
+                    file: stage.file,
+                    source: stage.source,
+                    plate: stage.full,
+                    enhanced: false,
+                  })
+                }
+                onCrop={async (rect: CropRect) => {
                   try {
-                    setStage({ kind: 'uploading' });
-                    const plate = await producePlate(stage.analysis.decompose, selection);
-                    const recipe: PlanPrepRecipe = {
-                      version: 1,
-                      keepKeys: selection.keepKeys,
-                      crop: selection.crop,
-                      format: selection.format,
-                      originalPath: objectNameForFloor(floorId, 'application/pdf'),
-                      outputWidth: plate.width,
-                      outputHeight: plate.height,
-                    };
-                    upload.mutate({ mode: 'cleaned', original: stage.file, plate, recipe });
+                    setStage({ kind: 'processing', message: 'Cropping your floor plan…' });
+                    const cropped = await cropPlateBlob(stage.full.blob, rect);
+                    upload.mutate({
+                      mode: 'plate',
+                      file: stage.file,
+                      source: stage.source,
+                      plate: cropped,
+                      enhanced: true,
+                    });
                   } catch (err) {
                     setStage({
                       kind: 'error',
                       message:
                         err instanceof Error
-                          ? `Couldn't produce the cleaned plan: ${err.message}`
-                          : "Couldn't produce the cleaned plan.",
+                          ? `Couldn't crop this plan: ${err.message}`
+                          : "Couldn't crop this plan.",
                     });
                   }
                 }}
               />
             )}
-            {stage.kind === 'uploading' && <UploadingPanel />}
+            {stage.kind === 'enhance-scan' && (
+              <ScanEnhancePanel
+                beforeUrl={stage.beforeUrl}
+                afterUrl={stage.afterUrl}
+                busy={upload.isPending}
+                pinSafe={hasPins}
+                redrawHref={redrawMailto({ buildingName, floorLabel })}
+                onCancel={() => setStage({ kind: 'pick' })}
+                onKeepOriginal={() => startDefaultUpload(stage.file, stage.source)}
+                onAccept={() => {
+                  setStage({ kind: 'processing', message: 'Saving the enhanced plan…' });
+                  upload.mutate({
+                    mode: 'plate',
+                    file: stage.file,
+                    source: stage.source,
+                    plate: stage.enhanced,
+                    enhanced: true,
+                  });
+                }}
+              />
+            )}
+            {stage.kind === 'processing' && <ProcessingPanel message={stage.message} />}
             {stage.kind === 'error' && (
               <ErrorPanel message={stage.message} onRetry={() => setStage({ kind: 'pick' })} />
             )}
@@ -343,118 +543,6 @@ export function FloorPlanUploadDialog({
         </Dialog.Content>
       </Dialog.Portal>
     </Dialog.Root>
-  );
-}
-
-function PlanPrepPanel(props: {
-  analysis: PlanPrepAnalysis;
-  beforeUrl: string;
-  pageWidth: number;
-  pageHeight: number;
-  busy: boolean;
-  onCancel: () => void;
-  onKeepOriginal: () => void;
-  onAccept: (selection: { keepKeys: string[]; crop: Bbox; format: 'svg' | 'png' }) => void;
-}) {
-  const { analysis, beforeUrl, pageWidth, pageHeight, busy } = props;
-  const groups = analysis.decompose.groups;
-
-  const [keepKeys, setKeepKeys] = useState<string[]>(() =>
-    analysis.autoArchKey ? [analysis.autoArchKey] : groups.map((g) => g.key)
-  );
-  const [showColors, setShowColors] = useState(false);
-
-  // When unlocked, the crop follows the kept groups; when locked, it's frozen.
-  const crop: Bbox = useMemo(() => {
-    if (analysis.cropLocked) return analysis.autoCrop;
-    return cropForKeys(groups, keepKeys, pageWidth, pageHeight);
-  }, [analysis.cropLocked, analysis.autoCrop, groups, keepKeys, pageWidth, pageHeight]);
-
-  const keptCount = useMemo(
-    () => keptPathCount({ groups, keepKeys, crop }),
-    [groups, keepKeys, crop]
-  );
-  const format: 'svg' | 'png' = keptCount > 20_000 ? 'png' : 'svg';
-
-  // Build the AFTER preview from the current selection (always vector SVG —
-  // cheap, regardless of the final output format).
-  const afterUrl = useObjectUrl(
-    useMemo(() => emitSvg({ groups, keepKeys, crop }), [groups, keepKeys, crop])
-  );
-
-  const toggleKey = (key: string) =>
-    setKeepKeys((cur) => (cur.includes(key) ? cur.filter((k) => k !== key) : [...cur, key]));
-
-  const canAccept = keptCount > 0 && !busy;
-
-  return (
-    <div className="space-y-4">
-      <div className="grid grid-cols-2 gap-3">
-        <ComparePane label="Original" badge={`${analysis.decompose.totalPaths.toLocaleString()} shapes`}>
-          <img src={beforeUrl} alt="Original uploaded plan" className="h-full w-full object-contain" />
-        </ComparePane>
-        <ComparePane
-          label="Cleaned"
-          badge={`${keptCount.toLocaleString()} shapes · ${format.toUpperCase()}`}
-          highlight
-        >
-          {afterUrl ? (
-            <img src={afterUrl} alt="Cleaned floor plate preview" className="h-full w-full object-contain" />
-          ) : (
-            <div className="flex h-full items-center justify-center text-xs text-text-faint">
-              Nothing kept — choose at least one color group.
-            </div>
-          )}
-        </ComparePane>
-      </div>
-
-      {analysis.cropLocked ? (
-        <p className="flex items-start gap-2 rounded-md border border-info/30 bg-info-bg p-3 text-xs text-info">
-          <Lock size={14} aria-hidden className="mt-0.5 shrink-0" />
-          <span>
-            This floor has pins, so the plan keeps its current frame. We can declutter and recolor,
-            but the crop is locked to keep every pin in place.
-          </span>
-        </p>
-      ) : analysis.autoArchKey === null ? (
-        <p className="flex items-start gap-2 rounded-md border border-warning/30 bg-warning-bg p-3 text-xs text-warning">
-          <AlertTriangle size={14} aria-hidden className="mt-0.5 shrink-0" />
-          <span>
-            We couldn't confidently spot the architectural layer. Pick which color groups to keep
-            below.
-          </span>
-        </p>
-      ) : null}
-
-      <button
-        type="button"
-        onClick={() => setShowColors((s) => !s)}
-        className="text-xs font-medium text-text-muted underline-offset-2 hover:text-text hover:underline dark:hover:text-white"
-      >
-        {showColors ? 'Hide color groups' : 'Adjust colors'}
-      </button>
-      {showColors && (
-        <ColorGroupPicker groups={groups} keepKeys={keepKeys} onToggle={toggleKey} />
-      )}
-
-      <div className="flex flex-wrap items-center justify-end gap-2 pt-1">
-        <Button variant="ghost" onClick={props.onCancel} disabled={busy}>
-          Pick a different file
-        </Button>
-        <Button variant="secondary" onClick={props.onKeepOriginal} disabled={busy}>
-          Keep original
-        </Button>
-        <Button
-          variant="gold"
-          loading={busy}
-          disabled={!canAccept}
-          iconLeft={<Sparkles size={14} aria-hidden />}
-          onClick={() => props.onAccept({ keepKeys, crop, format })}
-        >
-          Use cleaned plan
-        </Button>
-      </div>
-    </div>
   );
 }
 
@@ -483,63 +571,6 @@ function ComparePane({
       <div className="h-56 p-2">{children}</div>
     </div>
   );
-}
-
-function ColorGroupPicker({
-  groups,
-  keepKeys,
-  onToggle,
-}: {
-  groups: PlanPrepAnalysis['decompose']['groups'];
-  keepKeys: string[];
-  onToggle: (key: string) => void;
-}) {
-  // Show the most significant groups; trivial buckets just add noise.
-  const shown = groups.filter((g) => g.pathCount >= 3).slice(0, 16);
-  return (
-    <ul className="grid max-h-44 grid-cols-2 gap-1.5 overflow-y-auto rounded-md border border-black/10 p-2 dark:border-white/10">
-      {shown.map((g) => {
-        const kept = keepKeys.includes(g.key);
-        return (
-          <li key={g.key}>
-            <button
-              type="button"
-              onClick={() => onToggle(g.key)}
-              aria-pressed={kept}
-              className={cn(
-                'flex w-full items-center gap-2 rounded-md border px-2 py-1.5 text-left text-xs transition-colors',
-                kept
-                  ? 'border-waymarks-gold bg-waymarks-gold-soft'
-                  : 'border-black/10 opacity-60 hover:opacity-100 dark:border-white/10'
-              )}
-            >
-              <span
-                aria-hidden
-                className="h-4 w-4 shrink-0 rounded border border-black/20"
-                style={{ backgroundColor: `rgb(${g.color[0]}, ${g.color[1]}, ${g.color[2]})` }}
-              />
-              <span className="min-w-0 flex-1">
-                <span className="block font-medium text-text">{kept ? 'Keep' : 'Drop'}</span>
-                <span className="text-text-faint">{g.pathCount.toLocaleString()} shapes</span>
-              </span>
-            </button>
-          </li>
-        );
-      })}
-    </ul>
-  );
-}
-
-/** Create an object URL for a string/blob and revoke it on change/unmount. */
-function useObjectUrl(svg: string): string | null {
-  const [url, setUrl] = useState<string | null>(null);
-  useEffect(() => {
-    const blob = new Blob([svg], { type: 'image/svg+xml' });
-    const u = URL.createObjectURL(blob);
-    setUrl(u);
-    return () => URL.revokeObjectURL(u);
-  }, [svg]);
-  return url;
 }
 
 function PickArea(props: {
@@ -641,14 +672,21 @@ function AnalyzingPanel({ name }: { name: string }) {
 
 function ReviewPanel(props: {
   file: File;
+  source: PlanSource;
   metadata: PdfMetadata | null;
   warnings: MismatchWarning[];
   isReplace: boolean;
-  uploading: boolean;
+  canEnhance: boolean;
   onCancel: () => void;
-  onConfirm: () => void;
+  onUpload: () => void;
+  onCrop: () => void;
+  onCleanScan: () => void;
+  redrawHref: string;
 }) {
   const Icon = props.file.type === 'application/pdf' ? FileText : ImageIcon;
+  // Scan cleanup runs on the baked plate, so it's offered for ANY upload —
+  // including floors with pins, where it runs pin-safe (no deskew; see
+  // enhanceScanBlob). Crop stays pin-free-only: it always moves the frame.
   return (
     <div className="space-y-4">
       <div className="flex items-center gap-3 rounded-lg border border-black/10 bg-surface p-3 text-sm dark:border-white/10">
@@ -677,28 +715,104 @@ function ReviewPanel(props: {
           ))}
         </ul>
       )}
-      {props.isReplace && (
-        <p className="rounded-md border border-info/30 bg-info-bg p-3 text-xs text-info">
-          The current plan will be overwritten. Existing pins on this floor are preserved.
-        </p>
-      )}
-      <div className="flex justify-end gap-2">
-        <Button variant="secondary" onClick={props.onCancel} disabled={props.uploading}>
-          Pick a different file
-        </Button>
-        <Button variant="gold" onClick={props.onConfirm} loading={props.uploading}>
-          {props.isReplace ? 'Replace plan' : 'Upload plan'}
-        </Button>
+      <p className="rounded-md border border-black/10 bg-surface p-3 text-xs text-text-muted dark:border-white/10">
+        We'll prepare a crisp, size-capped image of this plan — with every wall, room,
+        and label intact — so the floor opens instantly.
+        {props.canEnhance
+          ? ' Want to trim the title block and border? Use Crop to plan.'
+          : ' This floor already has pins, so the plan keeps its exact frame — cleanup here is pin-safe (contrast and despeckle only, no rotation or cropping).'}
+        {props.isReplace && ' Existing pins on this floor are preserved.'}
+      </p>
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <PlanRedrawLink href={props.redrawHref} />
+        <div className="flex flex-wrap justify-end gap-2">
+          <Button variant="secondary" onClick={props.onCancel}>
+            Pick a different file
+          </Button>
+          <Button variant="ghost" iconLeft={<Wand2 size={14} aria-hidden />} onClick={props.onCleanScan}>
+            Clean up scan
+          </Button>
+          {props.canEnhance && (
+            <Button variant="ghost" iconLeft={<Crop size={14} aria-hidden />} onClick={props.onCrop}>
+              Crop to plan
+            </Button>
+          )}
+          <Button variant="gold" onClick={props.onUpload}>
+            {props.isReplace ? 'Replace plan' : 'Upload plan'}
+          </Button>
+        </div>
       </div>
     </div>
   );
 }
 
-function UploadingPanel() {
+/** Scan/image cleanup Enhance — before/after with Accept / Keep original. */
+function ScanEnhancePanel(props: {
+  beforeUrl: string;
+  afterUrl: string;
+  busy: boolean;
+  /** True on pinned floors: cleanup ran without deskew (pin-safe). */
+  pinSafe: boolean;
+  redrawHref: string;
+  onCancel: () => void;
+  onKeepOriginal: () => void;
+  onAccept: () => void;
+}) {
+  return (
+    <div className="space-y-4">
+      <div className="grid grid-cols-2 gap-3">
+        <ComparePane label="Original" badge="as uploaded">
+          <img src={props.beforeUrl} alt="Original plan" className="h-full w-full object-contain" />
+        </ComparePane>
+        <ComparePane
+          label="Enhanced"
+          badge={props.pinSafe ? 'contrast · despeckle · pin-safe' : 'deskew · contrast · despeckle'}
+          highlight
+        >
+          <img src={props.afterUrl} alt="Enhanced plan" className="h-full w-full object-contain" />
+        </ComparePane>
+      </div>
+      <div className="flex flex-wrap items-center justify-between gap-2 pt-1">
+        <PlanRedrawLink href={props.redrawHref} />
+        <div className="flex flex-wrap justify-end gap-2">
+          <Button variant="ghost" onClick={props.onCancel} disabled={props.busy}>
+            Pick a different file
+          </Button>
+          <Button variant="secondary" onClick={props.onKeepOriginal} disabled={props.busy}>
+            Keep original
+          </Button>
+          <Button
+            variant="gold"
+            loading={props.busy}
+            iconLeft={<Sparkles size={14} aria-hidden />}
+            onClick={props.onAccept}
+          >
+            Use enhanced plan
+          </Button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/** Quiet Plan Redraw lead — opens a prefilled email. Not a store. */
+function PlanRedrawLink({ href }: { href: string }) {
+  return (
+    <a
+      href={href}
+      className="inline-flex items-center gap-1.5 text-xs font-medium text-waymarks-gold-deep underline decoration-waymarks-gold/40 underline-offset-2 hover:decoration-waymarks-gold"
+    >
+      <PenTool size={12} aria-hidden />
+      Not clean enough? Have OfficeMark redraw this floor.
+    </a>
+  );
+}
+
+function ProcessingPanel({ message }: { message: string }) {
   return (
     <div className="flex items-center gap-3 rounded-lg border border-black/10 bg-surface p-4 text-sm dark:border-white/10">
       <div className="h-5 w-5 animate-spin rounded-full border-2 border-waymarks-gold border-t-waymarks-gold" />
-      <span>Uploading…</span>
+      <span>{message}</span>
     </div>
   );
 }

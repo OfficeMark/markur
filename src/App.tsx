@@ -95,6 +95,9 @@ const FloorCatalogue = lazyWithReload(() =>
   import('@/routes/FloorCatalogue').then((m) => ({ default: m.FloorCatalogue }))
 );
 const Report = lazyWithReload(() => import('@/routes/Report').then((m) => ({ default: m.Report })));
+const ExpenseReport = lazyWithReload(() =>
+  import('@/routes/ExpenseReport').then((m) => ({ default: m.ExpenseReport }))
+);
 const Login = lazyWithReload(() => import('@/routes/Login').then((m) => ({ default: m.Login })));
 const ResetPassword = lazyWithReload(() =>
   import('@/routes/ResetPassword').then((m) => ({ default: m.ResetPassword }))
@@ -109,6 +112,7 @@ const AcceptInvitation = lazyWithReload(() =>
 const BuildingShare = lazyWithReload(() =>
   import('@/routes/BuildingShare').then((m) => ({ default: m.BuildingShare }))
 );
+const Welcome = lazyWithReload(() => import('@/routes/Welcome').then((m) => ({ default: m.Welcome })));
 const Help = lazyWithReload(() => import('@/routes/Help').then((m) => ({ default: m.Help })));
 const Settings = lazyWithReload(() => import('@/routes/Settings').then((m) => ({ default: m.Settings })));
 const Privacy = lazyWithReload(() => import('@/routes/Privacy').then((m) => ({ default: m.Privacy })));
@@ -247,6 +251,9 @@ export default function App() {
                   <BootPrefetch />
                   <SessionLostHandler />
                   <LastErrorBanner />
+                  {/* PERF-7: second boundary so a route crash cannot take
+                      down the whole app shell (e.g. mid-audit). */}
+                  <ErrorBoundary>
                   <Suspense fallback={<RouteFallback />}>
                     <Routes>
                   <Route path="/login" element={<Login />} />
@@ -300,6 +307,14 @@ export default function App() {
                     }
                   />
                   <Route
+                    path="/reports/expenses"
+                    element={
+                      <ProtectedRoute>
+                        <ExpenseReport />
+                      </ProtectedRoute>
+                    }
+                  />
+                  <Route
                     path="/reports/:buildingId"
                     element={
                       <ProtectedRoute>
@@ -342,10 +357,12 @@ export default function App() {
                   </Route>
                   <Route path="/accept/:token" element={<AcceptInvitation />} />
                   <Route path="/share/:token" element={<BuildingShare />} />
+                  <Route path="/welcome/:token" element={<Welcome />} />
                   <Route path="/legal/privacy" element={<Privacy />} />
                   <Route path="/legal/terms" element={<Terms />} />
                     </Routes>
                   </Suspense>
+                  </ErrorBoundary>
                   <CookieConsent />
                 </RadixTooltip.Provider>
               </ActionHintsProvider>

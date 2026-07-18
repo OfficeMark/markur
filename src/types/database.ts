@@ -600,6 +600,39 @@ export type Database = {
           },
         ]
       }
+      client_errors: {
+        Row: {
+          component_stack: string | null
+          created_at: string
+          id: string
+          message: string
+          stack: string | null
+          url: string | null
+          user_agent: string | null
+          user_id: string | null
+        }
+        Insert: {
+          component_stack?: string | null
+          created_at?: string
+          id?: string
+          message: string
+          stack?: string | null
+          url?: string | null
+          user_agent?: string | null
+          user_id?: string | null
+        }
+        Update: {
+          component_stack?: string | null
+          created_at?: string
+          id?: string
+          message?: string
+          stack?: string | null
+          url?: string | null
+          user_agent?: string | null
+          user_id?: string | null
+        }
+        Relationships: []
+      }
       contacts: {
         Row: {
           building_id: string | null
@@ -1161,7 +1194,7 @@ export type Database = {
     }
     Functions: {
       claim_building_share: { Args: { p_token: string }; Returns: string }
-      get_app_boot: { Args: Record<PropertyKey, never>; Returns: Json }
+      get_app_boot: { Args: never; Returns: Json }
       get_building_view: { Args: { p_building_id: string }; Returns: Json }
       get_floor_view: { Args: { p_floor_id: string }; Returns: Json }
       log_access: {
@@ -1170,11 +1203,11 @@ export type Database = {
       }
       log_client_error: {
         Args: {
+          p_component_stack?: string
           p_message: string
-          p_stack?: string | null
-          p_component_stack?: string | null
-          p_url?: string | null
-          p_user_agent?: string | null
+          p_stack?: string
+          p_url?: string
+          p_user_agent?: string
         }
         Returns: undefined
       }
@@ -1342,6 +1375,11 @@ export const Constants = {
 // ---------------------------------------------------------------------------
 // Convenience row aliases (hand-maintained — the Supabase type generator does
 // not emit these). Re-append after any regen of the block above.
+//
+// NOTE (2026-07-18 sync): AssetExpense and FloorAuditPath reference tables
+// (asset_expenses, floor_audit_paths) that are NOT YET on the live demo
+// backend (dzhrugpkodxzhjgihjkn). They will error until the pending rebuild
+// migrations are applied there and this file is regenerated once more.
 // ---------------------------------------------------------------------------
 type Tbl = Database['public']['Tables'];
 
@@ -1366,3 +1404,6 @@ export type AuditVideoRow = Tbl['audit_videos']['Row'];
 export type Contact = Tbl['contacts']['Row'];
 export type Vendor = Tbl['vendors']['Row'];
 export type AssetVendor = Tbl['asset_vendors']['Row'];
+export type AssetExpense = Tbl['asset_expenses']['Row'];
+export type FloorAuditPath = Tbl['floor_audit_paths']['Row'];
+export type FeatureSuggestion = Tbl['feature_suggestions']['Row'];

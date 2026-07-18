@@ -83,6 +83,23 @@ export default defineConfig({
       },
     }),
   ],
+  build: {
+    modulePreload: {
+      // Plan Prep v2 law: the plan-prep + pdfjs graph must load ONLY when the
+      // upload screen actually needs it — never eagerly on floor open. Vite's
+      // default modulePreload injects <link modulepreload> for a route's
+      // dynamic-import deps, which was warming the (now pdfjs-free, 38 kB)
+      // upload-dialog chunk on every floor open. Strip those chunks from the
+      // preload hints; the on-demand import() still loads them when opened.
+      resolveDependencies: (_filename, deps) =>
+        deps.filter(
+          (d) =>
+            !/FloorPlanUploadDialog|plan-prep|pdf-|pdf\.worker|enhance-scan|rasterize|decompose|pdf-metadata/i.test(
+              d
+            )
+        ),
+    },
+  },
   resolve: {
     alias: {
       '@': path.resolve(__dirname, './src'),

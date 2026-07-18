@@ -24,9 +24,20 @@ export type AuditVideosPanelProps = {
   assetId?: string | null;
   /** Triggered by the parent's "Record video" button. */
   onRecordClick?: () => void;
+  /**
+   * Feature #3c: render as a secondary action inside another band (e.g. Media)
+   * rather than its own "Audit videos" group — drops the big h3 header but
+   * keeps record / playback / delete intact.
+   */
+  compact?: boolean;
 };
 
-export function AuditVideosPanel({ buildingId, assetId, onRecordClick }: AuditVideosPanelProps) {
+export function AuditVideosPanel({
+  buildingId,
+  assetId,
+  onRecordClick,
+  compact,
+}: AuditVideosPanelProps) {
   const assetQuery = useAssetAuditVideos(assetId ?? undefined);
   const buildingQuery = useBuildingAuditVideos(assetId ? undefined : buildingId);
   const query = assetId ? assetQuery : buildingQuery;
@@ -37,10 +48,17 @@ export function AuditVideosPanel({ buildingId, assetId, onRecordClick }: AuditVi
   return (
     <section className="space-y-3">
       <div className="flex items-center justify-between">
-        <h3 className="flex items-center gap-1.5 text-[11px] font-medium uppercase tracking-[0.18em] text-text-faint">
-          <Video size={12} aria-hidden className="text-waymarks-gold" />
-          Audit videos {videos.length > 0 && <span className="ml-1 text-text-muted">({videos.length})</span>}
-        </h3>
+        {compact ? (
+          <span className="flex items-center gap-1.5 text-[11px] text-text-faint">
+            <Video size={12} aria-hidden className="text-waymarks-gold" />
+            Video {videos.length > 0 && <span className="text-text-muted">({videos.length})</span>}
+          </span>
+        ) : (
+          <h3 className="flex items-center gap-1.5 text-[11px] font-medium uppercase tracking-[0.18em] text-text-faint">
+            <Video size={12} aria-hidden className="text-waymarks-gold" />
+            Audit videos {videos.length > 0 && <span className="ml-1 text-text-muted">({videos.length})</span>}
+          </h3>
+        )}
         {onRecordClick && (
           <Button
             size="sm"

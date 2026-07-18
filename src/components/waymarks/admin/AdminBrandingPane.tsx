@@ -93,6 +93,11 @@ export function AdminBrandingPane() {
         logo_path: logoPath,
         accent_color: accentColor,
         display_name_override: displayName.trim() || null,
+        // Pin shape/size are edited on /admin/asset-types now; the
+        // org_branding row is upserted whole, so carry the current values
+        // through to avoid resetting them from the branding pane.
+        pin_shape: branding.pinShape,
+        pin_size: branding.pinSize,
       });
       setSavedAt(Date.now());
       window.setTimeout(() => setSavedAt(null), 2400);

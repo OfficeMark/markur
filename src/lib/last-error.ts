@@ -67,10 +67,10 @@ export async function logClientError(e: CapturedError): Promise<void> {
   try {
     await supabase.rpc('log_client_error', {
       p_message: e.message,
-      p_stack: e.stack,
-      p_component_stack: e.componentStack,
-      p_url: e.url,
-      p_user_agent: e.ua,
+      p_stack: e.stack ?? undefined,
+      p_component_stack: e.componentStack ?? undefined,
+      p_url: e.url ?? undefined,
+      p_user_agent: e.ua ?? undefined,
     });
   } catch {
     /* best-effort */

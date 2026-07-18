@@ -44,6 +44,12 @@ export type PinMarkerProps = {
    * label is hidden by default (M32 Step 1 — hover/press to reveal).
    */
   pinLabel?: string | null;
+  /**
+   * Audit-path edit mode (Feature 1): when set, this pin is stop N in the
+   * walking order and shows a gold sequence badge + gold ring. `null` means the
+   * pin is not (yet) in the path.
+   */
+  sequenceNumber?: number | null;
   onPointerDownDrag?: (e: React.PointerEvent<HTMLButtonElement>) => void;
   onClick?: () => void;
 };
@@ -66,7 +72,11 @@ const PIN_ICON_PX: Record<PinSize, number> = {
   large: 13,
 };
 
-const PinMarkerInner = forwardRef<HTMLButtonElement, PinMarkerProps>(function PinMarker(
+/**
+ * PERF-4: memoized (CODE-REVIEW-2026-07-06) so dragging one pin does not
+ * re-render every pin on the floor at pointermove frequency.
+ */
+export const PinMarker = memo(forwardRef<HTMLButtonElement, PinMarkerProps>(function PinMarker(
   {
     assetId,
     name,
@@ -81,11 +91,13 @@ const PinMarkerInner = forwardRef<HTMLButtonElement, PinMarkerProps>(function Pi
     faded,
     fillColor,
     pinLabel,
+    sequenceNumber,
     onPointerDownDrag,
     onClick,
   },
   ref
 ) {
+  const inPath = sequenceNumber != null;
   const Icon = ICON_BY_STATUS[status];
   const dragAccept = unlocked || repositioning;
   const lockSuffix = repositioning
@@ -93,16 +105,13 @@ const PinMarkerInner = forwardRef<HTMLButtonElement, PinMarkerProps>(function Pi
     : unlocked
       ? ', unlocked - drag to move'
       : '';
-  // Flagged overrides the type color entirely: the WHOLE pin goes red so it's
-  // unmistakable even beside red-ish type colors (e.g. Capital One's #D6336C).
-  // Reverts to the type color automatically on resolve, since `status` is
-  // recomputed once the flag clears.
+  // Flagged still drives the danger ring (statusRingClass below) and the loud
+  // red badge; the pin body keeps its type colour so the type stays readable.
   const flagged = status === 'flagged';
-  // Teardrop is the Markur map-pin silhouette (hollow centre). It follows the
-  // same colour rules as the other shapes — type colour, red when flagged —
-  // rendered as an SVG rather than a CSS box.
+  // S10: teardrop is the Markur map-pin silhouette (hollow centre), rendered
+  // as an SVG instead of a CSS box; same colour rules as the other shapes.
   const isTeardrop = shape === 'teardrop';
-  const resolvedFill = flagged ? 'rgb(var(--color-danger))' : (fillColor ?? colorForType(type));
+  const resolvedFill = fillColor ?? colorForType(type);
   const ariaPrefix = pinLabel ? `Pin ${pinLabel}, ` : '';
   const statusRingClass = flagged
     ? 'ring-2 ring-danger ring-offset-1 ring-offset-white'
@@ -141,7 +150,9 @@ const PinMarkerInner = forwardRef<HTMLButtonElement, PinMarkerProps>(function Pi
         e.stopPropagation();
         onClick?.();
       }}
-      aria-label={`${ariaPrefix}${name} (${typeName}, ${statusLabel(status)}${lockSuffix})`}
+      aria-label={`${ariaPrefix}${name} (${typeName}, ${statusLabel(status)}${lockSuffix}${
+        inPath ? `, audit path stop ${sequenceNumber}` : ''
+      })`}
       style={{
         backgroundColor: isTeardrop ? 'transparent' : resolvedFill,
         width: px,
@@ -168,18 +179,14 @@ const PinMarkerInner = forwardRef<HTMLButtonElement, PinMarkerProps>(function Pi
         unlocked && !repositioning &&
           'after:pointer-events-none after:absolute after:-inset-1 after:animate-pulse after:rounded-full after:border-2 after:border-dashed after:border-waymarks-gold',
         !unlocked && !repositioning && selected && 'ring-4 ring-waymarks-gold',
+        // Audit-path stop: a gold ring so path pins read as a connected set.
+        inPath && !repositioning && !unlocked && !selected && 'ring-2 ring-waymarks-gold',
         pendingSync && 'border-dashed',
         faded && 'opacity-40'
       )}
     >
       {isTeardrop ? (
-        <svg
-          viewBox="0 0 24 24"
-          width={px}
-          height={px}
-          className="drop-shadow-sm"
-          aria-hidden
-        >
+        <svg viewBox="0 0 24 24" width={px} height={px} className="drop-shadow-sm" aria-hidden>
           {/* Markur map-pin: teardrop body with a hollow centre (evenodd cut-out
               so the plan shows through), white outline for definition. */}
           <path
@@ -198,12 +205,32 @@ const PinMarkerInner = forwardRef<HTMLButtonElement, PinMarkerProps>(function Pi
           aria-hidden
         />
       )}
-      {/* The top-right dot slot is no longer used for flag state (the whole pin
-          is red now). It's reserved for the attachments/video indicator. */}
+      {/* Flagged pins get a loud red badge so they stand out on the plan
+          without opening the detail panel (M33). A top-right red dot,
+          counter-rotated so it stays upright on a diamond pin. */}
+      {status === 'flagged' && (
+        <span
+          aria-hidden
+          className={cn(
+            'absolute -right-0.5 -top-0.5 h-2.5 w-2.5 rounded-full border border-white bg-danger shadow-sm',
+            iconCounterRotate && '-rotate-45'
+          )}
+        />
+      )}
+      {/* Audit-path sequence badge (Feature 1): the pin's stop number in the
+          walking order. Fixed size so it stays legible on the smallest pins;
+          counter-rotated so it reads upright even on a diamond pin. */}
+      {inPath && (
+        <span
+          aria-hidden
+          className={cn(
+            'absolute -left-2 -top-2 inline-flex h-[15px] min-w-[15px] items-center justify-center rounded-full border border-white bg-waymarks-gold px-[3px] text-[9px] font-bold leading-none text-white shadow-sm',
+            iconCounterRotate && '-rotate-45'
+          )}
+        >
+          {sequenceNumber}
+        </span>
+      )}
     </button>
   );
-});
-
-// Memoized: with a memoized PinItem parent passing stable props, an unrelated
-// floor re-render no longer re-renders every pin.
-export const PinMarker = memo(PinMarkerInner);
+}));

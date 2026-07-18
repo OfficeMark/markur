@@ -64,7 +64,8 @@ export function BuildingPhotoUpload({
     const preview = URL.createObjectURL(file);
     setLocalPreview(preview);
     try {
-      await upload.mutateAsync(file);
+      // S8: HEIC converts to JPEG on-device before upload.
+      await upload.mutateAsync(await prepareForUpload(file));
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Upload failed.');
     } finally {
