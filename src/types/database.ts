@@ -23,6 +23,7 @@ export type Database = {
           role: string
           scope_id: string | null
           scope_type: string
+          source_invitation_id: string | null
           user_id: string
         }
         Insert: {
@@ -33,6 +34,7 @@ export type Database = {
           role: string
           scope_id?: string | null
           scope_type: string
+          source_invitation_id?: string | null
           user_id: string
         }
         Update: {
@@ -43,9 +45,18 @@ export type Database = {
           role?: string
           scope_id?: string | null
           scope_type?: string
+          source_invitation_id?: string | null
           user_id?: string
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "access_grants_source_invitation_id_fkey"
+            columns: ["source_invitation_id"]
+            isOneToOne: false
+            referencedRelation: "pending_invitations"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       asset_attachments: {
         Row: {
@@ -84,6 +95,63 @@ export type Database = {
             columns: ["asset_id"]
             isOneToOne: false
             referencedRelation: "assets"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      asset_expenses: {
+        Row: {
+          amount: number
+          asset_id: string
+          billable_to: string
+          created_at: string
+          created_by: string
+          expense_date: string
+          flag_id: string | null
+          id: string
+          invoice_ref: string | null
+          note: string | null
+          updated_at: string
+        }
+        Insert: {
+          amount: number
+          asset_id: string
+          billable_to: string
+          created_at?: string
+          created_by?: string
+          expense_date?: string
+          flag_id?: string | null
+          id?: string
+          invoice_ref?: string | null
+          note?: string | null
+          updated_at?: string
+        }
+        Update: {
+          amount?: number
+          asset_id?: string
+          billable_to?: string
+          created_at?: string
+          created_by?: string
+          expense_date?: string
+          flag_id?: string | null
+          id?: string
+          invoice_ref?: string | null
+          note?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "asset_expenses_asset_id_fkey"
+            columns: ["asset_id"]
+            isOneToOne: false
+            referencedRelation: "assets"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "asset_expenses_flag_id_fkey"
+            columns: ["flag_id"]
+            isOneToOne: false
+            referencedRelation: "flags"
             referencedColumns: ["id"]
           },
         ]
@@ -796,6 +864,38 @@ export type Database = {
           },
         ]
       }
+      floor_audit_paths: {
+        Row: {
+          created_at: string
+          floor_id: string
+          path: string[]
+          set_by: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          floor_id: string
+          path?: string[]
+          set_by?: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          floor_id?: string
+          path?: string[]
+          set_by?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "floor_audit_paths_floor_id_fkey"
+            columns: ["floor_id"]
+            isOneToOne: true
+            referencedRelation: "floors"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       floors: {
         Row: {
           audit_cycle_days: number | null
@@ -1024,10 +1124,12 @@ export type Database = {
         Row: {
           accepted_at: string | null
           created_at: string
-          email: string
+          email: string | null
           expires_at: string
+          grant_days: number | null
           id: string
           invited_by: string
+          kind: string
           role: string
           scope_id: string | null
           scope_type: string
@@ -1036,10 +1138,12 @@ export type Database = {
         Insert: {
           accepted_at?: string | null
           created_at?: string
-          email: string
+          email?: string | null
           expires_at: string
+          grant_days?: number | null
           id?: string
           invited_by: string
+          kind?: string
           role: string
           scope_id?: string | null
           scope_type: string
@@ -1048,10 +1152,12 @@ export type Database = {
         Update: {
           accepted_at?: string | null
           created_at?: string
-          email?: string
+          email?: string | null
           expires_at?: string
+          grant_days?: number | null
           id?: string
           invited_by?: string
+          kind?: string
           role?: string
           scope_id?: string | null
           scope_type?: string
@@ -1193,10 +1299,24 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      accept_invitation: { Args: { p_token: string }; Returns: undefined }
       claim_building_share: { Args: { p_token: string }; Returns: string }
+      claim_demo_link: { Args: { p_token: string }; Returns: string }
       get_app_boot: { Args: never; Returns: Json }
       get_building_view: { Args: { p_building_id: string }; Returns: Json }
+      get_expense_report: {
+        Args: { p_building_id: string; p_from: string; p_to: string }
+        Returns: Json
+      }
       get_floor_view: { Args: { p_floor_id: string }; Returns: Json }
+      list_demo_link_claims: {
+        Args: { p_building_id: string }
+        Returns: {
+          claimed_at: string
+          email: string
+          invitation_id: string
+        }[]
+      }
       log_access: {
         Args: { p_action: string; p_entity_id?: string; p_entity_type?: string }
         Returns: undefined
@@ -1211,10 +1331,16 @@ export type Database = {
         }
         Returns: undefined
       }
+      lookup_invitation: { Args: { p_token: string }; Returns: Json }
       org_slug: { Args: { input: string }; Returns: string }
       peek_building_share: { Args: { p_token: string }; Returns: Json }
+      peek_demo_link: { Args: { p_token: string }; Returns: Json }
       revoke_building_share: {
         Args: { p_share_id: string }
+        Returns: undefined
+      }
+      revoke_demo_link: {
+        Args: { p_invitation_id: string }
         Returns: undefined
       }
       set_floor_pins_locked: {
@@ -1375,11 +1501,6 @@ export const Constants = {
 // ---------------------------------------------------------------------------
 // Convenience row aliases (hand-maintained — the Supabase type generator does
 // not emit these). Re-append after any regen of the block above.
-//
-// NOTE (2026-07-18 sync): AssetExpense and FloorAuditPath reference tables
-// (asset_expenses, floor_audit_paths) that are NOT YET on the live demo
-// backend (dzhrugpkodxzhjgihjkn). They will error until the pending rebuild
-// migrations are applied there and this file is regenerated once more.
 // ---------------------------------------------------------------------------
 type Tbl = Database['public']['Tables'];
 
