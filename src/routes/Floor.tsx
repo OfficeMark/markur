@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type ComponentType } from 'react';
-import { Link, useParams } from 'react-router-dom';
-import { AlertTriangle, ArrowLeft, ChevronLeft, ChevronRight, ClipboardCheck, ImageOff, LayoutGrid, Map as MapIcon, Maximize2, MapPin, Minimize2, NotebookPen, Shapes, Trash2 } from 'lucide-react';
+import { Link, useNavigate, useParams } from 'react-router-dom';
+import { AlertTriangle, ArrowLeft, ChevronLeft, ChevronRight, ClipboardCheck, FileDown, ImageOff, LayoutGrid, Map as MapIcon, Maximize2, MapPin, Minimize2, NotebookPen, Shapes, Trash2 } from 'lucide-react';
 import { AppShell } from '@/components/waymarks/AppShell';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { Button } from '@/components/ui/Button';
@@ -38,6 +38,8 @@ import { AssetGridView } from '@/components/waymarks/AssetGridView';
 import { FilterByTypePopover } from '@/components/waymarks/FilterByTypePopover';
 import { FilterByZonePopover } from '@/components/waymarks/FilterByZonePopover';
 import { FloorFilterSheet } from '@/components/waymarks/FloorFilterSheet';
+import { FilterByTextInput } from '@/components/waymarks/FilterByTextInput';
+import { AuditVideoRecorderDialog } from '@/components/waymarks/AuditVideoRecorderDialog';
 import { FloorMoreMenu } from '@/components/waymarks/FloorMoreMenu';
 import { FloorNotesButton } from '@/components/waymarks/FloorNotesButton';
 import { AuditPathEditBar } from '@/components/waymarks/AuditPathEditBar';
@@ -47,7 +49,7 @@ import {
   useFloorAuditPath,
   useSaveFloorAuditPath,
 } from '@/hooks/useAuditPath';
-import { useFloors } from '@/hooks/useFloors';
+import { useFloors, useSoftDeleteFloor } from '@/hooks/useFloors';
 import { PlanProvenanceCaption } from '@/components/waymarks/PlanProvenanceCaption';
 import { useAssets, useSoftDeleteAsset, useUpdateAsset } from '@/hooks/useAssets';
 import { useAssetTypes } from '@/hooks/useAssetTypes';
@@ -60,6 +62,7 @@ import {
 import { useAuth } from '@/lib/auth-context';
 import { useCan } from '@/lib/permissions-context';
 import { planKindForPath, planRefreshStamp, signedUrlForPlan } from '@/lib/upload';
+import { pinNumberMatchesQuery } from '@/lib/pin-types';
 import { pinAppearanceFromSettings } from '@/lib/pin-appearance';
 import { cn, mapWithConcurrency } from '@/lib/utils';
 import {
@@ -110,9 +113,18 @@ export function Floor() {
   const canCreate = useCan('create', { type: 'building', id: floor?.building_id ?? '' });
   const canEdit = useCan('edit', { type: 'building', id: floor?.building_id ?? '' });
   const canAudit = useCan('audit', { type: 'floor', id: id ?? '' });
+  const canDeleteFloor = useCan('delete', { type: 'floor', id: id ?? '' });
   const updateAsset = useUpdateAsset(id);
   const softDelete = useSoftDeleteAsset(id);
+  const softDeleteFloor = useSoftDeleteFloor(floor?.building_id);
+  const navigate = useNavigate();
   const [exportingPdf, setExportingPdf] = useState(false);
+
+  // Floor-level video walkthrough recorder (floor scope → assetId={null}).
+  const [videoRecorderOpen, setVideoRecorderOpen] = useState(false);
+  // Delete-floor confirmation (name-typed StepUpDialog, like building delete).
+  const [deleteFloorOpen, setDeleteFloorOpen] = useState(false);
+  const [deleteFloorError, setDeleteFloorError] = useState<string | null>(null);
 
   // M6 — audit walkaround. These read the caches get_floor_view seeds above
   // (enabled:false → no own fetch); start/end-audit + the confirm patch keep
@@ -220,6 +232,9 @@ export function Floor() {
   // Reskin: a real zone facet alongside type. '' (NO_ZONE) selects pins with a
   // blank zone. Empty set = all visible.
   const [filterZones, setFilterZones] = useState<Set<string>>(new Set());
+  // M22 (#6) — free-text filter that ANDs with the Type + Zone facets. Matches
+  // pin #, name, location notes, room number, notes, and vendor name/company.
+  const [filterText, setFilterText] = useState('');
 
   // M9 — take this floor offline (pre-cache for the audit walkaround).
   const [cacheState, setCacheState] = useState<'idle' | 'caching' | 'cached' | 'error'>(
@@ -472,14 +487,17 @@ export function Floor() {
       return x.localeCompare(y);
     });
   }, [baseSet]);
+  const trimmedFilterText = filterText.trim().toLowerCase();
   const visibleAssets = useMemo(() => {
     return baseSet.filter((a) => {
       if (filterTypes.size > 0 && !filterTypes.has(a.type)) return false;
       if (filterZones.size > 0 && !filterZones.has((a.zone ?? '').trim())) return false;
+      if (trimmedFilterText && !matchesAssetText(a, trimmedFilterText)) return false;
       return true;
     });
-  }, [baseSet, filterTypes, filterZones]);
-  const filtersActive = filterTypes.size > 0 || filterZones.size > 0;
+  }, [baseSet, filterTypes, filterZones, trimmedFilterText]);
+  const filtersActive =
+    filterTypes.size > 0 || filterZones.size > 0 || trimmedFilterText.length > 0;
 
   // S7 — surface the existing floor-catalogue PDF generator from the grid.
   // Per-table: one query for first-photo paths, then sign + inline each as a
@@ -749,6 +767,12 @@ export function Floor() {
           : undefined
       }
       onVisualize={onVisualize}
+      onRecordVideo={canEdit ? () => setVideoRecorderOpen(true) : undefined}
+      canDeleteFloor={canDeleteFloor}
+      onDeleteFloor={() => {
+        setDeleteFloorError(null);
+        setDeleteFloorOpen(true);
+      }}
     />
   );
 
@@ -812,6 +836,28 @@ export function Floor() {
     </Tooltip>
   ) : null;
 
+  // Sign catalogue — links to the printable /catalogue page (a separate route
+  // from the grid's inline PDF export). Bordered toolbar button, icon + label
+  // (label drops on phones like the other controls).
+  const catalogueLink = () => assets.length > 0 ? (
+    <Tooltip text="View the sign catalogue for this floor (print or download as PDF)">
+      <Link
+        to={`/floors/${floor.id}/catalogue`}
+        aria-label="Floor catalogue"
+        className="inline-flex h-9 shrink-0 items-center gap-1.5 rounded-lg border border-black/15 bg-surface px-2 text-xs font-medium text-text-muted transition-colors hover:bg-black/5 hover:text-text sm:px-3 dark:border-white/15 dark:hover:bg-white/5"
+      >
+        <FileDown size={14} aria-hidden />
+        <span className="hidden sm:inline">Catalogue</span>
+      </Link>
+    </Tooltip>
+  ) : null;
+
+  // Free-text pin filter (M22 #6). Fixed-width on desktop (sits in the filter
+  // cluster); stretches full-width in the phone filter band below the toolbar.
+  const textFilter = showFilters ? (
+    <FilterByTextInput value={filterText} onChange={setFilterText} />
+  ) : null;
+
   // Map mode fills the viewport (definite-height chain via AppShell) so the
   // plan canvas's h-full resolves and its recenter/zoom controls stay on-screen.
   // Grid + empty state keep the normal scrolling page.
@@ -866,14 +912,25 @@ export function Floor() {
             )}
             <div className="flex shrink-0 items-center gap-1.5">
               {viewSeg()}
+              {/* Free-text filter — desktop only; on phones it lives in the
+                  full-width band below the toolbar (added after this row). */}
+              {showFilters && <div className="hidden w-44 sm:block">{textFilter}</div>}
               {showFilters && <div className="hidden sm:block">{filterSeg()}</div>}
               {showFilters && <div className="sm:hidden">{combinedFilter}</div>}
+              {catalogueLink()}
               {/* Focus is a presentation feature; on phones the map already
                   fills the screen and the width belongs to the breadcrumb. */}
               <div className="hidden sm:block">{focusBtn()}</div>
               {moreMenu}
             </div>
           </div>
+        )}
+
+        {/* Phone-tier free-text filter band — the desktop cluster has room for
+            the input inline, but on phones the toolbar is icons-only, so the
+            text filter drops to its own full-width row beneath it. */}
+        {!focus && showFilters && (
+          <div className="mb-3 sm:hidden">{textFilter}</div>
         )}
 
         {/* Focus mode: a small floating control to restore normal view. */}
@@ -1140,6 +1197,53 @@ export function Floor() {
         />
       )}
 
+      {canEdit && floor.building_id && (
+        <AuditVideoRecorderDialog
+          open={videoRecorderOpen}
+          onOpenChange={setVideoRecorderOpen}
+          buildingId={floor.building_id}
+          assetId={null}
+          scopeLabel={`${building?.name ?? 'Building'} · Floor ${floor.label}`}
+        />
+      )}
+
+      {canDeleteFloor && (
+        <StepUpDialog
+          open={deleteFloorOpen}
+          onOpenChange={(o) => {
+            if (!softDeleteFloor.isPending) setDeleteFloorOpen(o);
+          }}
+          title={`Delete Floor ${floor.label}?`}
+          description={
+            `This soft-deletes the floor and hides it for everyone with access. ` +
+            (assets.length === 0
+              ? `There are no pins on this floor yet. `
+              : assets.length === 1
+                ? `1 asset pin and any audit history go with it. `
+                : `${assets.length} asset pins and any audit history go with them. `) +
+            `Records are kept in the database; support can restore the floor if needed.`
+          }
+          confirmWord="DELETE"
+          confirmLabel="Delete floor"
+          confirmVariant="danger"
+          confirmIcon={<Trash2 size={14} aria-hidden />}
+          busy={softDeleteFloor.isPending}
+          errorMessage={deleteFloorError}
+          onConfirm={async () => {
+            setDeleteFloorError(null);
+            try {
+              await softDeleteFloor.mutateAsync(floor.id);
+              setDeleteFloorOpen(false);
+              navigate(`/buildings/${buildingId}`);
+            } catch (err) {
+              setDeleteFloorError(
+                err instanceof Error ? err.message : 'Could not delete the floor.'
+              );
+            }
+          }}
+        />
+      )}
+
     </AppShell>
   );
 }
@@ -1212,4 +1316,34 @@ function UploadDialogError({
 // =============================================================================
 // Filter helpers (M22 #6)
 // =============================================================================
+
+/**
+ * Case-insensitive substring match against the user-visible text fields
+ * we care about: pin ID number, name, location notes, room number, notes,
+ * and the two vendor-contact strings. `q` is expected to already be trimmed
+ * and lower-cased by the caller.
+ */
+function matchesAssetText(a: Asset, q: string): boolean {
+  if (!q) return true;
+  // Pin ID: typing "3", "003", or "#003" finds the asset by its floor number.
+  if (pinNumberMatchesQuery(a.pin_number, q)) return true;
+  const haystacks: Array<string | null | undefined> = [
+    a.name,
+    a.location_notes,
+    a.room_number,
+    a.notes,
+  ];
+  const v = a.vendor_contact as
+    | { name?: string | null; company?: string | null }
+    | null
+    | undefined;
+  if (v) {
+    haystacks.push(v.name);
+    haystacks.push(v.company);
+  }
+  for (const h of haystacks) {
+    if (h && h.toLowerCase().includes(q)) return true;
+  }
+  return false;
+}
 

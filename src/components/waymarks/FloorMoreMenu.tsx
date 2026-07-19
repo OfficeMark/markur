@@ -10,6 +10,8 @@ import {
   Download,
   Eye,
   Footprints,
+  Video,
+  Trash2,
 } from 'lucide-react';
 import { PLAN_PROVENANCE_OPTIONS } from '@/lib/plan-provenance';
 import { useSetFloorProvenance } from '@/hooks/useFloors';
@@ -17,9 +19,10 @@ import { useSetFloorPinsLocked } from '@/hooks/useAssets';
 
 /**
  * Floor toolbar "⋯ More" overflow (reskin). A single Radix DropdownMenu holding
- * the rarely-used plan actions the tightened header tucks away: Replace plan,
- * Plan source (provenance, as a radio submenu), and Lock/Unlock all pins.
- * Delete-floor lives on the building Trash page now — not here (Slice 3).
+ * the rarely-used plan actions the tightened header tucks away: Record video
+ * walkthrough, Replace plan, Plan source (provenance, as a radio submenu),
+ * Lock/Unlock all pins, and — for those who can — a floor-level Delete floor at
+ * the foot (the building Trash page keeps its own delete too).
  *
  * All data goes through the per-table floor/asset hooks — no bundles.
  */
@@ -35,6 +38,9 @@ export function FloorMoreMenu({
   onEditPath,
   offline,
   onVisualize,
+  onRecordVideo,
+  canDeleteFloor,
+  onDeleteFloor,
 }: {
   floorId: string;
   buildingId?: string;
@@ -53,6 +59,12 @@ export function FloorMoreMenu({
   offline?: { cached: boolean; busy: boolean; onToggle: () => void };
   /** When provided, a Visualize item is shown (collapses here below lg). */
   onVisualize?: () => void;
+  /** Open the floor-level video walkthrough recorder. Editors only. */
+  onRecordVideo?: () => void;
+  /** Whether the current user may delete this floor. Gates the Delete-floor item. */
+  canDeleteFloor?: boolean;
+  /** Open the floor delete confirmation (name-typed StepUpDialog in Floor.tsx). */
+  onDeleteFloor?: () => void;
 }) {
   const setProvenance = useSetFloorProvenance(floorId, buildingId);
   const setPinsLocked = useSetFloorPinsLocked(floorId);
@@ -102,7 +114,14 @@ export function FloorMoreMenu({
             </DropdownMenu.Item>
           )}
 
-          {(offline || onVisualize) && (canUploadPlan || canEditPins) && (
+          {onRecordVideo && (
+            <DropdownMenu.Item className={itemCls} onSelect={onRecordVideo}>
+              <Video size={14} aria-hidden className="text-text-muted" />
+              Record walkthrough
+            </DropdownMenu.Item>
+          )}
+
+          {(offline || onVisualize || onRecordVideo) && (canUploadPlan || canEditPins) && (
             <DropdownMenu.Separator className="my-1 h-px bg-black/10 dark:bg-white/10" />
           )}
 
@@ -173,6 +192,19 @@ export function FloorMoreMenu({
               )}
               {allPinsLocked ? 'Unlock all pins' : 'Lock all pins'}
             </DropdownMenu.Item>
+          )}
+
+          {canDeleteFloor && onDeleteFloor && (
+            <>
+              <DropdownMenu.Separator className="my-1 h-px bg-black/10 dark:bg-white/10" />
+              <DropdownMenu.Item
+                className="flex cursor-pointer items-center gap-2 rounded-md px-2 py-1.5 text-sm text-danger outline-none data-[highlighted]:bg-danger-bg"
+                onSelect={onDeleteFloor}
+              >
+                <Trash2 size={14} aria-hidden />
+                Delete floor
+              </DropdownMenu.Item>
+            </>
           )}
         </DropdownMenu.Content>
       </DropdownMenu.Portal>

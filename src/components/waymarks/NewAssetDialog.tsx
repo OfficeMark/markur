@@ -3,14 +3,16 @@ import * as Dialog from '@radix-ui/react-dialog';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
-import { Camera, FileImage, X, AlertCircle, Trash2, Check, Layers, Video, Tag, MapPin, Bell, Wrench } from 'lucide-react';
+import { Camera, FileImage, X, AlertCircle, Trash2, Check, Layers, Video, Tag, MapPin, Bell, Wrench, Info, Plus } from 'lucide-react';
 import { Button } from '@/components/ui/Button';
 import { Band } from '@/components/ui/Band';
+import { Tooltip } from '@/components/ui/Tooltip';
 import { useAssets, useCreateAsset, useUpdateAsset } from '@/hooks/useAssets';
 import { useContacts } from '@/hooks/useContacts';
 import { useFloors } from '@/hooks/useFloors';
 import { useAddAuditVideo } from '@/hooks/useAuditVideos';
 import { listAssetsByFloor, type AssetCategory } from '@/lib/queries/assets';
+import { formatPinNumber } from '@/lib/pin-types';
 import { addAssetPhoto, validateAssetPhotoFile } from '@/lib/queries/asset-photos';
 import {
   AuditVideoRecorderDialog,
@@ -31,11 +33,15 @@ import type { Asset } from '@/types/database';
 // when the user has the info to fill in.
 const schema = z.object({
   type: z.string().max(60).optional(),
-  name: z.string().max(80, 'Up to 80 characters').optional(),
+  // Name / room_number / notes store in unlimited Postgres `text` columns, so
+  // the caps are purely a front-end guard. The old 80-char caps surfaced as an
+  // "Up to 80 characters" save block on longer descriptive text, so they're now
+  // generous. Notes has a high ceiling only to guard an accidental large paste.
+  name: z.string().max(200, 'Up to 200 characters').optional(),
   zone: z.string().max(120, 'Up to 120 characters').optional(),
   location_notes: z.string().max(280, 'Up to 280 characters').optional(),
-  room_number: z.string().max(80, 'Up to 80 characters').optional(),
-  notes: z.string().max(4000, 'Up to 4000 characters').optional(),
+  room_number: z.string().max(200, 'Up to 200 characters').optional(),
+  notes: z.string().max(20000, 'Up to 20000 characters').optional(),
 });
 
 type FormValues = z.infer<typeof schema>;
@@ -136,6 +142,7 @@ export function NewAssetDialog({
     formState: { errors, isSubmitting },
     reset,
     setValue,
+    watch,
   } = useForm<FormValues>({
     resolver: zodResolver(schema),
     mode: 'onTouched',
@@ -148,6 +155,10 @@ export function NewAssetDialog({
       notes: '',
     },
   });
+
+  // Item 9: the pill picker highlights the active type and shows its colour.
+  const selectedType = watch('type');
+  const selectedTypeMeta = allTypes.find((t) => t.key === selectedType) ?? null;
 
   // Edit mode: hydrate the form from the asset each time the dialog opens.
   // Add mode: clear the folded-in (non-RHF) fields.
@@ -462,101 +473,31 @@ export function NewAssetDialog({
             </Band>
 
             <Band icon={Tag} label="What it is">
-            <Field
-              label="Asset type"
-              htmlFor="asset-type"
+            {/* Item 9: searchable pill picker — each type shows its colour dot
+                so the user sees what colour the pin will be. Replaces the plain
+                <select>, which hid the colours. Custom-type flow preserved. */}
+            <TypePicker
+              query={typeQuery}
+              onQuery={setTypeQuery}
+              signage={filteredSignage}
+              facility={filteredFacility}
+              selectedKey={selectedType ?? ''}
+              selectedMeta={selectedTypeMeta}
+              onSelect={(key) => setValue('type', key, { shouldValidate: true })}
               error={errors.type?.message}
-              hint="Optional. Pick from the list, add a custom one, or skip."
-            >
-              <input
-                type="text"
-                value={typeQuery}
-                onChange={(e) => setTypeQuery(e.target.value)}
-                placeholder="Pick a type, or add a new one — Directory, Stairwell ID, Fire extinguisher…"
-                className="mb-1.5 h-9 w-full rounded-md border border-black/10 bg-surface px-3 text-sm text-text outline-none focus:border-waymarks-gold focus:ring-2 focus:ring-waymarks-gold dark:border-white/10"
-              />
-              <select
-                id="asset-type"
-                {...register('type')}
-                onChange={(e) => {
-                  if (e.target.value === '__custom__') {
-                    e.preventDefault();
-                    setValue('type', '');
-                    setCustomTypeMode(true);
-                    return;
-                  }
-                  setValue('type', e.target.value);
-                }}
-                className="h-11 w-full rounded-md border border-black/10 bg-surface px-3 text-sm text-text outline-none focus:border-waymarks-gold focus:ring-2 focus:ring-waymarks-gold dark:border-white/10"
-              >
-                <option value="">Choose a type… (optional)</option>
-                {filteredSignage.length > 0 && (
-                  <optgroup label="Signage">
-                    {filteredSignage.map((t) => (
-                      <option key={t.id} value={t.key}>
-                        {t.label}
-                      </option>
-                    ))}
-                  </optgroup>
-                )}
-                {filteredFacility.length > 0 && (
-                  <optgroup label="Facility">
-                    {filteredFacility.map((t) => (
-                      <option key={t.id} value={t.key}>
-                        {t.label}
-                      </option>
-                    ))}
-                  </optgroup>
-                )}
-                <option value="__custom__">+ Add custom type…</option>
-              </select>
-              {customTypeMode && (
-                <div className="mt-2 space-y-1.5 rounded-md border border-waymarks-gold/40 bg-waymarks-gold-soft p-3">
-                  <label htmlFor="custom-type-label" className="block text-[11px] font-medium uppercase tracking-[0.18em] text-waymarks-gold">
-                    New custom type
-                  </label>
-                  <div className="flex gap-2">
-                    <input
-                      id="custom-type-label"
-                      value={customTypeLabel}
-                      onChange={(e) => setCustomTypeLabel(e.target.value)}
-                      maxLength={60}
-                      // eslint-disable-next-line jsx-a11y/no-autofocus -- intentional: focuses the field when this inline editor opens
-                      autoFocus
-                      placeholder="e.g. Memorial bench"
-                      className="h-9 flex-1 rounded-md border border-black/10 bg-surface px-3 text-sm text-text outline-none focus:border-waymarks-gold focus:ring-1 focus:ring-waymarks-gold"
-                    />
-                    <Button
-                      size="sm"
-                      variant="gold"
-                      loading={createAssetType.isPending}
-                      onClick={() => void saveCustomType()}
-                      iconLeft={<Check size={12} aria-hidden />}
-                    >
-                      Save
-                    </Button>
-                    <Button
-                      size="sm"
-                      variant="secondary"
-                      onClick={() => {
-                        setCustomTypeMode(false);
-                        setCustomTypeLabel('');
-                        setCustomTypeError(null);
-                      }}
-                    >
-                      Cancel
-                    </Button>
-                  </div>
-                  {customTypeError && (
-                    <p className="text-xs text-danger">{customTypeError}</p>
-                  )}
-                  <p className="text-[11px] text-text-muted">
-                    Saved to your org's catalog and reusable for future assets.
-                    Color and category can be tuned in admin later.
-                  </p>
-                </div>
-              )}
-            </Field>
+              customMode={customTypeMode}
+              onStartCustom={() => setCustomTypeMode(true)}
+              customLabel={customTypeLabel}
+              onCustomLabel={setCustomTypeLabel}
+              customError={customTypeError}
+              customPending={createAssetType.isPending}
+              onSaveCustom={() => void saveCustomType()}
+              onCancelCustom={() => {
+                setCustomTypeMode(false);
+                setCustomTypeLabel('');
+                setCustomTypeError(null);
+              }}
+            />
 
             <Field label="Name" htmlFor="asset-name" error={errors.name?.message}>
               <input
@@ -566,6 +507,23 @@ export function NewAssetDialog({
                 className="h-11 w-full rounded-md border border-black/10 bg-surface px-3 text-sm text-text outline-none focus:border-waymarks-gold focus:ring-2 focus:ring-waymarks-gold dark:border-white/10"
               />
             </Field>
+
+            {/* Item 6: pin number is assigned automatically and read-only.
+                Shown only when editing an existing asset. */}
+            {isEdit && asset && (
+              <Field label="Pin number" htmlFor="asset-pin" hint="Assigned automatically — not editable.">
+                <input
+                  id="asset-pin"
+                  readOnly
+                  value={
+                    formatPinNumber(asset.pin_number)
+                      ? `#${formatPinNumber(asset.pin_number)}`
+                      : 'Not yet assigned'
+                  }
+                  className="h-11 w-full cursor-not-allowed rounded-md border border-black/10 bg-bg px-3 text-sm text-text-muted outline-none dark:border-white/10"
+                />
+              </Field>
+            )}
 
             <Field
               label="Install & service notes"
@@ -591,6 +549,7 @@ export function NewAssetDialog({
               htmlFor="asset-zone"
               error={errors.zone?.message}
               hint="Optional. e.g. Reception, Parkade, Wing B, or a department."
+              tooltip="A grouping for this pin — e.g. Reception, Parkade, Wing B, or a department name. Optional; filterable later."
             >
               <input
                 id="asset-zone"
@@ -753,25 +712,198 @@ function Field({
   htmlFor,
   error,
   hint,
+  tooltip,
   children,
 }: {
   label: string;
   htmlFor: string;
   error?: string;
   hint?: string;
+  /** Optional hover note shown via an info icon beside the label. */
+  tooltip?: string;
   children: React.ReactNode;
 }) {
   return (
     <div className="space-y-1.5">
-      <label
-        htmlFor={htmlFor}
-        className="block text-xs font-medium uppercase tracking-[0.18em] text-text-faint"
-      >
-        {label}
-      </label>
+      <div className="flex items-center gap-1">
+        <label
+          htmlFor={htmlFor}
+          className="block text-xs font-medium uppercase tracking-[0.18em] text-text-faint"
+        >
+          {label}
+        </label>
+        {tooltip && (
+          <Tooltip text={tooltip}>
+            <button
+              type="button"
+              className="inline-flex cursor-help text-text-faint hover:text-text-muted"
+              aria-label={tooltip}
+            >
+              <Info size={12} aria-hidden />
+            </button>
+          </Tooltip>
+        )}
+      </div>
       {children}
       {hint && !error && <p className="text-xs text-text-faint">{hint}</p>}
       {error && <p className="text-xs text-danger">{error}</p>}
+    </div>
+  );
+}
+
+type TypeMeta = { id: string; key: string; label: string; color: string };
+
+/**
+ * Item 9: searchable type picker rendered as legend pills — each a colour dot +
+ * label matching the floor legend, so the user sees exactly which colour their
+ * pin will be. Filter narrows the catalog; a "+ Custom type" pill opens the
+ * inline creator. Replaces the plain <select> (which hid the colours).
+ */
+function TypePicker({
+  query,
+  onQuery,
+  signage,
+  facility,
+  selectedKey,
+  selectedMeta,
+  onSelect,
+  error,
+  customMode,
+  onStartCustom,
+  customLabel,
+  onCustomLabel,
+  customError,
+  customPending,
+  onSaveCustom,
+  onCancelCustom,
+}: {
+  query: string;
+  onQuery: (q: string) => void;
+  signage: TypeMeta[];
+  facility: TypeMeta[];
+  selectedKey: string;
+  selectedMeta: TypeMeta | null;
+  onSelect: (key: string) => void;
+  error?: string;
+  customMode: boolean;
+  onStartCustom: () => void;
+  customLabel: string;
+  onCustomLabel: (v: string) => void;
+  customError: string | null;
+  customPending: boolean;
+  onSaveCustom: () => void;
+  onCancelCustom: () => void;
+}) {
+  return (
+    <div className="space-y-1.5">
+      <span className="block text-xs font-medium uppercase tracking-[0.18em] text-text-faint">
+        Asset type
+      </span>
+      <input
+        type="text"
+        value={query}
+        onChange={(e) => onQuery(e.target.value)}
+        placeholder={
+          selectedMeta ? `Selected: ${selectedMeta.label} — search to change…` : 'Search types…'
+        }
+        className="h-9 w-full rounded-md border border-black/10 bg-surface px-3 text-sm text-text outline-none focus:border-waymarks-gold focus:ring-2 focus:ring-waymarks-gold dark:border-white/10"
+      />
+      <div className="max-h-40 space-y-2 overflow-y-auto rounded-md border border-black/10 p-2 dark:border-white/10">
+        <TypePillGroup heading="Signage" types={signage} selectedKey={selectedKey} onSelect={onSelect} />
+        <TypePillGroup heading="Facility" types={facility} selectedKey={selectedKey} onSelect={onSelect} />
+        {!customMode && (
+          <button
+            type="button"
+            onClick={onStartCustom}
+            className="inline-flex items-center gap-1 rounded-full border border-dashed border-waymarks-gold/50 px-2.5 py-1 text-xs font-medium text-waymarks-gold hover:bg-waymarks-gold-soft"
+          >
+            <Plus size={12} aria-hidden /> Custom type
+          </button>
+        )}
+      </div>
+      <p className="text-xs text-text-faint">Optional. Pick from the list, add a custom one, or skip.</p>
+      {error && <p className="text-xs text-danger">{error}</p>}
+      {customMode && (
+        <div className="space-y-1.5 rounded-md border border-waymarks-gold/40 bg-waymarks-gold-soft p-3">
+          <label
+            htmlFor="custom-type-label"
+            className="block text-[11px] font-medium uppercase tracking-[0.18em] text-waymarks-gold"
+          >
+            New custom type
+          </label>
+          <div className="flex gap-2">
+            <input
+              id="custom-type-label"
+              value={customLabel}
+              onChange={(e) => onCustomLabel(e.target.value)}
+              maxLength={60}
+              // eslint-disable-next-line jsx-a11y/no-autofocus -- intentional: focuses the field when this inline editor opens
+              autoFocus
+              placeholder="e.g. Memorial bench"
+              className="h-9 flex-1 rounded-md border border-black/10 bg-surface px-3 text-sm text-text outline-none focus:border-waymarks-gold focus:ring-1 focus:ring-waymarks-gold"
+            />
+            <Button size="sm" variant="gold" loading={customPending} onClick={onSaveCustom} iconLeft={<Check size={12} aria-hidden />}>
+              Save
+            </Button>
+            <Button size="sm" variant="secondary" onClick={onCancelCustom}>
+              Cancel
+            </Button>
+          </div>
+          {customError && <p className="text-xs text-danger">{customError}</p>}
+          <p className="text-[11px] text-text-muted">
+            Saved to your org's catalog and reusable for future assets. Color and category can be
+            tuned in admin later.
+          </p>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function TypePillGroup({
+  heading,
+  types,
+  selectedKey,
+  onSelect,
+}: {
+  heading: string;
+  types: TypeMeta[];
+  selectedKey: string;
+  onSelect: (key: string) => void;
+}) {
+  if (types.length === 0) return null;
+  return (
+    <div>
+      <p className="mb-1 text-[10px] font-medium uppercase tracking-[0.16em] text-text-faint">
+        {heading}
+      </p>
+      <ul className="flex flex-wrap gap-1.5">
+        {types.map((t) => {
+          const active = t.key === selectedKey;
+          return (
+            <li key={t.id}>
+              <button
+                type="button"
+                onClick={() => onSelect(t.key)}
+                aria-pressed={active}
+                className={cn(
+                  'inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs transition-colors',
+                  active
+                    ? 'border-waymarks-ink bg-waymarks-ink/5 font-medium dark:border-white dark:bg-white/10'
+                    : 'border-black/10 hover:bg-black/5 dark:border-white/15 dark:hover:bg-white/5'
+                )}
+              >
+                <span
+                  aria-hidden
+                  style={{ backgroundColor: t.color }}
+                  className="inline-block h-2.5 w-2.5 rounded-full border border-white shadow-sm"
+                />
+                {t.label}
+              </button>
+            </li>
+          );
+        })}
+      </ul>
     </div>
   );
 }

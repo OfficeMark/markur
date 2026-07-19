@@ -90,13 +90,6 @@ export type AssetDrawerProps = {
    * to cover the floor. Only wired when the user can run an audit.
    */
   onStartAuditHere?: (assetId: string) => void;
-  /**
-   * Guest viewer (building share link): hides the optional/internal surfaces a
-   * client shouldn't see — Visualize, Order Signs, vendor details, attachments,
-   * audit videos, and the activity timeline. Edit affordances are already
-   * suppressed via useCan (a viewer grant returns false for every write cap).
-   */
-  guest?: boolean;
 };
 
 const STATUS_OPTIONS: Array<{ value: AssetStatus; label: string; icon: typeof Check }> = [
@@ -141,23 +134,47 @@ export function AssetDrawer({
   // Full-screen zoomable viewer for the pin's photos (opened from the hero).
   const [photoViewerOpen, setPhotoViewerOpen] = useState(false);
   const [photoError, setPhotoError] = useState<string | null>(null);
+  // Tracks an in-flight upload batch ({done, total}). Uploads are sequential, so
+  // a slow batch (esp. HEIC conversion) used to look stuck — picking again while
+  // it ran started a SECOND batch and piled extra photos onto the pin. We now
+  // ignore + disable new picks until the batch finishes, and show its progress.
+  const [uploadBatch, setUploadBatch] = useState<{ done: number; total: number } | null>(null);
+  // Instant local previews: show each picked photo from the local File the moment
+  // it's added, so the surveyor never waits on the upload round-trip. Cleared (and
+  // the object URL revoked) once its upload lands.
+  const [pendingPhotos, setPendingPhotos] = useState<{ localId: string; url: string }[]>([]);
 
   async function onPickPhotos(list: FileList | null) {
-    if (!list) return;
+    // Re-entrancy guard: ignore new picks while a batch is still uploading.
+    if (!list || uploadBatch) return;
     setPhotoError(null);
-    for (const file of Array.from(list)) {
+    const files = Array.from(list);
+    setUploadBatch({ done: 0, total: files.length });
+    let done = 0;
+    for (const raw of files) {
+      // S8: HEIC converts to JPEG on-device before upload (image-convert.ts).
+      const file = await prepareForUpload(raw);
       const v = validateAssetPhotoFile(file);
       if (v) {
         setPhotoError(v);
+        setUploadBatch({ done: (done += 1), total: files.length });
         continue;
       }
+      // Show the photo immediately from the local file while it uploads.
+      const localId = crypto.randomUUID();
+      const previewUrl = URL.createObjectURL(file);
+      setPendingPhotos((p) => [...p, { localId, url: previewUrl }]);
       try {
-        // S8: HEIC converts to JPEG on-device before upload (image-convert.ts).
-        await addPhoto.mutateAsync(await prepareForUpload(file));
+        await addPhoto.mutateAsync(file);
       } catch (e) {
         setPhotoError(e instanceof Error ? e.message : 'Upload failed.');
+      } finally {
+        setPendingPhotos((p) => p.filter((x) => x.localId !== localId));
+        URL.revokeObjectURL(previewUrl);
       }
+      setUploadBatch({ done: (done += 1), total: files.length });
     }
+    setUploadBatch(null);
   }
   async function onDeletePhoto(p: AssetPhoto) {
     setPhotoError(null);
@@ -247,7 +264,8 @@ export function AssetDrawer({
                           active={safeActive}
                           loading={photosLoading}
                           canEdit={canEdit}
-                          adding={addPhoto.isPending}
+                          batch={uploadBatch}
+                          pending={pendingPhotos}
                           error={photoError}
                           onSelect={setActivePhoto}
                           onPick={onPickPhotos}
@@ -259,11 +277,15 @@ export function AssetDrawer({
                           onRecordClick={canEdit ? () => setRecordOpen(true) : undefined}
                         />
                         <AssetAttachmentsPanel assetId={asset.id} canEdit={canEdit} />
-                        <VisualizeRow
-                          buildingName={building?.name ?? 'Building'}
-                          floorLabel={floor?.label ?? ''}
-                          pinValue={asset.room_number?.trim() || asset.name}
-                        />
+                        {/* Visualize-on-a-wall is a signage mock-up tool — not
+                            relevant to facility pins (stairwells, service rooms). */}
+                        {asset.category === 'signage' && (
+                          <VisualizeRow
+                            buildingName={building?.name ?? 'Building'}
+                            floorLabel={floor?.label ?? ''}
+                            pinValue={asset.room_number?.trim() || asset.name}
+                          />
+                        )}
                       </>
                     ),
                   },
@@ -301,6 +323,10 @@ export function AssetDrawer({
                         <QuickActions
                           asset={asset}
                           canAudit={canAudit}
+                          canEdit={canEdit}
+                          onSetStatus={(status) =>
+                            update.mutate({ id: asset.id, patch: { status } })
+                          }
                           onLogFlag={onLogFlag ? () => onLogFlag(asset.id) : undefined}
                           onStartAuditHere={
                             onStartAuditHere ? () => onStartAuditHere(asset.id) : undefined
@@ -854,7 +880,8 @@ function PhotoStrip({
   active,
   loading,
   canEdit,
-  adding,
+  batch,
+  pending,
   error,
   onSelect,
   onPick,
@@ -863,11 +890,16 @@ function PhotoStrip({
   active: number;
   loading: boolean;
   canEdit: boolean;
-  adding: boolean;
+  batch: { done: number; total: number } | null;
+  pending: { localId: string; url: string }[];
   error: string | null;
   onSelect: (i: number) => void;
   onPick: (list: FileList | null) => void;
 }) {
+  const uploading = !!batch;
+  const addLabel = batch
+    ? `Uploading ${Math.min(batch.done + 1, batch.total)} of ${batch.total}…`
+    : 'Add photo';
   return (
     <div className="space-y-2.5">
       {photos.length > 0 ? (
@@ -877,26 +909,54 @@ function PhotoStrip({
           ))}
         </div>
       ) : (
-        !loading && <p className="text-xs text-text-faint">No photos yet.</p>
+        !loading && pending.length === 0 && <p className="text-xs text-text-faint">No photos yet.</p>
+      )}
+
+      {/* Instant local previews of files still uploading. */}
+      {pending.length > 0 && (
+        <div className="flex gap-1.5 overflow-x-auto">
+          {pending.map((p) => (
+            <div
+              key={p.localId}
+              className="relative h-12 w-12 shrink-0 overflow-hidden rounded-md border border-black/10 dark:border-white/10"
+            >
+              <img src={p.url} alt="" className="h-full w-full object-cover opacity-70" />
+              <div className="absolute inset-0 flex items-center justify-center bg-black/25">
+                <span className="h-3.5 w-3.5 animate-spin rounded-full border-2 border-white border-t-transparent" />
+              </div>
+            </div>
+          ))}
+        </div>
       )}
 
       {canEdit && (
         <div className="flex flex-wrap gap-2">
-          <label className="inline-flex h-9 cursor-pointer items-center gap-1.5 rounded-lg bg-accent px-3 text-xs font-semibold text-white shadow-sm hover:bg-accent/90">
+          <label
+            className={cn(
+              'inline-flex h-9 items-center gap-1.5 rounded-lg bg-accent px-3 text-xs font-semibold text-white shadow-sm hover:bg-accent/90',
+              uploading ? 'pointer-events-none opacity-60' : 'cursor-pointer'
+            )}
+          >
             <Plus size={13} aria-hidden />
-            <span>{adding ? 'Uploading…' : 'Add photo'}</span>
+            <span>{addLabel}</span>
             <input
               type="file"
               accept="image/*"
               capture="environment"
               className="sr-only"
+              disabled={uploading}
               onChange={(e) => {
                 onPick(e.target.files);
                 e.target.value = '';
               }}
             />
           </label>
-          <label className="inline-flex h-9 cursor-pointer items-center gap-1.5 rounded-lg border-[1.5px] border-black/15 bg-surface px-3 text-xs font-medium text-text hover:bg-black/5 dark:border-white/15 dark:hover:bg-white/5">
+          <label
+            className={cn(
+              'inline-flex h-9 items-center gap-1.5 rounded-lg border-[1.5px] border-black/15 bg-surface px-3 text-xs font-medium text-text hover:bg-black/5 dark:border-white/15 dark:hover:bg-white/5',
+              uploading ? 'pointer-events-none opacity-60' : 'cursor-pointer'
+            )}
+          >
             <Pencil size={13} aria-hidden />
             <span>Choose files</span>
             <input
@@ -904,6 +964,7 @@ function PhotoStrip({
               accept={PHOTO_ACCEPT}
               multiple
               className="sr-only"
+              disabled={uploading}
               onChange={(e) => {
                 onPick(e.target.files);
                 e.target.value = '';
@@ -1031,6 +1092,12 @@ function WhereItIsBody({
     <>
       {asset.room_number?.trim() && <ReadField label="Room">{asset.room_number}</ReadField>}
       {asset.zone?.trim() && <ReadField label="Layer">{asset.zone}</ReadField>}
+      {asset.location_notes?.trim() && (
+        <p className="flex items-start gap-1.5 text-sm text-text-muted">
+          <MapPin size={12} aria-hidden className="mt-1 shrink-0" />
+          <span>{asset.location_notes}</span>
+        </p>
+      )}
       <PinMeta asset={asset} />
       {canEdit && (
         <>
