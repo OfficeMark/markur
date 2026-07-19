@@ -1,24 +1,21 @@
 import { test, expect } from '@playwright/test';
 
 /**
- * Mobile horizontal-overflow regression guard (Part 0 of the guest-viewer work).
- * "Every page requires pinch-zoom" is caused by an element wider than the
- * viewport — so we assert, at the two tightest phone widths, that the document
- * never scrolls horizontally. Covers the public + guest-claim shells (which
- * exercise GuestLayout). The authenticated app + the claimed guest building/
- * floor were verified clean on demo via the live admin→claim flow (they need a
- * session, so they aren't hermetic enough for the default check run).
+ * Mobile horizontal-overflow regression guard. "Every page requires pinch-zoom"
+ * is caused by an element wider than the viewport — so we assert, at the two
+ * tightest phone widths, that the document never scrolls horizontally. Covers
+ * the public auth shells. The authenticated app needs a session, so it isn't
+ * hermetic enough for the default check run and is verified live on demo.
  *
- * Routes here are hermetic: static pages, the auth shells, and the guest claim
- * screen with a deliberately-invalid token (renders GuestLayout + the
- * "unavailable" card via a harmless peek — no data created).
+ * Routes here are hermetic: static legal pages and the auth shells.
+ * (The guest view-only share route was retired 2026-07-19 — demo-links are the
+ * one share model — so it's no longer exercised here.)
  */
 const ROUTES = [
   '/login',
   '/reset-password',
   '/legal/privacy',
   '/legal/terms',
-  '/share/this-token-does-not-exist',
 ];
 
 const WIDTHS = [390, 360];

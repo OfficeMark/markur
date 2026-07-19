@@ -109,9 +109,6 @@ const BuildingSettings = lazyWithReload(() =>
 const AcceptInvitation = lazyWithReload(() =>
   import('@/routes/AcceptInvitation').then((m) => ({ default: m.AcceptInvitation }))
 );
-const BuildingShare = lazyWithReload(() =>
-  import('@/routes/BuildingShare').then((m) => ({ default: m.BuildingShare }))
-);
 const Welcome = lazyWithReload(() => import('@/routes/Welcome').then((m) => ({ default: m.Welcome })));
 const Help = lazyWithReload(() => import('@/routes/Help').then((m) => ({ default: m.Help })));
 const Settings = lazyWithReload(() => import('@/routes/Settings').then((m) => ({ default: m.Settings })));
@@ -356,7 +353,6 @@ export default function App() {
                     <Route path="deleted-buildings" element={<AdminDeletedBuildingsPane />} />
                   </Route>
                   <Route path="/accept/:token" element={<AcceptInvitation />} />
-                  <Route path="/share/:token" element={<BuildingShare />} />
                   <Route path="/welcome/:token" element={<Welcome />} />
                   <Route path="/legal/privacy" element={<Privacy />} />
                   <Route path="/legal/terms" element={<Terms />} />
