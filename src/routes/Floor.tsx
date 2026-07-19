@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type ComponentType } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
-import { AlertTriangle, ArrowLeft, ChevronLeft, ChevronRight, ClipboardCheck, FileDown, ImageOff, LayoutGrid, Map as MapIcon, Maximize2, MapPin, Minimize2, NotebookPen, Shapes, Trash2 } from 'lucide-react';
+import { AlertTriangle, ArrowLeft, ChevronLeft, ChevronRight, ClipboardCheck, FileDown, ImageOff, LayoutGrid, Map as MapIcon, Maximize2, MapPin, Minimize2, NotebookPen, Shapes, Trash2, Video } from 'lucide-react';
 import { AppShell } from '@/components/waymarks/AppShell';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { Button } from '@/components/ui/Button';
@@ -767,7 +767,6 @@ export function Floor() {
           : undefined
       }
       onVisualize={onVisualize}
-      onRecordVideo={canEdit ? () => setVideoRecorderOpen(true) : undefined}
       canDeleteFloor={canDeleteFloor}
       onDeleteFloor={() => {
         setDeleteFloorError(null);
@@ -852,6 +851,22 @@ export function Floor() {
     </Tooltip>
   ) : null;
 
+  // Floor-level video walkthrough — a top-level toolbar button (editor-gated),
+  // opens the recorder in deferred-capture mode (assetId=null → building scope).
+  const recordBtn = () => canEdit ? (
+    <Tooltip text="Record a video walkthrough of this floor">
+      <button
+        type="button"
+        onClick={() => setVideoRecorderOpen(true)}
+        aria-label="Record walkthrough"
+        className="inline-flex h-9 shrink-0 items-center gap-1.5 rounded-lg border border-black/15 bg-surface px-2 text-xs font-medium text-text-muted transition-colors hover:bg-black/5 hover:text-text sm:px-3 dark:border-white/15 dark:hover:bg-white/5"
+      >
+        <Video size={14} aria-hidden />
+        <span className="hidden sm:inline">Record</span>
+      </button>
+    </Tooltip>
+  ) : null;
+
   // Free-text pin filter (M22 #6). Fixed-width on desktop (sits in the filter
   // cluster); stretches full-width in the phone filter band below the toolbar.
   const textFilter = showFilters ? (
@@ -917,6 +932,7 @@ export function Floor() {
               {showFilters && <div className="hidden w-44 sm:block">{textFilter}</div>}
               {showFilters && <div className="hidden sm:block">{filterSeg()}</div>}
               {showFilters && <div className="sm:hidden">{combinedFilter}</div>}
+              {recordBtn()}
               {catalogueLink()}
               {/* Focus is a presentation feature; on phones the map already
                   fills the screen and the width belongs to the breadcrumb. */}

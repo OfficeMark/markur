@@ -10,7 +10,6 @@ import {
   Download,
   Eye,
   Footprints,
-  Video,
   Trash2,
 } from 'lucide-react';
 import { PLAN_PROVENANCE_OPTIONS } from '@/lib/plan-provenance';
@@ -19,10 +18,10 @@ import { useSetFloorPinsLocked } from '@/hooks/useAssets';
 
 /**
  * Floor toolbar "⋯ More" overflow (reskin). A single Radix DropdownMenu holding
- * the rarely-used plan actions the tightened header tucks away: Record video
- * walkthrough, Replace plan, Plan source (provenance, as a radio submenu),
- * Lock/Unlock all pins, and — for those who can — a floor-level Delete floor at
- * the foot (the building Trash page keeps its own delete too).
+ * the rarely-used plan actions the tightened header tucks away: Replace plan,
+ * Plan source (provenance, as a radio submenu), Lock/Unlock all pins, and — for
+ * those who can — a floor-level Delete floor at the foot (the building Trash
+ * page keeps its own delete too).
  *
  * All data goes through the per-table floor/asset hooks — no bundles.
  */
@@ -38,7 +37,6 @@ export function FloorMoreMenu({
   onEditPath,
   offline,
   onVisualize,
-  onRecordVideo,
   canDeleteFloor,
   onDeleteFloor,
 }: {
@@ -59,8 +57,6 @@ export function FloorMoreMenu({
   offline?: { cached: boolean; busy: boolean; onToggle: () => void };
   /** When provided, a Visualize item is shown (collapses here below lg). */
   onVisualize?: () => void;
-  /** Open the floor-level video walkthrough recorder. Editors only. */
-  onRecordVideo?: () => void;
   /** Whether the current user may delete this floor. Gates the Delete-floor item. */
   canDeleteFloor?: boolean;
   /** Open the floor delete confirmation (name-typed StepUpDialog in Floor.tsx). */
@@ -114,14 +110,7 @@ export function FloorMoreMenu({
             </DropdownMenu.Item>
           )}
 
-          {onRecordVideo && (
-            <DropdownMenu.Item className={itemCls} onSelect={onRecordVideo}>
-              <Video size={14} aria-hidden className="text-text-muted" />
-              Record walkthrough
-            </DropdownMenu.Item>
-          )}
-
-          {(offline || onVisualize || onRecordVideo) && (canUploadPlan || canEditPins) && (
+          {(offline || onVisualize) && (canUploadPlan || canEditPins) && (
             <DropdownMenu.Separator className="my-1 h-px bg-black/10 dark:bg-white/10" />
           )}
 
