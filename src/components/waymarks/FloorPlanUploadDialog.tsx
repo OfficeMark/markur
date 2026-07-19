@@ -33,6 +33,7 @@ import {
 } from '@/lib/plan-prep';
 import { PlanCropPanel } from '@/components/waymarks/PlanCropPanel';
 import { floorKeys } from '@/hooks/useFloors';
+import { bundleKeys } from '@/hooks/useBundles';
 import { useAssets } from '@/hooks/useAssets';
 import type { Json } from '@/types/database';
 import { cn } from '@/lib/utils';
@@ -241,13 +242,23 @@ export function FloorPlanUploadDialog({
       void removeSiblingPlate(floorId, path);
     },
     onSuccess: async () => {
-      // Refetch the floor row BEFORE closing. The mutation stays pending until
+      // Refetch the floor BEFORE closing. The mutation stays pending until
       // onSuccess settles, so the dialog holds its working spinner through the
       // refetch and the close lands directly on the new-plan swap — instead of
       // closing onto the stale plan for a beat, which read as "Replace did
-      // nothing" while the row + fresh signed URL caught up. The broad floors
-      // invalidation stays fire-and-forget; lists can refresh behind the swap.
-      await queryClient.invalidateQueries({ queryKey: floorKeys.detail(floorId) });
+      // nothing" while the row + fresh signed URL caught up.
+      //
+      // Floor.tsx reads the plan from the get_floor_view BUNDLE cache
+      // (['floor-view', id]) — its signed-URL key carries the plan_metadata
+      // refresh stamp, which only changes when that bundle refetches. Plan Prep
+      // rewrites the SAME plan_url (canonical plate slot), so invalidating just
+      // the per-table floorKeys.detail left the bundle — and the stamp — stale,
+      // and the replace only appeared after a hard reload. Invalidate the
+      // bundle too, and await it so the swap lands on fresh data.
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: bundleKeys.floorView(floorId) }),
+        queryClient.invalidateQueries({ queryKey: floorKeys.detail(floorId) }),
+      ]);
       void queryClient.invalidateQueries({ queryKey: floorKeys.all });
       onOpenChange(false);
     },
