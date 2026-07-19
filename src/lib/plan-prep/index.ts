@@ -28,6 +28,7 @@ export {
   produceDisplayPlate,
   rasterizeImageToPlate,
   rasterizePdfToPlate,
+  rotatePlateBlob,
   type CropRect,
   type DisplayPlate,
 } from './rasterize';

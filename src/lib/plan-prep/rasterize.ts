@@ -258,3 +258,32 @@ export async function cropPlateBlob(
     revoke();
   }
 }
+
+/**
+ * Rotate a display plate 90° (clockwise or counter-clockwise). A quarter turn
+ * swaps width/height, so the returned plate's dimensions are the source's
+ * transposed — callers persist these as the floor's width_px/height_px so the
+ * stored orientation matches the baked image. Pixel count is unchanged, so the
+ * result stays within the plate edge cap. Re-encodes via the same PNG/JPEG
+ * "smaller wins" path as the other plate producers.
+ */
+export async function rotatePlateBlob(
+  blob: Blob,
+  dir: 'cw' | 'ccw'
+): Promise<DisplayPlate> {
+  const { img, revoke } = await loadBlobImage(blob);
+  try {
+    const nw = img.naturalWidth || 1600;
+    const nh = img.naturalHeight || 1200;
+    // A 90° turn transposes the frame: the rotated plate is nh wide by nw tall.
+    const { canvas, ctx } = newCanvas(nh, nw);
+    ctx.save();
+    ctx.translate(canvas.width / 2, canvas.height / 2);
+    ctx.rotate((dir === 'cw' ? 90 : -90) * (Math.PI / 180));
+    ctx.drawImage(img, -nw / 2, -nh / 2, nw, nh);
+    ctx.restore();
+    return { blob: await encodePlateCanvas(canvas), width: canvas.width, height: canvas.height };
+  } finally {
+    revoke();
+  }
+}

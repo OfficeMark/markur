@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import * as Dialog from '@radix-ui/react-dialog';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
-import { AlertTriangle, Crop, FileText, Image as ImageIcon, PenTool, Sparkles, Upload, Wand2, X } from 'lucide-react';
+import { AlertTriangle, Crop, FileText, Image as ImageIcon, PenTool, RotateCcw, RotateCw, Sparkles, Upload, Wand2, X } from 'lucide-react';
 import { Button } from '@/components/ui/Button';
 import { supabase } from '@/lib/supabase';
 import {
@@ -25,6 +25,7 @@ import {
   cropPlateBlob,
   enhanceScanBlob,
   produceDisplayPlate,
+  rotatePlateBlob,
   stampPlanPrep,
   type CropRect,
   type DisplayPlate,
@@ -139,6 +140,7 @@ export function FloorPlanUploadDialog({
 }: FloorPlanUploadDialogProps) {
   const [stage, setStage] = useState<Stage>({ kind: 'pick' });
   const [dragOver, setDragOver] = useState(false);
+  const [rotating, setRotating] = useState(false);
   const inputRef = useRef<HTMLInputElement | null>(null);
   const autoRanRef = useRef(false);
   const queryClient = useQueryClient();
@@ -523,9 +525,40 @@ export function FloorPlanUploadDialog({
                 afterUrl={stage.afterUrl}
                 busy={upload.isPending}
                 pinSafe={hasPins}
+                rotating={rotating}
                 redrawHref={redrawMailto({ buildingName, floorLabel })}
                 onCancel={() => setStage({ kind: 'pick' })}
                 onKeepOriginal={() => startDefaultUpload(stage.file, stage.source)}
+                onRotate={
+                  hasPins
+                    ? undefined
+                    : async (dir) => {
+                        if (rotating) return;
+                        setRotating(true);
+                        try {
+                          // Rotate the working plate a quarter turn; the swapped
+                          // width/height ride along on the DisplayPlate, so accept
+                          // persists them as width_px/height_px.
+                          const rotated = await rotatePlateBlob(stage.enhanced.blob, dir);
+                          URL.revokeObjectURL(stage.afterUrl);
+                          setStage({
+                            ...stage,
+                            enhanced: rotated,
+                            afterUrl: URL.createObjectURL(rotated.blob),
+                          });
+                        } catch (err) {
+                          setStage({
+                            kind: 'error',
+                            message:
+                              err instanceof Error
+                                ? `Couldn't rotate this plan: ${err.message}`
+                                : "Couldn't rotate this plan.",
+                          });
+                        } finally {
+                          setRotating(false);
+                        }
+                      }
+                }
                 onAccept={() => {
                   setStage({ kind: 'processing', message: 'Saving the enhanced plan…' });
                   upload.mutate({
@@ -764,10 +797,18 @@ function ScanEnhancePanel(props: {
   busy: boolean;
   /** True on pinned floors: cleanup ran without deskew (pin-safe). */
   pinSafe: boolean;
+  /** A rotate is in flight (buttons disabled). */
+  rotating: boolean;
   redrawHref: string;
   onCancel: () => void;
   onKeepOriginal: () => void;
   onAccept: () => void;
+  /**
+   * Rotate the working plate 90°. Only supplied on pin-free floors — rotating
+   * under existing pins would scramble their coordinates, so it's gated exactly
+   * like crop.
+   */
+  onRotate?: (dir: 'cw' | 'ccw') => void;
 }) {
   return (
     <div className="space-y-4">
@@ -783,6 +824,29 @@ function ScanEnhancePanel(props: {
           <img src={props.afterUrl} alt="Enhanced plan" className="h-full w-full object-contain" />
         </ComparePane>
       </div>
+      {props.onRotate && (
+        <div className="flex items-center justify-center gap-2">
+          <span className="text-xs font-medium text-text-muted">Rotate 90°</span>
+          <Button
+            variant="secondary"
+            iconLeft={<RotateCcw size={14} aria-hidden />}
+            onClick={() => props.onRotate?.('ccw')}
+            disabled={props.busy || props.rotating}
+            aria-label="Rotate 90° left"
+          >
+            Left
+          </Button>
+          <Button
+            variant="secondary"
+            iconLeft={<RotateCw size={14} aria-hidden />}
+            onClick={() => props.onRotate?.('cw')}
+            disabled={props.busy || props.rotating}
+            aria-label="Rotate 90° right"
+          >
+            Right
+          </Button>
+        </div>
+      )}
       <div className="flex flex-wrap items-center justify-between gap-2 pt-1">
         <PlanRedrawLink href={props.redrawHref} />
         <div className="flex flex-wrap justify-end gap-2">
