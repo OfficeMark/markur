@@ -152,9 +152,42 @@ export function FloorPlanUploadDialog({
   const { data: assets } = useAssets(floorId);
   const hasPins = (assets?.length ?? 0) > 0;
 
+  // The display plate (capped raster) is what Crop, Clean-scan, and the default
+  // upload all consume, and producing it (raster + PNG/JPEG encode, up to
+  // MAX_PLATE_EDGE) is the expensive step. Produce it ONCE — prefetched in the
+  // background the moment the review screen appears — and reuse that promise
+  // everywhere, so it's off the Enhance/Crop click path (Randy's "choosing
+  // Enhance/Crop is slow" report). By the time the user reads the review
+  // options and clicks, the plate is usually already in hand.
+  const plateCacheRef = useRef<{ file: File; promise: Promise<DisplayPlate> } | null>(null);
+  const getPlate = useCallback((file: File, source: PlanSource): Promise<DisplayPlate> => {
+    const cached = plateCacheRef.current;
+    if (cached && cached.file === file) return cached.promise;
+    const t0 = import.meta.env.DEV ? performance.now() : 0;
+    const promise = produceDisplayPlate(file, source);
+    if (import.meta.env.DEV) {
+      void promise.then(
+        (p) =>
+          console.log(
+            `[plan-prep] plate produced in ${Math.round(performance.now() - t0)}ms (${p.width}x${p.height})`
+          ),
+        () => undefined
+      );
+    }
+    // Swallow rejection on the cached copy so an un-awaited prefetch (user
+    // cancels before choosing) never logs an unhandled rejection; every real
+    // consumer awaits and catches.
+    promise.catch(() => undefined);
+    plateCacheRef.current = { file, promise };
+    return promise;
+  }, []);
+
   // Reset state when the dialog opens / closes.
   useEffect(() => {
-    if (!open) setStage({ kind: 'pick' });
+    if (!open) {
+      setStage({ kind: 'pick' });
+      plateCacheRef.current = null;
+    }
   }, [open]);
 
   const writeFloorPlan = useCallback(
@@ -204,7 +237,7 @@ export function FloorPlanUploadDialog({
         enhanced = job.enhanced;
       } else {
         plate = await withTimeout(
-          produceDisplayPlate(job.file, job.source),
+          getPlate(job.file, job.source),
           PLATE_TIMEOUT_MS
         ).catch(() => null);
       }
@@ -302,6 +335,8 @@ export function FloorPlanUploadDialog({
       if (file.type !== 'application/pdf') {
         // Image/SVG: source 'image'. Default Upload produces a capped display
         // PNG; Crop and scan-cleanup Enhances are offered (pin-free floors).
+        // Prefetch the plate now (background) so Crop/Enhance are instant.
+        void getPlate(file, 'image');
         setStage({ kind: 'review', file, source: 'image', metadata: null, warnings: [] });
         return;
       }
@@ -311,6 +346,8 @@ export function FloorPlanUploadDialog({
       try {
         const metadata = await readPdfMetadata(file);
         const warnings = detectMismatch(metadata, { buildingName, floorLabel });
+        // Prefetch the plate now (background) so Crop/Enhance are instant.
+        void getPlate(file, 'vector');
         setStage({ kind: 'review', file, source: 'vector', metadata, warnings });
       } catch (err) {
         setStage({
@@ -320,7 +357,7 @@ export function FloorPlanUploadDialog({
         });
       }
     },
-    [buildingName, floorLabel, hasPins]
+    [buildingName, floorLabel, hasPins, getPlate]
   );
 
   // Open the scan cleanup Enhance. Runs on the baked display PNG, so it works
@@ -330,11 +367,14 @@ export function FloorPlanUploadDialog({
     async (file: File, source: PlanSource) => {
       setStage({ kind: 'processing', message: 'Enhancing your plan…' });
       try {
-        const before = await produceDisplayPlate(file, source);
+        const before = await getPlate(file, source);
         // Pin-safe on pinned floors: contrast + despeckle only (strictly
         // per-pixel). Deskew rotates content relative to the frame, which
         // would drift normalized pin coordinates — pin-free floors only.
+        const te = import.meta.env.DEV ? performance.now() : 0;
         const enhanced = await enhanceScanBlob(before.blob, { deskew: !hasPins });
+        if (import.meta.env.DEV)
+          console.log(`[plan-prep] scan enhance in ${Math.round(performance.now() - te)}ms`);
         setStage({
           kind: 'enhance-scan',
           file,
@@ -350,14 +390,14 @@ export function FloorPlanUploadDialog({
         });
       }
     },
-    [hasPins]
+    [hasPins, getPlate]
   );
 
   // Open Crop-to-plan: produce the full display plate and hand it to the crop UI.
   const openCrop = useCallback(async (file: File, source: PlanSource) => {
     setStage({ kind: 'processing', message: 'Preparing your floor plan…' });
     try {
-      const full = await produceDisplayPlate(file, source);
+      const full = await getPlate(file, source);
       setStage({ kind: 'enhance-crop', file, source, full, fullUrl: URL.createObjectURL(full.blob) });
     } catch (err) {
       setStage({
@@ -365,7 +405,7 @@ export function FloorPlanUploadDialog({
         message: err instanceof Error ? `Couldn't prepare this plan: ${err.message}` : "Couldn't prepare this plan.",
       });
     }
-  }, []);
+  }, [getPlate]);
 
   // Handoff path (e.g. from the Add-Floor modal): auto-run the shared handler on
   // the provided file once, when the dialog opens. Guarantees this entry point
