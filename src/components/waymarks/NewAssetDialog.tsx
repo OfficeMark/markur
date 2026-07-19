@@ -3,32 +3,14 @@ import * as Dialog from '@radix-ui/react-dialog';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
-import {
-  Camera,
-  FileImage,
-  X,
-  AlertCircle,
-  Trash2,
-  Check,
-  Layers,
-  Video,
-  MapPin,
-  Tag,
-  Bell,
-  Wrench,
-  Images,
-  Plus,
-  Info,
-  type LucideIcon,
-} from 'lucide-react';
+import { Camera, FileImage, X, AlertCircle, Trash2, Check, Layers, Video, Tag, MapPin, Bell, Wrench } from 'lucide-react';
 import { Button } from '@/components/ui/Button';
-import { Tooltip } from '@/components/ui/Tooltip';
-import { useCreateAsset, useAssets, useUpdateAsset } from '@/hooks/useAssets';
-import { useFloors } from '@/hooks/useFloors';
+import { Band } from '@/components/ui/Band';
+import { useAssets, useCreateAsset, useUpdateAsset } from '@/hooks/useAssets';
 import { useContacts } from '@/hooks/useContacts';
+import { useFloors } from '@/hooks/useFloors';
 import { useAddAuditVideo } from '@/hooks/useAuditVideos';
 import { listAssetsByFloor, type AssetCategory } from '@/lib/queries/assets';
-import { formatPinNumber } from '@/lib/pin-types';
 import { addAssetPhoto, validateAssetPhotoFile } from '@/lib/queries/asset-photos';
 import {
   AuditVideoRecorderDialog,
@@ -43,21 +25,17 @@ import type { Asset } from '@/types/database';
 // is provided by lib/pin-types.ts; the hook overlays org-specific
 // entries on top.
 
-// Asset-dialog redesign: every form field is optional. Type falls back to
-// 'other' (a seeded global) so the pin still renders with a category at the
-// DB. "Where on the floor" (location_notes) was merged into the single Notes
-// field, so it's no longer a separate input here. Vendor info lives in the
-// drawer's Vendors list, not this dialog.
+// M17b: every form field is optional. Type falls back to 'other' (a
+// seeded global) so the pin still renders with a category at the DB.
+// Vendor info is no longer in this dialog — added later in the drawer
+// when the user has the info to fill in.
 const schema = z.object({
   type: z.string().max(60).optional(),
-  // All of these store in unlimited Postgres `text` columns, so the caps are
-  // purely a front-end guard. The old 80-char caps on name/room_number surfaced
-  // as an "Up to 80 characters" save block when longer descriptive text was
-  // entered, so they're now generous. Notes is freeform with no practical limit
-  // (a high ceiling only to guard against an accidental multi-megabyte paste).
-  name: z.string().max(200, 'Up to 200 characters').optional(),
-  room_number: z.string().max(200, 'Up to 200 characters').optional(),
-  notes: z.string().max(20000, 'Up to 20000 characters').optional(),
+  name: z.string().max(80, 'Up to 80 characters').optional(),
+  zone: z.string().max(120, 'Up to 120 characters').optional(),
+  location_notes: z.string().max(280, 'Up to 280 characters').optional(),
+  room_number: z.string().max(80, 'Up to 80 characters').optional(),
+  notes: z.string().max(4000, 'Up to 4000 characters').optional(),
 });
 
 type FormValues = z.infer<typeof schema>;
@@ -74,7 +52,7 @@ export type NewAssetDialogProps = {
   /**
    * When supplied, the dialog is in EDIT mode: fields load from this asset,
    * the footer reads "Save changes", and submit updates the row in place.
-   * Add/Edit parity — one component, every field editable in both.
+   * Standalone-only capability folded into main's layout.
    */
   asset?: Asset | null;
 };
@@ -94,14 +72,19 @@ export function NewAssetDialog({
   const addVideo = useAddAuditVideo();
   const { signage: signageTypes, facility: facilityTypes, list: allTypes, orgId } = useAssetTypes();
   const createAssetType = useCreateAssetType();
+
+  // Standalone-only fields folded into main's layout: a directory contact,
+  // an installed date, and an audit cycle. Live outside RHF (select / dates).
   const contacts = useContacts();
-  // Only this building's contacts plus org-wide shared ones (M34b scope).
   const contactsInScope = contacts.list.filter(
     (c) => c.building_id === null || c.building_id === buildingId
   );
+  const [contactId, setContactId] = useState('');
+  const [installed, setInstalled] = useState('');
+  const [cycle, setCycle] = useState('');
 
-  // Zone suggestions: distinct zones already used on this floor (free-text,
-  // so this just speeds re-entry of an existing zone — it doesn't constrain).
+  // Zone suggestions: distinct zones already used on this floor (free-text —
+  // just speeds re-entry of an existing zone, doesn't constrain).
   const { data: floorAssets = [] } = useAssets(floorId);
   const zoneSuggestions = useMemo(() => {
     const seen = new Set<string>();
@@ -119,17 +102,26 @@ export function NewAssetDialog({
   const [selectedFloorIds, setSelectedFloorIds] = useState<Set<string>>(() => new Set([floorId]));
   const [result, setResult] = useState<{ created: number; skipped: string[] } | null>(null);
 
+  useEffect(() => {
+    if (open) {
+      setSelectedFloorIds(new Set([floorId]));
+      setResult(null);
+    }
+  }, [open, floorId]);
   const [customTypeMode, setCustomTypeMode] = useState(false);
   const [customTypeLabel, setCustomTypeLabel] = useState('');
   const [customTypeError, setCustomTypeError] = useState<string | null>(null);
   const [typeQuery, setTypeQuery] = useState('');
 
-  // Banded-dialog fields that live outside RHF (selects / datalist / chips).
-  const [zone, setZone] = useState('');
-  const [contactId, setContactId] = useState('');
-  const [installed, setInstalled] = useState('');
-  const [cycle, setCycle] = useState('');
-
+  // M18b: filter the dropdown groups by the query string. Case-insensitive
+  // substring match on the label. Keeps the catalog discoverable when there
+  // are 30+ types.
+  const filteredSignage = typeQuery
+    ? signageTypes.filter((t) => t.label.toLowerCase().includes(typeQuery.toLowerCase()))
+    : signageTypes;
+  const filteredFacility = typeQuery
+    ? facilityTypes.filter((t) => t.label.toLowerCase().includes(typeQuery.toLowerCase()))
+    : facilityTypes;
   const [photos, setPhotos] = useState<File[]>([]);
   // Item: videos are deferred-captured the same way photos are — collected
   // here, then attached to the new asset(s) after create.
@@ -138,74 +130,46 @@ export function NewAssetDialog({
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [photoErrors, setPhotoErrors] = useState<string[]>([]);
 
-  // M18b: filter the type catalog by the query string. Case-insensitive
-  // substring match on the label. Keeps it discoverable at 30+ types.
-  const filteredSignage = typeQuery
-    ? signageTypes.filter((t) => t.label.toLowerCase().includes(typeQuery.toLowerCase()))
-    : signageTypes;
-  const filteredFacility = typeQuery
-    ? facilityTypes.filter((t) => t.label.toLowerCase().includes(typeQuery.toLowerCase()))
-    : facilityTypes;
-
   const {
     register,
     handleSubmit,
     formState: { errors, isSubmitting },
     reset,
     setValue,
-    watch,
   } = useForm<FormValues>({
     resolver: zodResolver(schema),
     mode: 'onTouched',
-    defaultValues: { type: '', name: '', room_number: '', notes: '' },
+    defaultValues: {
+      type: '',
+      name: '',
+      zone: '',
+      location_notes: '',
+      room_number: '',
+      notes: '',
+    },
   });
 
-  const selectedType = watch('type');
-  const selectedTypeMeta = allTypes.find((t) => t.key === selectedType) ?? null;
-
-  function resetAll() {
-    reset();
-    setZone('');
-    setContactId('');
-    setInstalled('');
-    setCycle('');
-    setTypeQuery('');
-    setCustomTypeMode(false);
-    setCustomTypeLabel('');
-    setCustomTypeError(null);
-    setPhotos([]);
-    setVideos([]);
-    setPhotoErrors([]);
-    setSubmitError(null);
-  }
-
-  useEffect(() => {
-    if (open) {
-      setSelectedFloorIds(new Set([floorId]));
-      setResult(null);
-    }
-  }, [open, floorId]);
-
   // Edit mode: hydrate the form from the asset each time the dialog opens.
-  // "Where on the floor" (location_notes) merges into the single Notes field;
-  // on save it's written back to `notes` and location_notes is cleared.
+  // Add mode: clear the folded-in (non-RHF) fields.
   useEffect(() => {
-    if (!open || !asset) return;
-    const mergedNotes = [asset.location_notes, asset.notes]
-      .map((s) => s?.trim())
-      .filter(Boolean)
-      .join('\n\n');
-    reset({
-      type: asset.type,
-      name: asset.name ?? '',
-      room_number: asset.room_number ?? '',
-      notes: mergedNotes,
-    });
-    setZone(asset.zone ?? '');
-    setContactId(asset.contact_id ?? '');
-    setInstalled(asset.installed_at ?? '');
-    setCycle(asset.audit_cycle_days != null ? String(asset.audit_cycle_days) : '');
-    setTypeQuery('');
+    if (!open) return;
+    if (asset) {
+      reset({
+        type: asset.type,
+        name: asset.name ?? '',
+        zone: asset.zone ?? '',
+        location_notes: asset.location_notes ?? '',
+        room_number: asset.room_number ?? '',
+        notes: asset.notes ?? '',
+      });
+      setContactId(asset.contact_id ?? '');
+      setInstalled(asset.installed_at ?? '');
+      setCycle(asset.audit_cycle_days != null ? String(asset.audit_cycle_days) : '');
+    } else {
+      setContactId('');
+      setInstalled('');
+      setCycle('');
+    }
   }, [open, asset, reset]);
 
   function slugify(label: string): string {
@@ -265,44 +229,34 @@ export function NewAssetDialog({
   }
 
   async function onSubmit(values: FormValues) {
-    // Validate the optional audit cycle (positive whole number of days).
-    let cycleNum: number | null = null;
-    if (cycle.trim() !== '') {
-      const n = Number(cycle);
-      if (!Number.isFinite(n) || n < 0 || !Number.isInteger(n)) {
-        setSubmitError('Audit cycle must be a positive whole number of days.');
-        return;
-      }
-      cycleNum = n;
-    }
-
-    // Type optional, fallback to seeded 'other' so the pin still has a
-    // renderable category.
+    setSubmitError(null);
+    // M17b: type optional, fallback to seeded 'other' so the pin still has a
+    // renderable category. Vendor info is added later from the asset drawer.
     const finalType = (values.type ?? '').trim() || 'other';
     const finalCategory: AssetCategory =
       (allTypes.find((t) => t.key === finalType)?.category as AssetCategory) ?? 'signage';
-    const mergedNotes = values.notes?.trim() || null;
+    const cycleTrimmed = cycle.trim();
+    const cycleNum = cycleTrimmed && Number.isFinite(Number(cycleTrimmed)) ? Number(cycleTrimmed) : null;
 
-    // ----- EDIT: update the existing row in place -----
+    // ----- EDIT: update the existing row in place (standalone capability
+    // folded into main's layout) -----
     if (isEdit && asset) {
-      setSubmitError(null);
       try {
         await update.mutateAsync({
           id: asset.id,
           patch: {
-            name: values.name?.trim() || 'Untitled',
             type: finalType,
             category: finalCategory,
+            name: values.name?.trim() || 'Untitled',
+            zone: values.zone?.trim() || null,
+            location_notes: values.location_notes?.trim() || null,
             room_number: values.room_number?.trim() || null,
-            notes: mergedNotes,
-            location_notes: null,
+            notes: values.notes?.trim() || null,
             contact_id: contactId || null,
             installed_at: installed || null,
             audit_cycle_days: cycleNum,
-            zone: zone.trim() || null,
           },
         });
-        // Attach any newly added photos / clips to the existing asset.
         for (const f of photos) await addAssetPhoto(asset.id, f);
         for (const v of videos) {
           await addVideo.mutateAsync({
@@ -313,7 +267,10 @@ export function NewAssetDialog({
             notes: v.notes,
           });
         }
-        resetAll();
+        reset();
+        setPhotos([]);
+        setVideos([]);
+        setPhotoErrors([]);
         onOpenChange(false);
       } catch (err) {
         setSubmitError(err instanceof Error ? err.message : 'Failed to save changes.');
@@ -328,7 +285,6 @@ export function NewAssetDialog({
     }
     // Always include the floor the pin was placed on, even if the picker isn't shown.
     const targetIds = selectedFloorIds.size > 0 ? [...selectedFloorIds] : [floorId];
-    setSubmitError(null);
     try {
       // Item 4: create one independent asset per selected floor at the same
       // x/y. Skip any floor that already has a pin at that exact spot.
@@ -354,12 +310,13 @@ export function NewAssetDialog({
           type: finalType,
           category: finalCategory,
           name: values.name?.trim() || null,
+          zone: values.zone?.trim() || null,
+          location_notes: values.location_notes?.trim() || null,
           room_number: values.room_number?.trim() || null,
-          notes: mergedNotes,
+          notes: values.notes?.trim() || null,
           contact_id: contactId || null,
           installed_at: installed || null,
           audit_cycle_days: cycleNum,
-          zone: zone.trim() || null,
           x: position.x,
           y: position.y,
         });
@@ -389,8 +346,11 @@ export function NewAssetDialog({
       if (firstCreated) onCreated?.(firstCreated);
 
       if (skipped.length === 0) {
-        // Clean run — reset and close.
-        resetAll();
+        // Clean run — behave like the single-floor path: reset and close.
+        reset();
+        setPhotos([]);
+        setVideos([]);
+        setPhotoErrors([]);
         onOpenChange(false);
       } else {
         // Surface what was skipped; the user dismisses with "Done".
@@ -402,7 +362,10 @@ export function NewAssetDialog({
   }
 
   function finish() {
-    resetAll();
+    reset();
+    setPhotos([]);
+    setVideos([]);
+    setPhotoErrors([]);
     setResult(null);
     onOpenChange(false);
   }
@@ -412,7 +375,11 @@ export function NewAssetDialog({
       open={open}
       onOpenChange={(o) => {
         if (!o) {
-          resetAll();
+          reset();
+          setPhotos([]);
+          setVideos([]);
+          setPhotoErrors([]);
+          setSubmitError(null);
           setResult(null);
         }
         onOpenChange(o);
@@ -420,34 +387,28 @@ export function NewAssetDialog({
     >
       <Dialog.Portal>
         <Dialog.Overlay className="fixed inset-0 z-50 bg-black/40 data-[state=open]:animate-in data-[state=open]:fade-in-0" />
-        <Dialog.Content className="fixed left-1/2 top-1/2 z-50 flex max-h-[92dvh] w-[min(94vw,560px)] -translate-x-1/2 -translate-y-1/2 flex-col overflow-hidden rounded-xl border border-black/10 bg-surface text-text shadow-sheet outline-none dark:border-white/10">
-          {/* Ink header band with the orange accent bar. */}
-          <div className="relative shrink-0 bg-waymarks-ink px-5 py-4 text-white">
-            <span aria-hidden className="absolute inset-y-0 left-0 w-1 bg-waymarks-gold" />
-            <div className="flex items-start justify-between gap-3">
-              <div>
-                <Dialog.Title className="font-semibold text-xl">
-                  {isEdit ? 'Edit asset' : 'Add asset'}
-                </Dialog.Title>
-                <Dialog.Description className="mt-0.5 text-sm text-white/70">
-                  {isEdit
-                    ? "Update this pin's details."
-                    : 'Place a sign at the spot you clicked on the plan.'}
-                </Dialog.Description>
-              </div>
-              <Dialog.Close asChild>
-                <button
-                  aria-label="Close"
-                  className="rounded-md p-1 text-white/70 hover:bg-white/10 hover:text-white"
-                >
-                  <X size={16} aria-hidden />
-                </button>
-              </Dialog.Close>
+        <Dialog.Content className="fixed left-1/2 top-1/2 z-50 max-h-[92vh] w-[min(94vw,540px)] -translate-x-1/2 -translate-y-1/2 overflow-y-auto rounded-xl border border-black/10 bg-surface p-5 text-text shadow-sheet outline-none dark:border-white/10">
+          <div className="flex items-start justify-between gap-3">
+            <div>
+              <Dialog.Title className="font-semibold text-xl">{isEdit ? 'Edit pin' : 'Add a pin'}</Dialog.Title>
+              <Dialog.Description className="mt-1 text-sm text-text-muted">
+                {isEdit
+                  ? 'Update this pin’s details.'
+                  : 'Place a pin at the spot you clicked on the plan.'}
+              </Dialog.Description>
             </div>
+            <Dialog.Close asChild>
+              <button
+                aria-label="Close"
+                className="rounded-md p-1 text-text-muted hover:bg-black/5 dark:hover:bg-white/5"
+              >
+                <X size={16} aria-hidden />
+              </button>
+            </Dialog.Close>
           </div>
 
           {result ? (
-            <div className="space-y-4 overflow-y-auto p-5">
+            <div className="mt-5 space-y-4">
               <div className="rounded-md border border-black/10 bg-bg p-4 text-sm dark:border-white/10">
                 <p className="font-medium text-text">
                   {result.created > 0
@@ -466,213 +427,308 @@ export function NewAssetDialog({
               </div>
             </div>
           ) : (
-            <form
-              onSubmit={handleSubmit(onSubmit)}
-              className="flex min-h-0 flex-1 flex-col"
-              noValidate
+          <form onSubmit={handleSubmit(onSubmit)} className="mt-5 space-y-4" noValidate>
+            {submitError && (
+              <div
+                role="alert"
+                className="flex items-start gap-2 rounded-md border border-danger/30 bg-danger-bg px-3 py-2 text-sm text-danger"
+              >
+                <AlertCircle size={14} aria-hidden className="mt-0.5 shrink-0" />
+                <span>{submitError}</span>
+              </div>
+            )}
+
+            {/* Banded to match the pin-detail window (S6): Photos & video →
+                What it is → Where it is. Presentation only — every field,
+                register(), and handler below is unchanged. */}
+            <Band
+              icon={Camera}
+              label="Photos & video"
+              hint={
+                photos.length > 0
+                  ? `${photos.length} photo${photos.length === 1 ? '' : 's'}`
+                  : undefined
+              }
             >
-              <div className="min-h-0 flex-1 space-y-3 overflow-y-auto p-4">
-                {submitError && (
-                  <div
-                    role="alert"
-                    className="flex items-start gap-2 rounded-md border border-danger/30 bg-danger-bg px-3 py-2 text-sm text-danger"
-                  >
-                    <AlertCircle size={14} aria-hidden className="mt-0.5 shrink-0" />
-                    <span>{submitError}</span>
-                  </div>
+              <PhotosPicker
+                files={photos}
+                onAdd={appendFiles}
+                onRemove={(i) => setPhotos((prev) => prev.filter((_, idx) => idx !== i))}
+                errors={photoErrors}
+                videos={videos}
+                onRecord={() => setVideoOpen(true)}
+                onRemoveVideo={(i) => setVideos((prev) => prev.filter((_, idx) => idx !== i))}
+              />
+            </Band>
+
+            <Band icon={Tag} label="What it is">
+            <Field
+              label="Asset type"
+              htmlFor="asset-type"
+              error={errors.type?.message}
+              hint="Optional. Pick from the list, add a custom one, or skip."
+            >
+              <input
+                type="text"
+                value={typeQuery}
+                onChange={(e) => setTypeQuery(e.target.value)}
+                placeholder="Pick a type, or add a new one — Directory, Stairwell ID, Fire extinguisher…"
+                className="mb-1.5 h-9 w-full rounded-md border border-black/10 bg-surface px-3 text-sm text-text outline-none focus:border-waymarks-gold focus:ring-2 focus:ring-waymarks-gold dark:border-white/10"
+              />
+              <select
+                id="asset-type"
+                {...register('type')}
+                onChange={(e) => {
+                  if (e.target.value === '__custom__') {
+                    e.preventDefault();
+                    setValue('type', '');
+                    setCustomTypeMode(true);
+                    return;
+                  }
+                  setValue('type', e.target.value);
+                }}
+                className="h-11 w-full rounded-md border border-black/10 bg-surface px-3 text-sm text-text outline-none focus:border-waymarks-gold focus:ring-2 focus:ring-waymarks-gold dark:border-white/10"
+              >
+                <option value="">Choose a type… (optional)</option>
+                {filteredSignage.length > 0 && (
+                  <optgroup label="Signage">
+                    {filteredSignage.map((t) => (
+                      <option key={t.id} value={t.key}>
+                        {t.label}
+                      </option>
+                    ))}
+                  </optgroup>
                 )}
-
-                {/* ---------------------------------------------------------- LOCATION */}
-                <Band icon={MapPin} label="Location" tone="paper">
-                  <Field
-                    label="Zone or Department"
-                    htmlFor="asset-zone"
-                    tooltip="A grouping for this sign — e.g. Reception, Parkade, Wing B, or a department name. Optional; filterable later."
-                  >
+                {filteredFacility.length > 0 && (
+                  <optgroup label="Facility">
+                    {filteredFacility.map((t) => (
+                      <option key={t.id} value={t.key}>
+                        {t.label}
+                      </option>
+                    ))}
+                  </optgroup>
+                )}
+                <option value="__custom__">+ Add custom type…</option>
+              </select>
+              {customTypeMode && (
+                <div className="mt-2 space-y-1.5 rounded-md border border-waymarks-gold/40 bg-waymarks-gold-soft p-3">
+                  <label htmlFor="custom-type-label" className="block text-[11px] font-medium uppercase tracking-[0.18em] text-waymarks-gold">
+                    New custom type
+                  </label>
+                  <div className="flex gap-2">
                     <input
-                      id="asset-zone"
-                      list="asset-zone-suggestions"
-                      value={zone}
-                      onChange={(e) => setZone(e.target.value)}
-                      placeholder="Enter a zone or department"
-                      className={inputClass}
+                      id="custom-type-label"
+                      value={customTypeLabel}
+                      onChange={(e) => setCustomTypeLabel(e.target.value)}
+                      maxLength={60}
+                      // eslint-disable-next-line jsx-a11y/no-autofocus -- intentional: focuses the field when this inline editor opens
+                      autoFocus
+                      placeholder="e.g. Memorial bench"
+                      className="h-9 flex-1 rounded-md border border-black/10 bg-surface px-3 text-sm text-text outline-none focus:border-waymarks-gold focus:ring-1 focus:ring-waymarks-gold"
                     />
-                    <datalist id="asset-zone-suggestions">
-                      {zoneSuggestions.map((z) => (
-                        <option key={z} value={z} />
-                      ))}
-                    </datalist>
-                  </Field>
-
-                  <Field
-                    label="Room number & name"
-                    htmlFor="asset-room"
-                    error={errors.room_number?.message}
-                    hint='Number, letter, or name — "301", "B12", "Boardroom A".'
-                  >
-                    <input id="asset-room" {...register('room_number')} placeholder='e.g. "301"' className={inputClass} />
-                  </Field>
-
-                  {isEdit && asset && (
-                    <Field label="Pin number" htmlFor="asset-pin" hint="Assigned automatically — not editable.">
-                      <input
-                        id="asset-pin"
-                        readOnly
-                        value={
-                          formatPinNumber(asset.pin_number)
-                            ? `#${formatPinNumber(asset.pin_number)}`
-                            : 'Not yet assigned'
-                        }
-                        className={cn(inputClass, 'cursor-not-allowed bg-band-mist text-text-muted')}
-                      />
-                    </Field>
-                  )}
-
-                  {/* Item 4: place the same pin on multiple floors at once (add only). */}
-                  {!isEdit && floors.length > 1 && (
-                    <div className="space-y-1.5">
-                      <span className="block text-xs font-medium uppercase tracking-[0.18em] text-text-faint">
-                        Floors
-                      </span>
-                      <FloorPicker
-                        floors={floors}
-                        currentFloorId={floorId}
-                        selected={selectedFloorIds}
-                        onChange={setSelectedFloorIds}
-                      />
-                      <p className="text-xs text-text-faint">
-                        Creates a separate, independent pin on each selected floor. Shift-click to
-                        select a range. A floor that already has a pin here is skipped.
-                      </p>
-                    </div>
-                  )}
-                </Band>
-
-                {/* -------------------------------------------------------------- SIGN */}
-                <Band icon={Tag} label="Sign" tone="white">
-                  <Field label="Name" htmlFor="asset-name" error={errors.name?.message}>
-                    <input
-                      id="asset-name"
-                      {...register('name')}
-                      placeholder='e.g. "Lobby directory"'
-                      className={inputClass}
-                    />
-                  </Field>
-
-                  <TypePicker
-                    query={typeQuery}
-                    onQuery={setTypeQuery}
-                    signage={filteredSignage}
-                    facility={filteredFacility}
-                    selectedKey={selectedType ?? ''}
-                    selectedMeta={selectedTypeMeta}
-                    onSelect={(key) => setValue('type', key, { shouldValidate: true })}
-                    customMode={customTypeMode}
-                    onStartCustom={() => setCustomTypeMode(true)}
-                    customLabel={customTypeLabel}
-                    onCustomLabel={setCustomTypeLabel}
-                    customError={customTypeError}
-                    customPending={createAssetType.isPending}
-                    onSaveCustom={() => void saveCustomType()}
-                    onCancelCustom={() => {
-                      setCustomTypeMode(false);
-                      setCustomTypeLabel('');
-                      setCustomTypeError(null);
-                    }}
-                  />
-
-                  <Field
-                    label="Notes"
-                    htmlFor="asset-notes"
-                    error={errors.notes?.message}
-                    hint="Where it is on the floor, install & service history — anything worth recording."
-                  >
-                    <textarea
-                      id="asset-notes"
-                      rows={3}
-                      {...register('notes')}
-                      placeholder='e.g. "East elevator lobby, mounted at 5′. Replaced 2024-03."'
-                      className={textareaClass}
-                    />
-                  </Field>
-                </Band>
-
-                {/* ------------------------------------------- SEND STATUS / FLAGS TO */}
-                <Band icon={Bell} label="Send status changes & flags to" tone="paper">
-                  <Field
-                    label="Contact"
-                    htmlFor="asset-contact"
-                    hint="Pick a directory contact. Manage the list in Admin → Contacts & Vendors."
-                  >
-                    <select id="asset-contact" value={contactId} onChange={(e) => setContactId(e.target.value)} className={inputClass}>
-                      <option value="">— None —</option>
-                      {contactsInScope.map((c) => (
-                        <option key={c.id} value={c.id}>
-                          {c.label}
-                          {c.email ? ` · ${c.email}` : ''}
-                        </option>
-                      ))}
-                    </select>
-                  </Field>
-                </Band>
-
-                {/* ----------------------------------------------------------- SERVICE */}
-                <Band icon={Wrench} label="Service" tone="white">
-                  <div className="grid grid-cols-2 gap-2">
-                    <Field label="Installed" htmlFor="asset-installed">
-                      <input
-                        id="asset-installed"
-                        type="date"
-                        value={installed}
-                        onChange={(e) => setInstalled(e.target.value)}
-                        className={inputClass}
-                      />
-                    </Field>
-                    <Field label="Audit cycle (days)" htmlFor="asset-cycle">
-                      <input
-                        id="asset-cycle"
-                        type="number"
-                        min={0}
-                        step={1}
-                        value={cycle}
-                        onChange={(e) => setCycle(e.target.value)}
-                        placeholder="default 90"
-                        className={inputClass}
-                      />
-                    </Field>
+                    <Button
+                      size="sm"
+                      variant="gold"
+                      loading={createAssetType.isPending}
+                      onClick={() => void saveCustomType()}
+                      iconLeft={<Check size={12} aria-hidden />}
+                    >
+                      Save
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="secondary"
+                      onClick={() => {
+                        setCustomTypeMode(false);
+                        setCustomTypeLabel('');
+                        setCustomTypeError(null);
+                      }}
+                    >
+                      Cancel
+                    </Button>
                   </div>
-                </Band>
+                  {customTypeError && (
+                    <p className="text-xs text-danger">{customTypeError}</p>
+                  )}
+                  <p className="text-[11px] text-text-muted">
+                    Saved to your org's catalog and reusable for future assets.
+                    Color and category can be tuned in admin later.
+                  </p>
+                </div>
+              )}
+            </Field>
 
-                {/* --------------------------------------------------- PHOTOS & VIDEO */}
-                <Band icon={Images} label="Photos & video" tone="paper">
-                  <PhotosPicker
-                    files={photos}
-                    onAdd={appendFiles}
-                    onRemove={(i) => setPhotos((prev) => prev.filter((_, idx) => idx !== i))}
-                    errors={photoErrors}
-                    videos={videos}
-                    onRecord={() => setVideoOpen(true)}
-                    onRemoveVideo={(i) => setVideos((prev) => prev.filter((_, idx) => idx !== i))}
+            <Field label="Name" htmlFor="asset-name" error={errors.name?.message}>
+              <input
+                id="asset-name"
+                {...register('name')}
+                placeholder='e.g. "Lobby directory"'
+                className="h-11 w-full rounded-md border border-black/10 bg-surface px-3 text-sm text-text outline-none focus:border-waymarks-gold focus:ring-2 focus:ring-waymarks-gold dark:border-white/10"
+              />
+            </Field>
+
+            <Field
+              label="Install & service notes"
+              htmlFor="asset-notes"
+              error={errors.notes?.message}
+              hint="History, vendor info, install details. Anything not about where the pin is."
+            >
+              <textarea
+                id="asset-notes"
+                rows={3}
+                {...register('notes')}
+                placeholder='e.g. "Replaced 2024-03. Brushed aluminum, custom font."'
+                className="w-full rounded-md border border-black/10 bg-surface p-3 text-sm text-text outline-none focus:border-waymarks-gold focus:ring-2 focus:ring-waymarks-gold dark:border-white/10"
+              />
+            </Field>
+            </Band>
+
+            <Band icon={MapPin} label="Where it is">
+            {/* Feature #3a — free-text zone/department, distinct from the type
+                select above. Optional; saved to assets.zone on submit. */}
+            <Field
+              label="Layer"
+              htmlFor="asset-zone"
+              error={errors.zone?.message}
+              hint="Optional. e.g. Reception, Parkade, Wing B, or a department."
+            >
+              <input
+                id="asset-zone"
+                {...register('zone')}
+                list="asset-zone-suggestions"
+                placeholder="Reception, Parkade, Wing B, or a department"
+                className="h-11 w-full rounded-md border border-black/10 bg-surface px-3 text-sm text-text outline-none focus:border-waymarks-gold focus:ring-2 focus:ring-waymarks-gold dark:border-white/10"
+              />
+              {zoneSuggestions.length > 0 && (
+                <datalist id="asset-zone-suggestions">
+                  {zoneSuggestions.map((z) => (
+                    <option key={z} value={z} />
+                  ))}
+                </datalist>
+              )}
+            </Field>
+
+            <Field
+              label="Room"
+              htmlFor="asset-room"
+              error={errors.room_number?.message}
+              hint='Number, letter, or name — "301", "B12", "Boardroom A".'
+            >
+              <input
+                id="asset-room"
+                {...register('room_number')}
+                placeholder='e.g. "301"'
+                className="h-11 w-full rounded-md border border-black/10 bg-surface px-3 text-sm text-text outline-none focus:border-waymarks-gold focus:ring-2 focus:ring-waymarks-gold dark:border-white/10"
+              />
+            </Field>
+
+            <Field
+              label="Where on the floor"
+              htmlFor="asset-loc"
+              error={errors.location_notes?.message}
+              hint="Spatial detail used to find this pin. Filterable."
+            >
+              <textarea
+                id="asset-loc"
+                rows={2}
+                {...register('location_notes')}
+                placeholder='e.g. "East elevator lobby, mounted at 5′"'
+                className="w-full rounded-md border border-black/10 bg-surface p-3 text-sm text-text outline-none focus:border-waymarks-gold focus:ring-2 focus:ring-waymarks-gold dark:border-white/10"
+              />
+            </Field>
+
+            {/* Item 4: place the same pin on multiple floors at once. Each
+                selected floor gets an independent copy at this x/y. Add-only. */}
+            {!isEdit && floors.length > 1 && (
+              <div className="space-y-1.5">
+                <span className="block text-xs font-medium uppercase tracking-[0.18em] text-text-faint">
+                  Floors
+                </span>
+                <FloorPicker
+                  floors={floors}
+                  currentFloorId={floorId}
+                  selected={selectedFloorIds}
+                  onChange={setSelectedFloorIds}
+                />
+                <p className="text-xs text-text-faint">
+                  Creates a separate, independent pin on each selected floor. Shift-click to
+                  select a range. A floor that already has a pin here is skipped.
+                </p>
+              </div>
+            )}
+            </Band>
+
+            {/* Standalone-only fields folded into main's layout: a directory
+                contact for notifications, plus install / audit-cycle service
+                details. */}
+            <Band icon={Bell} label="Send status changes & flags to">
+              <Field
+                label="Contact"
+                htmlFor="asset-contact"
+                hint="Pick a directory contact. Manage the list in Admin → Contacts & Vendors."
+              >
+                <select
+                  id="asset-contact"
+                  value={contactId}
+                  onChange={(e) => setContactId(e.target.value)}
+                  className="h-11 w-full rounded-md border border-black/10 bg-surface px-3 text-sm text-text outline-none focus:border-waymarks-gold focus:ring-2 focus:ring-waymarks-gold dark:border-white/10"
+                >
+                  <option value="">— None —</option>
+                  {contactsInScope.map((c) => (
+                    <option key={c.id} value={c.id}>
+                      {c.label}
+                      {c.email ? ` · ${c.email}` : ''}
+                    </option>
+                  ))}
+                </select>
+              </Field>
+            </Band>
+
+            <Band icon={Wrench} label="Service">
+              <div className="grid grid-cols-2 gap-3">
+                <Field label="Installed" htmlFor="asset-installed">
+                  <input
+                    id="asset-installed"
+                    type="date"
+                    value={installed}
+                    onChange={(e) => setInstalled(e.target.value)}
+                    className="h-11 w-full rounded-md border border-black/10 bg-surface px-3 text-sm text-text outline-none focus:border-waymarks-gold focus:ring-2 focus:ring-waymarks-gold dark:border-white/10"
                   />
-                </Band>
+                </Field>
+                <Field label="Audit cycle (days)" htmlFor="asset-cycle">
+                  <input
+                    id="asset-cycle"
+                    type="number"
+                    min={0}
+                    step={1}
+                    value={cycle}
+                    onChange={(e) => setCycle(e.target.value)}
+                    placeholder="default 90"
+                    className="h-11 w-full rounded-md border border-black/10 bg-surface px-3 text-sm text-text outline-none focus:border-waymarks-gold focus:ring-2 focus:ring-waymarks-gold dark:border-white/10"
+                  />
+                </Field>
               </div>
+            </Band>
 
-              {/* Footer */}
-              <div className="flex shrink-0 justify-end gap-2 border-t border-black/10 bg-surface px-4 py-3 dark:border-white/10">
-                <Button variant="secondary" onClick={() => onOpenChange(false)} disabled={isSubmitting}>
-                  Cancel
-                </Button>
-                <Button type="submit" variant="gold" loading={isSubmitting}>
-                  {isEdit
-                    ? photos.length > 0
-                      ? `Save + ${photos.length} ${photos.length === 1 ? 'photo' : 'photos'}`
-                      : 'Save changes'
-                    : photos.length > 0
-                      ? `Place pin + ${photos.length} ${photos.length === 1 ? 'photo' : 'photos'}`
-                      : 'Place pin'}
-                </Button>
-              </div>
-            </form>
+            <div className="flex justify-end gap-2">
+              <Button
+                variant="secondary"
+                onClick={() => onOpenChange(false)}
+                disabled={isSubmitting}
+              >
+                Cancel
+              </Button>
+              <Button type="submit" variant="gold" loading={isSubmitting}>
+                {isEdit
+                  ? photos.length > 0
+                    ? `Save + ${photos.length} ${photos.length === 1 ? 'photo' : 'photos'}`
+                    : 'Save changes'
+                  : photos.length > 0
+                    ? `Place pin + ${photos.length} ${photos.length === 1 ? 'photo' : 'photos'}`
+                    : 'Place pin'}
+              </Button>
+            </div>
+          </form>
           )}
         </Dialog.Content>
       </Dialog.Portal>
@@ -692,237 +748,30 @@ export function NewAssetDialog({
   );
 }
 
-// Shared control classes (>=16px text rides the iOS auto-zoom guard).
-const inputClass =
-  'h-11 w-full rounded-md border border-black/10 bg-surface px-3 text-base text-text outline-none focus:border-waymarks-gold focus:ring-2 focus:ring-waymarks-gold dark:border-white/10';
-const textareaClass =
-  'w-full rounded-md border border-black/10 bg-surface p-3 text-base text-text outline-none focus:border-waymarks-gold focus:ring-2 focus:ring-waymarks-gold dark:border-white/10';
-
-/**
- * A color-banded form section: a Mist header strip with a 4px orange left bar,
- * an icon and a small-caps label, over a body tinted Paper or white. Bodies
- * alternate so adjacent bands stay visually distinct.
- */
-function Band({
-  icon: Icon,
-  label,
-  tone,
-  children,
-}: {
-  icon: LucideIcon;
-  label: string;
-  tone: 'paper' | 'white';
-  children: React.ReactNode;
-}) {
-  return (
-    <section className="overflow-hidden rounded-lg border border-black/10 dark:border-white/10">
-      <header className="relative flex items-center gap-2 bg-band-mist py-2 pl-4 pr-3">
-        <span aria-hidden className="absolute inset-y-0 left-0 w-1 bg-waymarks-gold" />
-        <Icon size={13} className="text-waymarks-gold" aria-hidden />
-        <span className="text-[11px] font-semibold uppercase tracking-[0.16em] text-text-muted">
-          {label}
-        </span>
-      </header>
-      <div className={cn('space-y-3 p-4', tone === 'paper' ? 'bg-band-paper' : 'bg-surface')}>
-        {children}
-      </div>
-    </section>
-  );
-}
-
 function Field({
   label,
   htmlFor,
   error,
   hint,
-  tooltip,
   children,
 }: {
   label: string;
   htmlFor: string;
   error?: string;
   hint?: string;
-  /** Optional hover note shown via an info icon beside the label. */
-  tooltip?: string;
   children: React.ReactNode;
 }) {
   return (
     <div className="space-y-1.5">
-      <div className="flex items-center gap-1">
-        <label
-          htmlFor={htmlFor}
-          className="block text-xs font-medium uppercase tracking-[0.18em] text-text-faint"
-        >
-          {label}
-        </label>
-        {tooltip && (
-          <Tooltip text={tooltip}>
-            <button
-              type="button"
-              className="inline-flex cursor-help text-text-faint hover:text-text-muted"
-              aria-label={tooltip}
-            >
-              <Info size={12} aria-hidden />
-            </button>
-          </Tooltip>
-        )}
-      </div>
+      <label
+        htmlFor={htmlFor}
+        className="block text-xs font-medium uppercase tracking-[0.18em] text-text-faint"
+      >
+        {label}
+      </label>
       {children}
       {hint && !error && <p className="text-xs text-text-faint">{hint}</p>}
       {error && <p className="text-xs text-danger">{error}</p>}
-    </div>
-  );
-}
-
-type TypeMeta = { id: string; key: string; label: string; color: string };
-
-/**
- * Searchable type picker rendered as legend pills — each a color dot + label
- * matching the floor legend, so the user sees exactly which colour their pin
- * will be. Filter narrows the catalog; a "+ Custom" pill opens the inline
- * creator. Replaces the old <select> (which hid the colours).
- */
-function TypePicker({
-  query,
-  onQuery,
-  signage,
-  facility,
-  selectedKey,
-  selectedMeta,
-  onSelect,
-  customMode,
-  onStartCustom,
-  customLabel,
-  onCustomLabel,
-  customError,
-  customPending,
-  onSaveCustom,
-  onCancelCustom,
-}: {
-  query: string;
-  onQuery: (q: string) => void;
-  signage: TypeMeta[];
-  facility: TypeMeta[];
-  selectedKey: string;
-  selectedMeta: TypeMeta | null;
-  onSelect: (key: string) => void;
-  customMode: boolean;
-  onStartCustom: () => void;
-  customLabel: string;
-  onCustomLabel: (v: string) => void;
-  customError: string | null;
-  customPending: boolean;
-  onSaveCustom: () => void;
-  onCancelCustom: () => void;
-}) {
-  return (
-    <div className="space-y-1.5">
-      <span className="block text-xs font-medium uppercase tracking-[0.18em] text-text-faint">
-        Type
-      </span>
-      <input
-        type="text"
-        value={query}
-        onChange={(e) => onQuery(e.target.value)}
-        placeholder={
-          selectedMeta ? `Selected: ${selectedMeta.label} — search to change…` : 'Search types…'
-        }
-        className={inputClass}
-      />
-      <div className="max-h-40 space-y-2 overflow-y-auto rounded-md border border-black/10 p-2 dark:border-white/10">
-        <TypePillGroup heading="Signage" types={signage} selectedKey={selectedKey} onSelect={onSelect} />
-        <TypePillGroup heading="Facility" types={facility} selectedKey={selectedKey} onSelect={onSelect} />
-        {!customMode && (
-          <button
-            type="button"
-            onClick={onStartCustom}
-            className="inline-flex items-center gap-1 rounded-full border border-dashed border-waymarks-gold/50 px-2.5 py-1 text-xs font-medium text-waymarks-gold hover:bg-waymarks-gold-soft"
-          >
-            <Plus size={12} aria-hidden /> Custom type
-          </button>
-        )}
-      </div>
-      {customMode && (
-        <div className="space-y-1.5 rounded-md border border-waymarks-gold/40 bg-waymarks-gold-soft p-3">
-          <label
-            htmlFor="custom-type-label"
-            className="block text-[11px] font-medium uppercase tracking-[0.18em] text-waymarks-gold"
-          >
-            New custom type
-          </label>
-          <div className="flex gap-2">
-            <input
-              id="custom-type-label"
-              value={customLabel}
-              onChange={(e) => onCustomLabel(e.target.value)}
-              maxLength={60}
-              // eslint-disable-next-line jsx-a11y/no-autofocus -- intentional: focuses the field when this inline editor opens
-              autoFocus
-              placeholder="e.g. Memorial bench"
-              className="h-11 flex-1 rounded-md border border-black/10 bg-surface px-3 text-base text-text outline-none focus:border-waymarks-gold focus:ring-1 focus:ring-waymarks-gold"
-            />
-            <Button size="sm" variant="gold" loading={customPending} onClick={onSaveCustom} iconLeft={<Check size={12} aria-hidden />}>
-              Save
-            </Button>
-            <Button size="sm" variant="secondary" onClick={onCancelCustom}>
-              Cancel
-            </Button>
-          </div>
-          {customError && <p className="text-xs text-danger">{customError}</p>}
-          <p className="text-[11px] text-text-muted">
-            Saved to your org's catalog and reusable for future assets. Color and category can be
-            tuned in admin later.
-          </p>
-        </div>
-      )}
-    </div>
-  );
-}
-
-function TypePillGroup({
-  heading,
-  types,
-  selectedKey,
-  onSelect,
-}: {
-  heading: string;
-  types: TypeMeta[];
-  selectedKey: string;
-  onSelect: (key: string) => void;
-}) {
-  if (types.length === 0) return null;
-  return (
-    <div>
-      <p className="mb-1 text-[10px] font-medium uppercase tracking-[0.16em] text-text-faint">
-        {heading}
-      </p>
-      <ul className="flex flex-wrap gap-1.5">
-        {types.map((t) => {
-          const active = t.key === selectedKey;
-          return (
-            <li key={t.id}>
-              <button
-                type="button"
-                onClick={() => onSelect(t.key)}
-                aria-pressed={active}
-                className={cn(
-                  'inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs transition-colors',
-                  active
-                    ? 'border-waymarks-ink bg-waymarks-ink/5 font-medium dark:border-white dark:bg-white/10'
-                    : 'border-black/10 hover:bg-black/5 dark:border-white/15 dark:hover:bg-white/5'
-                )}
-              >
-                <span
-                  aria-hidden
-                  style={{ backgroundColor: t.color }}
-                  className="inline-block h-2.5 w-2.5 rounded-full border border-white shadow-sm"
-                />
-                {t.label}
-              </button>
-            </li>
-          );
-        })}
-      </ul>
     </div>
   );
 }
@@ -1001,7 +850,9 @@ function FloorPicker({
               />
               <Layers size={12} aria-hidden className="shrink-0 text-text-faint" />
               <span className="truncate">{f.label}</span>
-              {isCurrent && <span className="ml-auto text-[11px] text-text-faint">this floor</span>}
+              {isCurrent && (
+                <span className="ml-auto text-[11px] text-text-faint">this floor</span>
+              )}
             </label>
           </li>
         );
@@ -1042,7 +893,7 @@ function PhotosPicker({
           {videos.map((v, i) => (
             <li
               key={i}
-              className="inline-flex items-center gap-1.5 rounded-md border border-black/10 bg-surface px-2 py-1 text-xs dark:border-white/10"
+              className="inline-flex items-center gap-1.5 rounded-md border border-black/10 bg-bg px-2 py-1 text-xs dark:border-white/10"
             >
               <Video size={12} aria-hidden className="text-waymarks-gold" />
               <span>Clip · {formatClipLength(v.durationSeconds)}</span>
@@ -1059,9 +910,16 @@ function PhotosPicker({
         </ul>
       )}
 
-      <div className="flex flex-wrap items-center gap-2 rounded-md border border-dashed border-black/15 p-3 dark:border-white/15">
+      <div
+        className={cn(
+          'flex flex-wrap items-center gap-2 rounded-md border border-dashed p-3',
+          'border-black/15 dark:border-white/15'
+        )}
+      >
         <span className="text-sm text-text-muted">
-          {files.length === 0 ? 'Add one or more photos.' : `${files.length} attached. Add more if you want.`}
+          {files.length === 0
+            ? 'Add one or more photos.'
+            : `${files.length} attached. Add more if you want.`}
         </span>
         <div className="ml-auto flex gap-1">
           <label className="inline-flex h-8 cursor-pointer items-center gap-1 rounded-md border border-black/10 px-2 text-xs hover:bg-black/5 dark:border-white/10 dark:hover:bg-white/5">
